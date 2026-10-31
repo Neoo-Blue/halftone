@@ -47,7 +47,7 @@ del os.environ["RADARR_KEY"]
 
 for bad in ({"NOPE": "x"}, {"_auth": {"hash": "x"}}, {"PAPER_TZ": "Mars/Base"}, {"PLEX_URL": "file:///etc/passwd"}, {"PLEX_URL": "http://user:pw@host/"}, {"PAPER_SINCE": "tomorrow"}, {"PVE_INSECURE": "yes"},
             {"HOSTS": "nope"}, {"HOSTS": [{"name": "x", "target": "-oProxyCommand=evil"}]}, {"HOSTS": [{"name": "x", "target": "a@b c"}]}, {"PROBES": [{"group": "g", "name": "n", "url": "ftp://x"}]},
-            {"EXTRA_FEEDS": [{"desk": "nope", "name": "n", "url": "https://x.example"}]}, {"EARLIER": [{"label": "x", "day": "2026-01-01", "amount": "lots"}]}, {"MAILBOXES": [{"address": "not an address", "label": ""}]}, {"PAPER_NAME": 5}):
+            {"EXTRA_FEEDS": [{"desk": "nope", "name": "n", "url": "https://x.example"}]}, {"EARLIER": [{"label": "x", "day": "2026-01-01", "amount": "lots"}]}, {"MAILBOXES": [{"address": "not an address", "label": ""}]}, {"PAPER_NAME": 5}, {"PAPER_FONT": "comic-sans"}, {"PAPER_FONT": '"><script>'}):
     assert refuses(settings.update, bad), bad
 assert refuses(settings.update, ["x"])
 settings.update({"PROBES": [{"group": "", "name": "", "url": ""}]})
@@ -57,7 +57,7 @@ settings.update({"PLEX_URL": ""})
 # ---------------------------------------------------------------- a section with nothing set stays off the page
 page = s.paper()
 assert page["on"]["media"] is False and page["on"]["money"] is False and page["on"]["systems"] is False and page["on"]["world"] is True
-assert page["media"]["data"] is None and page["name"] == "The Morning Paper"
+assert page["media"]["data"] is None and page["name"] == "The Times"
 settings.update({"MAILBOXES": []})
 s.save("mail", {"read": 1})
 assert s.paper()["mail_status"]["data"] is None and s.paper()["mail"]["need"] == [], "switching a desk off takes its old snapshot off the page"
@@ -126,7 +126,20 @@ r, raw = call("GET", "/api/paper", headers=jar)
 assert r.status == 200 and json.loads(raw)["name"], "a session opens the paper"
 assert call("GET", "/settings", headers=jar)[0].status == 200 and b"Plex" in call("GET", "/api/settings", headers=jar)[1]
 assert call("PUT", "/api/settings", {"values": {"PAPER_NAME": "The <b>Ledger</b>"}}, jar)[0].status == 200
-assert b"The &lt;b&gt;Ledger&lt;/b&gt;" in call("GET", "/", headers=jar)[1], "the name is printed escaped"
+front = call("GET", "/", headers=jar)[1]
+assert b"The &lt;b&gt;Ledger&lt;/b&gt;" in front and b"The Times" not in front, "the name is printed escaped, everywhere"
+assert b'data-masthead="blackletter"' in front and b"/fonts/manufacturing-consent.woff2" in front
+assert call("PUT", "/api/settings", {"values": {"PAPER_FONT": "fraktur"}}, jar)[0].status == 200
+front = call("GET", "/", headers=jar)[1]
+assert b'data-masthead="fraktur"' in front and b'href="/fonts/unifrakturcook.woff2"' in front and b"manufacturing-consent" not in front, "the page arrives in the chosen face"
+assert b'data-masthead="fraktur"' in call("GET", "/login")[1] and b'data-masthead="fraktur"' in call("GET", "/settings", headers=jar)[1]
+settings.update({"PAPER_FONT": "theme"})
+assert b'data-masthead="theme"' in call("GET", "/", headers=jar)[1]
+assert all(call("GET", f"/fonts/{f}.woff2")[0].status == 200 for f in s.TITLE_FONTS.values()), "every title font ships"
+os.environ["PAPER_FONT"] = '"><script>alert(1)</script>'
+assert b"<script>alert" not in call("GET", "/", headers=jar)[1], "a bad environment value can't reach the page"
+del os.environ["PAPER_FONT"]
+settings.update({"PAPER_FONT": "blackletter"})
 assert call("PUT", "/api/settings", {"values": {"PAPER_NAME": "x"}}, {**jar, "X-Paper": None})[0].status == 403
 r, raw = call("PUT", "/api/settings", {"values": {"PLEX_URL": "ftp://x"}}, jar)
 assert r.status == 400 and b"http" in raw

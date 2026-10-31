@@ -132,6 +132,7 @@ def mail():
 
 def main():
     s.init_db()
+    s.check = lambda section: {"ok": True, "text": "This is the demo, so nothing was really tested."}
     settings.update({"PAPER_TZ": "America/New_York", "PAPER_SINCE": str((datetime.now(timezone.utc) - timedelta(days=211)).date()), "PLEX_URL": "http://demo.invalid", "PLEX_TOKEN": "demo", "PVE_URL": "http://demo.invalid", "PVE_TOKEN": "demo",
                      "PROBES": [{"group": "Sites", "name": n, "url": "http://demo.invalid/"} for n in ("My Shop", "The Club")] + [{"group": "At home", "name": n, "url": "http://demo.invalid/"} for n in ("Router", "Photos", "Backups")],
                      "MAIL_TENANT": "demo", "MAIL_CLIENT_ID": "demo", "MAIL_CLIENT_SECRET": "demo", "MAILBOXES": [{"address": "you@shop.example", "label": "Shop"}], "MONEY_URL": "http://demo.invalid",

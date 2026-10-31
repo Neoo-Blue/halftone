@@ -4,7 +4,7 @@ A private morning newspaper you run yourself. It opens with real news from 57 ou
 
 ![The front page, in the Morning theme](docs/img/front-morning.png)
 
-Stories open inside the paper, in a clean reader. The globe, charts and meters are all printed in dots, and there are four themes: Morning, Night, Cobalt and Glass.
+Stories open inside the paper, in a clean reader. The globe, charts and meters are all printed in dots, and there are four themes: Morning, Night, Cobalt and Glass. Call it what you like and set the title in blackletter, like a real masthead, or in one of four other faces.
 
 Every picture here comes from `tools/demo.py`, and every name and number in them is made up.
 

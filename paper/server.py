@@ -1705,6 +1705,17 @@ TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=u
 CSP = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 
+TITLE_FONTS = {"blackletter": "manufacturing-consent", "fraktur": "unifrakturcook", "fatface": "abril-fatface"}
+
+
+def printed(page):
+    """The name and title font go into the page itself, so the masthead never flashes another one first."""
+    font = C("PAPER_FONT")
+    return (page.replace(b"The Times", html.escape(C("PAPER_NAME")).encode())
+            .replace(b'data-masthead="blackletter"', f'data-masthead="{html.escape(font)}"'.encode())
+            .replace(b"/fonts/manufacturing-consent.woff2", f"/fonts/{TITLE_FONTS.get(font, 'frank-ruhl-libre')}.woff2".encode()))
+
+
 OPEN_PATHS = {"/login", "/api/auth", "/api/login", "/api/setup"}
 OPEN_FILES = {".css", ".js", ".woff2", ".png"}  # the app's own code, fonts and map: no reader data ever lives in these
 PAGES = {"/login": "login.html", "/settings": "settings.html"}
@@ -1819,9 +1830,7 @@ class Handler(BaseHTTPRequestHandler):
         file = (WEB / (page or url.path.lstrip("/"))).resolve()
         if file.is_relative_to(WEB) and file.is_file() and file.suffix in TYPES and (page or file.suffix != ".html"):
             data = file.read_bytes()
-            if page:
-                data = data.replace(b"The Morning Paper", html.escape(C("PAPER_NAME")).encode())
-            return self.send(200, data, TYPES[file.suffix], "public, max-age=31536000, immutable" if file.suffix == ".woff2" else "no-cache")
+            return self.send(200, printed(data) if page else data, TYPES[file.suffix], "public, max-age=31536000, immutable" if file.suffix == ".woff2" else "no-cache")
         return self.send(404, b"not found", "text/plain")
 
     do_HEAD = do_GET

@@ -1,5 +1,5 @@
 ---
-name: The Morning Paper
+name: The Times
 description: A private morning paper for one reader, where everything printed is dots.
 colors:
   morning-stock: '#f6d3bd'
@@ -264,7 +264,7 @@ components:
     padding: clamp(18px, 2.6vw, 34px)
 ---
 
-# Design System: The Morning Paper
+# Design System: The Times
 
 ## Overview
 

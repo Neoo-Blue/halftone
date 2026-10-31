@@ -42,8 +42,16 @@ function secret(f) {
     ${hint(f)}</div>`;
 }
 
+// Each choice is shown as the paper's own name in that face.
+function fonts(f) {
+  const name = esc(section('paper').fields.find((x) => x.key === 'PAPER_NAME').value);
+  const off = f.locked ? ' disabled' : '';
+  return `<fieldset class="set-fonts"><legend>${esc(f.label)}</legend><div class="set-font-grid">${f.options.map(([value, label]) => `<label class="set-font mast-${value}"><input type="radio" name="${f.key}" value="${value}"${value === f.value ? ' checked' : ''}${off}><span data-name>${name}</span><small>${esc(label)}</small></label>`).join('')}</div></fieldset>`;
+}
+
 function field(f) {
   if (f.kind === 'rows') return rows(f);
+  if (f.kind === 'choice') return fonts(f);
   if (f.kind === 'secret') return secret(f);
   const off = f.locked ? ' disabled' : '';
   if (f.kind === 'bool') return `<label class="set-check"><input type="checkbox" data-key="${f.key}"${f.value ? ' checked' : ''}${off}${described(f)}><span>${esc(f.label)}</span>${hint(f)}</label>`;
@@ -110,6 +118,8 @@ function collect(s) {
     if (f.locked) continue;
     if (f.kind === 'rows') {
       values[f.key] = $$(`#rows-${f.key} .set-row`, el).map((row) => Object.fromEntries($$('[data-col]', row).map((i) => [i.dataset.col, i.value])));
+    } else if (f.kind === 'choice') {
+      values[f.key] = $(`[name="${f.key}"]:checked`, el).value;
     } else if (f.kind === 'secret') {
       const input = $(`[data-key="${f.key}"]`, el), held = $(`[data-secret="${f.key}"]`, el);
       if (held?.dataset.cleared) values[f.key] = null;
@@ -165,7 +175,11 @@ async function changePassword() {
 // ---------------------------------------------------------------- behaviour
 
 const dirty = (el) => { const b = $('[data-save]', el.closest('.set')); if (b) { b.disabled = false; $('.set-say', el.closest('.set')).textContent = 'Not saved yet.'; } };
-document.addEventListener('input', (e) => { if (e.target.closest('.set') && !e.target.id.startsWith('pw-')) dirty(e.target); });
+document.addEventListener('input', (e) => {
+  if (e.target.closest('.set') && !e.target.id.startsWith('pw-')) dirty(e.target);
+  if (e.target.name === 'PAPER_FONT') document.documentElement.dataset.masthead = e.target.value;  // try it on the masthead above, before saving
+  if (e.target.id === 'f-PAPER_NAME') $$('.nameplate a, [data-name]').forEach((n) => { n.textContent = e.target.value; });
+});
 addEventListener('beforeunload', (e) => { if ($$('[data-save]').some((b) => !b.disabled)) e.preventDefault(); });
 
 document.addEventListener('click', async (e) => {

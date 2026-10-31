@@ -5,6 +5,9 @@
 @font-face { font-family: 'Source Serif 4'; src: url(/fonts/source-serif-4-italic.woff2) format('woff2'); font-weight: 200 900; font-style: italic; font-display: swap; }
 @font-face { font-family: 'Schibsted Grotesk'; src: url(/fonts/schibsted-grotesk.woff2) format('woff2'); font-weight: 400 900; font-display: swap; }
 @font-face { font-family: 'Archivo'; src: url(/fonts/archivo.woff2) format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }
+@font-face { font-family: 'Manufacturing Consent'; src: url(/fonts/manufacturing-consent.woff2) format('woff2'); font-display: block; }
+@font-face { font-family: 'UnifrakturCook'; src: url(/fonts/unifrakturcook.woff2) format('woff2'); font-weight: 700; font-display: block; }
+@font-face { font-family: 'Abril Fatface'; src: url(/fonts/abril-fatface.woff2) format('woff2'); font-display: block; }
 
 :root {
   --display: 'Frank Ruhl Libre', 'Times New Roman', serif;
@@ -99,6 +102,12 @@ caption { text-align: left; }
 .ear-r { text-align: right; }
 .nameplate { font: var(--head-weight) clamp(38px, 7.6vw, 104px)/.98 var(--display); letter-spacing: -.022em; text-align: center; text-wrap: balance; }
 .nameplate a { text-decoration: none; color: inherit; }
+/* The title's own face, picked in Settings. A masthead is the one place a paper keeps its old type. */
+[data-masthead=blackletter], .mast-blackletter { --mast: 'Manufacturing Consent', 'Frank Ruhl Libre', serif; --mast-weight: 400; --mast-track: 0em; }
+[data-masthead=fraktur], .mast-fraktur { --mast: 'UnifrakturCook', 'Frank Ruhl Libre', serif; --mast-weight: 700; --mast-track: 0em; }
+[data-masthead=fatface], .mast-fatface { --mast: 'Abril Fatface', 'Frank Ruhl Libre', serif; --mast-weight: 400; --mast-track: -.01em; }
+[data-masthead=serif], .mast-serif { --mast: 'Frank Ruhl Libre', 'Times New Roman', serif; --mast-weight: 800; --mast-track: -.022em; }
+.mast-theme { --mast: var(--display); --mast-weight: var(--head-weight); --mast-track: var(--head-track); }
 [data-theme=cobalt] .masthead { grid-template-columns: 1fr auto; }
 [data-theme=cobalt] .nameplate { grid-row: 1; grid-column: 1 / -1; text-align: left; font-size: clamp(30px, 6.5vw, 112px); font-stretch: 125%; letter-spacing: -.045em; line-height: .92; text-transform: uppercase; white-space: normal; }
 [data-theme=glass] .nameplate { font-size: clamp(30px, 4.4vw, 58px); font-weight: 700; letter-spacing: -.035em; }
@@ -564,6 +573,19 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 .door-error { font: 600 14px/1.35 var(--ui); color: var(--bad); }
 .door .btn { justify-content: center; }
 
+[data-masthead]:not([data-masthead=theme]) .nameplate, .set-font > span { font-family: var(--mast); font-weight: var(--mast-weight); letter-spacing: var(--mast-track); font-stretch: normal; font-synthesis: none; text-transform: none; }
+[data-masthead=blackletter] .nameplate, [data-masthead=fraktur] .nameplate { font-size-adjust: .68; }  /* a small x-height next to the serif faces: this evens them out */
+.set-fonts { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 0; border: 0; }
+.set-fonts legend { padding: 0; margin-bottom: 6px; font: 600 14px/1.25 var(--ui); }
+.set-font-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.set-font { position: relative; display: grid; align-content: space-between; gap: 8px; min-height: 92px; padding: 12px; border: 1px solid var(--hair); border-radius: min(var(--radius), 10px); cursor: pointer; transition: border-color .3s var(--ease), background .3s var(--ease); }
+.set-font:hover { border-color: var(--ink3); }
+.set-font:has(:checked) { border-color: var(--ink); background: var(--paper2); box-shadow: inset 0 0 0 1px var(--ink); }
+.set-font:has(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.set-font:has(:disabled) { cursor: default; opacity: .6; }
+.set-font input { position: absolute; opacity: 0; width: 100%; height: 100%; inset: 0; margin: 0; cursor: inherit; }
+.set-font > span { font-size: 25px; line-height: 1.1; overflow-wrap: anywhere; }
+.set-font small { font: 400 13px/1.2 var(--ui); color: var(--ink2); }
 .set-mast { padding: clamp(12px, 2vw, 22px) var(--gutter); border-bottom: var(--heavy) solid var(--line); }
 .set-mast .nameplate { font-size: clamp(26px, 3.2vw, 40px); text-align: left; white-space: normal; }
 .set-page { max-width: 1180px; margin-inline: auto; padding: clamp(14px, 2vw, 24px) var(--gutter) 80px; }

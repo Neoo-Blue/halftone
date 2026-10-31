@@ -15,12 +15,13 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 DESKS = ("world", "us", "business", "tech", "ai", "security", "science")
+MASTHEADS = (("blackletter", "Blackletter"), ("fraktur", "Fraktur"), ("fatface", "Fat face"), ("serif", "Classic serif"), ("theme", "Follows the theme"))
 SLUG, MAILBOX = r"[a-z]{1,40}", r"[^@\s]+@[^@\s]+\.[^@\s]+"
 SSH_TARGET = r"[A-Za-z0-9._][A-Za-z0-9._-]*@[A-Za-z0-9.:_-]+"  # can't start with a dash, or ssh reads it as an option
 
 
-def F(key, label, kind="text", default="", hint="", placeholder="", columns=None):
-    return {"key": key, "label": label, "kind": kind, "default": default, "hint": hint, "placeholder": placeholder, "columns": columns}
+def F(key, label, kind="text", default="", hint="", placeholder="", columns=None, options=None):
+    return {"key": key, "label": label, "kind": kind, "default": default, "hint": hint, "placeholder": placeholder, "columns": columns, "options": options}
 
 
 def COL(key, label, kind="text", pattern=None, options=None, placeholder=""):
@@ -29,7 +30,8 @@ def COL(key, label, kind="text", pattern=None, options=None, placeholder=""):
 
 SECTIONS = [
     {"id": "paper", "title": "The paper", "about": "What it is called and whose day it follows.", "needs": (), "fields": [
-        F("PAPER_NAME", "Name", default="The Morning Paper"),
+        F("PAPER_NAME", "Name", default="The Times"),
+        F("PAPER_FONT", "Title font", "choice", "blackletter", options=MASTHEADS),
         F("PAPER_TZ", "Time zone", "tz", "UTC", "A name like America/New_York. It sets the date on the masthead and the days in the money report."),
         F("PAPER_SINCE", "First edition", "date", hint="Each day's number counts from here. Blank counts from the day you started the paper."),
     ]},
@@ -203,6 +205,8 @@ def clean(field, value):
         return clean_url(label, value)
     if kind == "date":
         return clean_date(label, value)
+    if kind == "choice" and value not in [v for v, _ in field["options"]]:
+        raise ValueError(f"{label} needs to be one of the choices.")
     if kind == "tz":
         try:
             ZoneInfo(value)
@@ -259,7 +263,7 @@ def view():
     for section in SECTIONS:
         fields = []
         for f in section["fields"]:
-            item = {k: f[k] for k in ("key", "label", "kind", "hint", "placeholder", "columns")}
+            item = {k: f[k] for k in ("key", "label", "kind", "hint", "placeholder", "columns", "options")}
             item["locked"] = bool(from_env(f["key"]))
             if f["kind"] == "secret":
                 item["set"] = bool(get(f["key"]))
