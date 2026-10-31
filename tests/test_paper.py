@@ -207,5 +207,26 @@ for kind, ident in (("product", "stripe"), ("service", "nope")):  # well formed,
         continue
     raise AssertionError((kind, ident))
 
+tries = []
+
+
+def page_for(url):
+    tries.append(url)
+    if "paywall" in url:
+        raise OSError("403")
+    return {"image": "https://open.example/p.jpg", "deck": "A deck", "body": "<p>Real words from the open outlet.</p>" if "open" in url else ""}
+
+
+real_read, s.read_page = s.read_page, page_for
+shut = {"u": "https://paywall.example/a", "src": "Paywall", "sum": "", "img": None, "outlets": [{"src": "Paywall", "u": "https://paywall.example/a"}, {"src": "Empty", "u": "https://empty.example/a"}, {"src": "Open", "u": "https://open.example/a"}, {"src": "Later", "u": "https://open.example/b"}]}
+got = s.enrich(shut)
+assert got["text"] == "<p>Real words from the open outlet.</p>" and got["via"]["src"] == "Open" and got["img"], "a refused publisher must not leave the front page blank, and the text names its outlet"
+assert len(tries) == 3, "it stops at the first outlet with words"
+s.enrich(shut)
+assert len(tries) == 3, "one pass per story, however often the desk refreshes"
+none = s.enrich({"u": "https://paywall.example/b", "src": "Paywall", "sum": "", "img": None, "outlets": [{"src": "Paywall", "u": "https://paywall.example/b"}]})
+assert none["text"] == "" and none["via"] is None
+s.read_page = real_read
+
 exec(open(Path(__file__).with_name("test_settings.py")).read())
 print("all good")

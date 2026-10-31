@@ -32,7 +32,9 @@ All are `GET`.
 
 `/events` takes `limit` (1 to 300, default 100), `min_severity` (0 to 1), `theater`, `domain` (`kinetic` or `economic`), `since` (unix seconds, rounded down to the minute) and `cursor` (from `next_cursor`).
 
-`/intel` takes `scope` (`theater`, `thread` or `global`), `scope_id` and `limit` (1 to 20).
+`/intel` takes `scope` (`theater`, `thread` or `global`), `scope_id`, which needs a `scope`, and `limit` (1 to 20).
+
+The parameters listed here are the only ones that do anything. Others are ignored.
 
 Times are unix seconds, UTC. Every answer carries `meta.generated_at` and `meta.license`. Lists look like this:
 
@@ -44,7 +46,7 @@ An event:
 
 ```json
 {
-  "id": "4f1c9a27b3e05d18",
+  "id": "4f1c9a27b3e05d18a61c0e72d94b3f65",
   "ts": 1793484729,
   "title": "Headline in English",
   "summary": "Summary, when there is one",
@@ -55,12 +57,12 @@ An event:
   "place": "City", "admin1": "Region", "country": "XX",
   "lat": 0.0, "lon": 0.0,
   "theater": "theater_id",
-  "thread_id": "thr:1a2b3c4d",
+  "thread_id": "thr:1a2b3c4d5e6f7a8b9c0d1e2f",
   "actor_a": null, "actor_b": null,
   "fatalities": null,
   "source": "gdelt_events",
   "source_url": "https://publisher.example/story",
-  "title_source": "publisher",
+  "title_source": "headline",
   "lang": "en"
 }
 ```
@@ -69,16 +71,20 @@ Errors look like `{"ok": false, "ts": 1793485138, "error": {"code": "not_found",
 
 ## Limits
 
-30 requests in a burst, then 75 a minute, per address. Past that you get `429` with a `Retry-After` header. Answers are cached on the server for the times above, so polling faster than that returns the same bytes and spends your allowance. If a refresh fails you get the last good copy, so check `meta.generated_at`.
+30 requests in a burst, then 75 a minute, per address (per /64 on IPv6). Past that you get `429` with a `Retry-After` header. Answers are cached on the server for the times above, so polling faster than that returns the same bytes and spends your allowance.
+
+If a refresh fails or the server is busy you get the last good copy, up to an hour old, so check `meta.generated_at`. With no copy to give you get `502`, or `503` with `Retry-After`.
 
 Any site may call it from a browser: `Access-Control-Allow-Origin` is `*`.
 
 ## What it leaves out
 
-Market prices, ACLED data and vessel positions are licensed for reading on WARROOM itself, not for passing on, so they aren't here. That is why the paper's Markets table only appears if you run your own WARROOM.
+Price series, ACLED data and vessel positions are for reading on WARROOM itself, not for passing on, so they aren't here. Neither are events from those feeds, or chokepoint risk summaries, which quote them. That is why the paper's Markets table only appears if you run your own WARROOM.
+
+Assessments and analyst notes are written by a machine with market and shipping data in view, so their text can mention a move or a traffic figure. It is commentary, not a data feed.
 
 ## Using the data
 
-Free to use with attribution to WARROOM (war.wakxi.com). Headlines and links belong to their publishers. The data comes from GDELT, USGS, NASA FIRMS, NASA EONET, GDACS, NOAA SWPC, ReliefWeb, OFAC, the Federal Register and public news and Telegram channels.
+Free to use with attribution to WARROOM (war.wakxi.com). Headlines, summaries and links belong to their publishers. The data comes from GDELT, USGS, NASA FIRMS, NASA EONET, GDACS, NOAA SWPC, ReliefWeb, OFAC, the Federal Register and public news and Telegram channels. Asset counts come from CelesTrak, OpenSky, ADS-B and AIS feeds.
 
 Reports are unverified and assessments are written by a machine. Do not use them for safety, targeting or trading decisions. There is no warranty, and no promise it stays up.

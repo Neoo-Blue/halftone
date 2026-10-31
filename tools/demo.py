@@ -79,7 +79,8 @@ def news():
     for i, c in enumerate(stories[:6] + stories[7:8]):
         c["img"] = picture(f"story{i}")
     lead = {**stories[0], "text": "<p>The agreement, reached after a night of talks, gives each city a seat on a joint board and a share of the upkeep. Engineers say the first section could close to shipping in a storm within four years.</p><p>Critics in the smaller ports said they would watch the costs closely.</p>"}
-    return {"lead": lead, "tops": stories[1:5], "tech_lead": {**stories[7], "text": ""}, "stories": stories * 4, "feeds": 57, "total": 57, "outlets": 50}
+    also = [{"u": c["u"], "t": c["t"], "src": c["src"], "n": len(c["outlets"]), "ts": c["ts"]} for c in stories[5:7] + stories[8:11]]
+    return {"lead": lead, "tops": stories[1:5], "also": also, "tech_lead": {**stories[7], "text": ""}, "stories": stories * 4, "feeds": 57, "total": 57, "outlets": 50}
 
 
 def world():

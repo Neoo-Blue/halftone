@@ -504,18 +504,29 @@ def opening(body, deck):
     return "".join([p for p in paras if not start or re.sub(r"\W+", "", plain(p, 200).lower())[:50] != start][:3])
 
 
+ENRICH_TRIES = 4
+
+
 def enrich(story):
-    """The front page shows real opening paragraphs and a picture from the article. One fetch per story, misses included."""
+    """The front page shows real opening paragraphs and a picture from the article. Publishers often turn the reader away, so it tries
+    the outlets carrying the story until one has words, and names that outlet. One pass per story, misses included."""
     if story["u"] not in ENRICHED:
         if len(ENRICHED) > 500:
             ENRICHED.clear()
-        try:
-            page = read_page(story["u"])
-            ENRICHED[story["u"]] = (page.get("image"), opening(page.get("body"), story["sum"] or plain(page.get("deck"))), plain(page.get("deck")))
-        except Exception:  # noqa: BLE001 - one strange article must not stop the news desk
-            ENRICHED[story["u"]] = (None, "", "")
-    image, text, deck = ENRICHED[story["u"]]
-    return {**story, "img": story["img"] or image, "text": text, "sum": story["sum"] or deck}
+        image, text, deck, via = None, "", "", None
+        for outlet in story.get("outlets", [{"u": story["u"], "src": story["src"]}])[:ENRICH_TRIES]:
+            try:
+                page = read_page(outlet["u"])
+            except Exception:  # noqa: BLE001 - one strange article must not stop the news desk
+                continue
+            image, deck = image or page.get("image"), deck or plain(page.get("deck"))
+            text = opening(page.get("body"), story["sum"] or plain(page.get("deck")))
+            if text:
+                via = outlet
+                break
+        ENRICHED[story["u"]] = (image, text, deck, via)
+    image, text, deck, via = ENRICHED[story["u"]]
+    return {**story, "img": story["img"] or image, "text": text, "sum": story["sum"] or deck, "via": via}
 
 
 def picks(ranked, count):
@@ -543,9 +554,11 @@ def news():
     ranked = sorted(stories, key=lambda c: -heat(c, now))
     hard = [c for c in ranked if set(c["desks"]) & set(NEWS_DESKS)]
     tops = picks(hard, 5)
+    lead = next((t for t in tops if t["text"]), tops[0] if tops else None)  # a lead with words beats a slightly hotter one with none
     used = {c["u"] for c in tops}  # a story leads one desk only
+    also = [{"u": c["u"], "t": c["t"], "src": c["src"], "n": len(c["outlets"]), "ts": c["ts"]} for c in hard if c["u"] not in used][:6]
     tech = [c for c in ranked if set(c["desks"]) & set(TECH_DESKS) and c["u"] not in used]
-    return {"lead": tops[0] if tops else None, "tops": tops[1:], "tech_lead": (picks(tech, 1) or [None])[0], "stories": stories[:400], "feeds": sum(s["ok"] for s in FEED_STATE.values()), "total": len(feeds), "outlets": len({f[1] for f in feeds})}
+    return {"lead": lead, "tops": [t for t in tops if t is not lead], "also": also, "tech_lead": (picks(tech, 1) or [None])[0], "stories": stories[:400], "feeds": sum(s["ok"] for s in FEED_STATE.values()), "total": len(feeds), "outlets": len({f[1] for f in feeds})}
 
 
 def news_view(data):

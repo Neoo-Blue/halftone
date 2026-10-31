@@ -61,12 +61,23 @@ function front(p) {
 
   const L = p.news.data?.lead;
   if (L) {
+    const story = reading(L.via?.u || L.u), also = p.news.data.also || [];
     $('#lead').innerHTML = `
-      <h1 class="headline"><a href="${reading(L.u)}">${tight(L.t)}</a></h1>
+      <h1 class="headline"><a href="${story}">${tight(L.t)}</a></h1>
       ${L.sum ? `<p class="deck">${esc(L.sum)}</p>` : ''}
       ${L.text ? `<div class="lead-body">${L.text}</div>` : ''}
-      <p class="byline">${esc(covered(L))}. Updated ${esc(ago(L.ts))}. <a href="${reading(L.u)}">Read the story</a></p>`;
+      <p class="byline">${esc(covered(L))}. Updated ${esc(ago(L.ts))}.${L.via && L.via.u !== L.u ? ` Text from ${esc(L.via.src)}.` : ''} <a href="${story}">Read the story</a></p>
+      ${also.length ? `<h2 class="also-head">Also in the news</h2><ul class="also">${also.map((n) => `<li><a href="${reading(n.u)}">${esc(n.t)}</a><span>${esc(n.n > 1 ? `${n.src} and ${n.n - 1} more` : n.src)}, ${esc(ago(n.ts))}</span></li>`).join('')}</ul>` : ''}`;
   }
+}
+
+// As many extra headlines as the lead column has room for, so it ends level with the globe and never runs past it.
+function fitAlso() {
+  const list = $('.also');
+  if (!list) return;
+  const room = Math.max($('#orb').getBoundingClientRect().bottom, $('#inside').getBoundingClientRect().bottom);  // their own heights: the column itself stretches to the tallest
+  while (list.lastElementChild && list.getBoundingClientRect().bottom > room) list.lastElementChild.remove();
+  if (!list.children.length) { list.previousElementSibling.remove(); list.remove(); }
 }
 
 // "BBC, New York Times and 4 more": who carried it, which is also why it ranks where it does.
@@ -446,6 +457,7 @@ function render() {
   if (p.on.money) business(p);
   if (p.on.media) arts(p);
   if (p.on.systems) systems(p);
+  fitAlso();
   if (!drawn) {
     drawn = true;
     document.body.classList.add('inked');
