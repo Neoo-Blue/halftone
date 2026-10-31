@@ -1,0 +1,12 @@
+__pycache__/
+node_modules/
+.wrangler/
+.DS_Store
+.env
+*.db
+*.db-*
+/settings.json
+/data/
+ssh_key
+.impeccable/review/
+.impeccable/mocks/

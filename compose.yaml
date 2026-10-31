@@ -1,0 +1,23 @@
+services:
+  paper:
+    image: ghcr.io/neoo-blue/halftone:latest
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8095:8095"  # this machine only. See "Putting it on the internet" in the README before changing it.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - paper-data:/data
+      # - ./ssh_key:/data/ssh_key:ro  # for the Other machines desk
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  paper-data:
