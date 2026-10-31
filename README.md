@@ -6,7 +6,11 @@ A private morning newspaper you run yourself. It opens with real news from 57 ou
 
 Stories open inside the paper, in a clean reader. The globe, charts and meters are all printed in dots, and there are four themes: Morning, Night, Cobalt and Glass. Call it what you like and set the title in blackletter, like a real masthead, or in one of four other faces.
 
-Every picture here comes from `tools/demo.py`, and every name and number in them is made up.
+Every story gets told in its own way. A cyclone draws its track across a map you can scrub through time, with its wind swath, forecast path and the people in its way. An earthquake's shaking spreads from the epicentre. A conflict plays back report by report, and a story shows which outlets carried it and when, and what each one led with. Every map has real place names and a small world in the corner, so you always know where you are.
+
+![A cyclone's track, wind swath and forecast](docs/img/scene.png)
+
+The front page comes from `tools/demo.py`, where every name and number is made up.
 
 ## Run it
 
@@ -25,6 +29,12 @@ Everything else is in **Settings**.
 
 To look around first, with no Docker and no setup, run `python3 tools/demo.py` and open <http://127.0.0.1:8096>.
 
+**Kubernetes:** `kubectl apply -f deploy/kubernetes.yaml` gives you a Deployment, a Service and a 2 GB PersistentVolumeClaim. Keep it at one replica on local or block storage, because the database is SQLite. The file's first lines cover the setup code and keys.
+
+**Proxmox:** run Docker in an LXC and use the steps above. Enable nesting on the container.
+
+**Updating:** `docker compose pull && docker compose up -d`. Your settings and history stay in the `paper-data` volume.
+
 ## What you can connect
 
 Leave anything blank and it stays off the page.
@@ -40,7 +50,13 @@ Leave anything blank and it stays off the page.
 
 ![Settings](docs/img/settings.png)
 
-Each connection has a Test button that tells you in plain words what went wrong. Saved keys can never be read back, not even by you. Any setting can come from the environment instead: see `.env.example`.
+Name the paper and choose its title face, from blackletter like a real masthead to the theme's own. Each connection has a Test button that tells you in plain words what went wrong. Saved keys can never be read back, not even by you. Any setting can come from the environment instead: see `.env.example`.
+
+## AI
+
+Add any provider in Settings: Anthropic, OpenAI, Google Gemini, xAI Grok, OpenRouter, Groq, Mistral, DeepSeek, Together, Ollama, LM Studio, or anything OpenAI-compatible. You can then ask the paper questions, have your mail sorted, and set it up by describing what you want.
+
+Any AI can also read the paper, over MCP or plain HTTP, with a token you control. Only news and world are shared until you tick more. [docs/ai.md](docs/ai.md) has the setup for Claude, Cursor and the rest, and explains why the AI that reads strangers' words can never change a setting.
 
 ## Putting it on the internet
 

@@ -1,5 +1,7 @@
 # Fonts
 
+The map data in `web/land.png`, `web/land-sharp.png` and `web/places.json` comes from Natural Earth, which is in the public domain.
+
 All seven families are under the [SIL Open Font License 1.1](https://openfontlicense.org), and each file here is a subset or variable build of the original.
 
 | File | Family | Copyright |

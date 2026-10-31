@@ -16,12 +16,18 @@ from zoneinfo import ZoneInfo
 
 DESKS = ("world", "us", "business", "tech", "ai", "security", "science")
 MASTHEADS = (("blackletter", "Blackletter"), ("fraktur", "Fraktur"), ("fatface", "Fat face"), ("serif", "Classic serif"), ("theme", "Follows the theme"))
+PROVIDERS = (  # value, label, OpenAI-compatible base address
+    ("anthropic", "Anthropic", ""), ("openai", "OpenAI", "https://api.openai.com/v1"), ("gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai"),
+    ("xai", "xAI Grok", "https://api.x.ai/v1"), ("openrouter", "OpenRouter", "https://openrouter.ai/api/v1"), ("groq", "Groq", "https://api.groq.com/openai/v1"),
+    ("mistral", "Mistral", "https://api.mistral.ai/v1"), ("deepseek", "DeepSeek", "https://api.deepseek.com/v1"), ("together", "Together", "https://api.together.xyz/v1"),
+    ("ollama", "Ollama, on your own machine", "http://localhost:11434/v1"), ("lmstudio", "LM Studio, on your own machine", "http://localhost:1234/v1"), ("custom", "Anything OpenAI-compatible", ""),
+)
 SLUG, MAILBOX = r"[a-z]{1,40}", r"[^@\s]+@[^@\s]+\.[^@\s]+"
 SSH_TARGET = r"[A-Za-z0-9._][A-Za-z0-9._-]*@[A-Za-z0-9.:_-]+"  # can't start with a dash, or ssh reads it as an option
 
 
-def F(key, label, kind="text", default="", hint="", placeholder="", columns=None, options=None):
-    return {"key": key, "label": label, "kind": kind, "default": default, "hint": hint, "placeholder": placeholder, "columns": columns, "options": options}
+def F(key, label, kind="text", default="", hint="", placeholder="", columns=None, options=None, guards=False):
+    return {"key": key, "label": label, "kind": kind, "default": default, "hint": hint, "placeholder": placeholder, "columns": columns, "options": options, "guards": guards}
 
 
 def COL(key, label, kind="text", pattern=None, options=None, placeholder=""):
@@ -74,12 +80,11 @@ SECTIONS = [
         F("PROBES", "Services", "rows", [], "Services in the same group sit together on the page.", columns=[
             COL("group", "Group", placeholder="At home"), COL("name", "Name", placeholder="Router"), COL("url", "Address", "url", placeholder="http://192.168.1.1/")]),
     ]},
-    {"id": "mail", "title": "Mail", "about": "Reads Microsoft 365 mailboxes and lifts what needs you. It never sends, moves or marks anything.", "needs": ("MAIL_TENANT", "MAIL_CLIENT_ID", "MAIL_CLIENT_SECRET", "MAILBOXES"), "fields": [
+    {"id": "mail", "title": "Mail", "about": "Reads Microsoft 365 mailboxes and lifts what needs you. It never sends, moves or marks anything. Add an AI provider and it sorts what the rules can't, up to 400 messages a day.", "needs": ("MAIL_TENANT", "MAIL_CLIENT_ID", "MAIL_CLIENT_SECRET", "MAILBOXES"), "fields": [
         F("MAIL_TENANT", "Tenant ID"),
         F("MAIL_CLIENT_ID", "App client ID"),
         F("MAIL_CLIENT_SECRET", "App client secret", "secret", hint="Give the app Mail.Read and nothing more."),
         F("MAILBOXES", "Mailboxes", "rows", [], columns=[COL("address", "Address", pattern=MAILBOX, placeholder="you@example.com"), COL("label", "Label", placeholder="Support")]),
-        F("ANTHROPIC_API_KEY", "Anthropic API key", "secret", hint="Optional. Sorts what the rules can't, at most 400 messages a day on Claude Haiku. Without it, unsorted mail stays visible as unsorted."),
         F("MAIL_ABOUT", "Who the mail is for", default="the owner of a small online business", hint="Finishes the sentence: You sort incoming email for..."),
     ]},
     {"id": "money", "title": "Money", "about": "Sales minus costs, from any address that returns the money report.", "needs": ("MONEY_URL",), "fields": [
@@ -89,6 +94,18 @@ SECTIONS = [
             COL("key", "Key", pattern=SLUG, placeholder="shop"), COL("name", "Name", placeholder="My Shop"), COL("host", "Web address", placeholder="shop.example.com")]),
         F("EARLIER", "Income from before the report", "rows", [], "Counted in all-time income only.", columns=[
             COL("label", "Label", placeholder="First invoice"), COL("day", "Date", "date"), COL("amount", "Amount", "money", placeholder="100.00")]),
+    ]},
+    {"id": "ai", "title": "AI provider", "about": "Add one and you can ask the paper questions, set it up by describing what you want, and have your mail sorted.", "needs": (), "fields": [
+        F("AI_PROVIDER", "Provider", "select", "anthropic", options=tuple((v, label) for v, label, _ in PROVIDERS), guards=True),
+        F("AI_KEY", "API key", "secret", hint="Not needed for Ollama or LM Studio."),
+        F("AI_MODEL", "Model", placeholder="claude-opus-5-5", hint="Its exact name at your provider. For Anthropic, blank means claude-opus-5-5."),
+        F("AI_URL", "Address", "url", hint="Only if yours differs from the provider's. In Docker, a model on the host is at http://host.docker.internal:11434/v1."),
+    ]},
+    {"id": "access", "title": "AI access", "about": "Let Claude, ChatGPT, Cursor or any agent read this paper, over MCP or plain HTTP. News and world are shared. The rest stays private until you tick it.", "needs": (), "fields": [
+        F("AI_SHARE_MONEY", "Share money", "bool", False),
+        F("AI_SHARE_MEDIA", "Share media", "bool", False),
+        F("AI_SHARE_SYSTEMS", "Share systems", "bool", False),
+        F("AI_SHARE_MAIL", "Share mail", "bool", False, "Senders, subjects and why each one matters, never full text. Anything an AI reads from strangers can try to steer it, so share this only with an AI you trust not to act on it."),
     ]},
     {"id": "brief", "title": "Newsletter", "about": "A daily brief on the Tech desk, from a site built the way this one expects. Most papers leave this blank.", "needs": ("BRIEF_URL",), "fields": [
         F("BRIEF_URL", "Site address", "url", hint="An archive at /n/ linking to issues, each one article element with h2 sections."),
@@ -205,7 +222,7 @@ def clean(field, value):
         return clean_url(label, value)
     if kind == "date":
         return clean_date(label, value)
-    if kind == "choice" and value not in [v for v, _ in field["options"]]:
+    if kind in ("choice", "select") and value not in [v for v, _ in field["options"]]:
         raise ValueError(f"{label} needs to be one of the choices.")
     if kind == "tz":
         try:
@@ -241,9 +258,10 @@ def update(values):
                 typed.add(key)
         dropped = []
         for section in SECTIONS:
-            urls = [f["key"] for f in section["fields"] if f["kind"] == "url"]
+            urls = [f["key"] for f in section["fields"] if f["kind"] == "url" or f["guards"]]
+            was = lambda k, d: d.get(k) or FIELDS[k]["default"]
             weakened = section["id"] == "proxmox" and fresh.get("PVE_INSECURE") and not _saved.get("PVE_INSECURE")  # no certificate check means no proof of who gets the token
-            if not weakened and not any(fresh.get(k, "") != _saved.get(k, "") for k in urls):
+            if not weakened and not any(was(k, fresh) != was(k, _saved) for k in urls):
                 continue
             for f in section["fields"]:
                 if f["kind"] == "secret" and f["key"] not in typed:
@@ -278,8 +296,20 @@ def auth_record():
     return _saved.get("_auth")
 
 
-def set_auth(record):
+def _set_record(name, value):
     with _lock:
-        fresh = {**_saved, "_auth": record}
+        fresh = {**_saved, name: value}
         _write(fresh)
         _saved.update(fresh)
+
+
+def set_auth(record):
+    _set_record("_auth", record)
+
+
+def token_record():
+    return _saved.get("_ai_token")
+
+
+def set_token(digest):
+    _set_record("_ai_token", digest)

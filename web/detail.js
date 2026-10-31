@@ -2,6 +2,7 @@
 // and stories are read inside the paper. The only way off the site is the small "Original" link under a story.
 import { $, esc, usd, whole, ago, span, bytes, dayName, dotPlot, lineChart, tight } from '/lib.js';
 import { makeGlobe } from '/globe.js';
+import { mountScene } from '/scene.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const NAME = document.title;
@@ -29,6 +30,48 @@ const title = (s) => String(s ?? '').replace(/_/g, ' ').replace(/^./, (c) => c.t
 export const reading = (url) => `/read?${new URLSearchParams({ u: url })}`;
 export const picture = (url) => `/img/remote?${new URLSearchParams({ u: url })}`;
 export const eventHref = (s) => `/world/${s.k === 'h' ? 'hazard' : 'event'}/${encodeURIComponent(s.i)}`;
+
+const km = (a, b) => 6371 * Math.acos(Math.min(1, Math.sin(a.la * Math.PI / 180) * Math.sin(b.la * Math.PI / 180) + Math.cos(a.la * Math.PI / 180) * Math.cos(b.la * Math.PI / 180) * Math.cos((a.lo - b.lo) * Math.PI / 180)));
+
+// A sentence or two of what happened, worked out from the track, so every hazard opens with the point.
+function hazardStory(d, t) {
+  const seen = t.filter((p) => !p.fc), ahead = t.filter((p) => p.fc);
+  if (seen.length < 2) return d.about || d.text || '';
+  const peak = seen.reduce((a, b) => ((b.v || 0) > (a.v || 0) ? b : a)), end = seen[seen.length - 1];
+  const far = seen.slice(1).reduce((sum, p, i) => sum + km(seen[i], p), 0);
+  const unit = d.unit || 'km/h';
+  const speed = peak.v ? ` It peaked at ${whole(peak.v)} ${unit} on ${stamp(peak.t)}.` : '';
+  const next = ahead.length ? ` It is forecast to go on for another ${whole(ahead.slice(1).reduce((sum, p, i) => sum + km(ahead[i], p), km(end, ahead[0])))} km.` : '';
+  return `It was first tracked on ${stamp(seen[0].t)} and has covered ${whole(far)} km.${speed} Its last reported position was on ${stamp(end.t)}${end.label ? `, as a ${end.label.toLowerCase()}` : ''}.${next}`;
+}
+
+const impactList = (d) => (d.impact?.length ? `<h3>The impact</h3>${facts(d.impact)}` : '');
+
+function advisories(t, unit = 'km/h') {
+  if (t.length < 3) return '';
+  return `<details class="log"><summary>Every position, ${t.length} in all</summary><table class="num-table"><thead><tr><th scope="col">When</th><th scope="col">Status</th><th scope="col" class="r">Strength</th><th scope="col" class="r">Exposed</th></tr></thead><tbody>${t.map((p) => `<tr><th scope="row">${esc(stamp(p.t))}</th><td>${esc(p.label || '')}${p.fc ? ' (forecast)' : ''}</td><td class="r">${p.v ? `${whole(p.v)} ${esc(unit)}` : ''}</td><td class="r">${p.gale ? whole(p.gale) : ''}</td></tr>`).join('')}</tbody></table></details>`;
+}
+
+const relatedNews = (list) => (list?.length ? `<h3>In the news</h3><ul class="plain">${list.map((n) => `<li><a href="${reading(n.u)}">${esc(n.t)}</a> <span class="small">${esc(n.src)}, ${esc(ago(n.ts))}</span></li>`).join('')}</ul>` : '');
+
+// Reports as time-stamped dots, with the page's subject pulsing among them.
+function reportScene(rows, pin, alt) {
+  const dots = rows.filter((r) => r.la != null && r.lo != null).map((r) => ({ la: r.la, lo: r.lo, t: r.ts, s: r.s, k: r.k || 'k', label: r.t, href: r.k === 'h' ? eventHref({ k: 'h', i: r.i }) : r.i && r.i !== 'demo' ? eventHref({ k: r.k, i: r.i }) : null }));
+  return dots.length || pin ? { dots, pin, span: 8, alt, key: [['k-red', 'Conflict'], ['k-blue', 'Economy'], ['k-orange', 'Hazard']] } : null;
+}
+
+const uniqueReports = (rows) => [...new Map(rows.map((r) => [r.i || r.t, r])).values()];
+const around = (lat, lon, deg = 12) => getDots().filter((x) => Math.abs(x.la - lat) < deg && Math.abs(x.lo - lon) < deg * 1.4);
+
+const coverageSpan = (o) => { const ts = o.map((x) => x.ts).filter(Boolean); return [Math.min(...ts), Math.max(...ts)]; };
+
+// Who carried a story, and when, each dot in its place along the day.
+function spread(outlets) {
+  if (!outlets || outlets.length < 2) return '';
+  const [from, to] = coverageSpan(outlets), width = (to - from) || 1;
+  return `<section class="spread"><h3>How it spread</h3><p class="small">${outlets.length} outlets over ${esc(span(to - from) || 'moments')}.</p>
+    <ol>${outlets.map((o, i) => `<li style="--x:${(((o.ts - from) / width) * 100).toFixed(1)};--i:${i}"><a href="${reading(o.u)}"><i></i><b>${esc(o.src)}</b><span>${esc(o.t || '')}</span><time>${esc(ago(o.ts))}</time></a></li>`).join('')}</ol></section>`;
+}
 
 function facts(rows) {
   const list = rows.filter(([, v]) => v !== null && v !== undefined && v !== '' && v !== false);
@@ -68,7 +111,7 @@ const VIEWS = {
   event(d) {
     const place = [...new Set([d.place, d.admin1].filter(Boolean).flatMap((x) => x.split(', ')).filter((x) => !/^[A-Z]{2}\d*$/.test(x)))].join(', ') || d.country;
     const side = `${facts([['Kind', title(d.category)], ['Place', place], ['When', stamp(d.ts)], ['Who', d.actors.join(', ')], ['Fatalities', d.fatalities], ['Severity', d.severity != null ? `${Math.round(d.severity * 100)} of 100` : ''], ['Confidence', d.confidence != null ? `${Math.round(d.confidence * 100)}%` : '']])}
-      ${onGlobe(d.lat, d.lon)}
+      ${d.lat == null ? '' : onGlobe(d.lat, d.lon)}
       ${d.theater && d.theater !== 'global' ? `<p class="to"><a href="/world/theater/${esc(d.theater)}">This conflict</a></p>` : ''}
       ${d.thread ? `<p class="to"><a href="/world/thread/${esc(d.thread.id)}">${esc(d.thread.title)}</a></p>` : ''}
       ${d.sources.length ? `<h3>Sources</h3><ul class="plain">${d.sources.map((s) => `<li><a href="${reading(s.url)}">${esc(s.title || s.publisher || s.url)}</a>${s.title ? `<time>${esc(s.publisher)}</time>` : ''}</li>`).join('')}</ul>` : ''}`;
@@ -76,12 +119,14 @@ const VIEWS = {
     const body = `${long ? `<div class="page-body"><p>${esc(d.summary)}</p></div>` : ''}${d.note ? notes([d.note]) : ''}
       ${d.story ? storyBody(d.story) : `<p class="empty">${d.sources.length ? 'The publisher would not share the full story with the paper. The sources alongside may have more.' : 'WARROOM has no article for this event, only the report itself.'}</p>`}
       ${d.nearby.length ? `<h3>Nearby in the last three days</h3>${stories(d.nearby)}` : ''}`;
-    return { head: d.title, deck: long ? '' : d.summary, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
+    return {
+      scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: d.title, deck: long ? '' : d.summary, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
   },
 
   theater(d) {
     return {
       head: d.name, deck: `Escalation stands at ${d.esc} of 100.`, meta: `${d.events.length} recent stories`,
+      scene: reportScene(uniqueReports([...d.events, ...getDots().filter((x) => x.w === d.id)]), null, `Reports in ${d.name}, over time`),
       body: `${notes(d.intel)}<h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}`,
       side: onGlobe(d.lat, d.lon), locate: [d.lat, d.lon],
     };
@@ -90,6 +135,7 @@ const VIEWS = {
   thread(d) {
     return {
       head: d.title, deck: d.summary, meta: `${whole(d.count)} reports since ${stamp(d.first)}`,
+      scene: reportScene(d.events, d.events.some((e) => e.la != null) ? null : d.lat != null ? [d.lat, d.lon] : null, `How ${d.title} developed`),
       body: `${notes(d.intel)}<h3>Latest</h3>${stories(d.events)}`,
       side: `${facts([['Status', title(d.status)], ['Last report', ago(d.last)], ['Who', d.actors.join(', ')]])}${onGlobe(d.lat, d.lon)}${d.theater && d.theater !== 'global' ? `<p class="to"><a href="/world/theater/${esc(d.theater)}">This conflict</a></p>` : ''}`,
       locate: [d.lat, d.lon],
@@ -97,10 +143,13 @@ const VIEWS = {
   },
 
   hazard(d) {
+    const t = d.track || [], quake = d.hkind === 'earthquake', moved = t.length > 1;
+    const key = { cyclone: [['k-solid', 'Track'], ['k-dash', 'Forecast'], ['k-red', 'Strongest winds'], ['k-orange', 'Storm winds'], ['k-faint', 'Possible path']], earthquake: [['k-red', 'Violent shaking'], ['k-orange', 'Strong shaking'], ['k-faint', 'Felt']] }[d.hkind];
+    const scene = (moved || d.areas?.length || d.lat != null) ? { track: moved ? t : [], areas: d.areas || [], pin: moved ? null : [d.lat, d.lon], ripple: quake && d.areas?.length ? true : null, unit: d.unit || 'km/h', key, span: quake ? 6 : 4, rippleText: 'The shaking spreading from the epicentre', alt: `Map of ${d.title}` } : null;
     return {
-      head: d.title, deck: d.text, meta: [title(d.hkind), d.country].filter(Boolean).join(', '),
-      body: `<div class="page-body"><p>${esc(d.about || d.text)}</p></div>`,
-      side: `${facts([['Alert', title(d.alert)], ['From', stamp(d.from)], ['Until', stamp(d.to)]])}${onGlobe(d.lat, d.lon)}`, locate: [d.lat, d.lon],
+      head: d.title, deck: d.text, meta: [title(d.hkind), (d.countries?.length ? d.countries.join(', ') : d.country)].filter(Boolean).join(', '), scene,
+      body: `<div class="page-body"><p>${esc(hazardStory(d, t))}</p></div>${impactList(d)}${d.about && d.about !== d.text ? `<div class="page-body"><p>${esc(d.about)}</p></div>` : ''}${advisories(t, d.unit)}${relatedNews(d.related)}`,
+      side: `${facts([['Alert', title(d.alert)], ['From', stamp(d.from)], ['Until', stamp(d.to)], ['Reported by', d.source]])}${d.report ? `<p class="source"><a href="${esc(d.report)}" target="_blank" rel="noopener noreferrer">Full report</a></p>` : ''}${onGlobe(d.lat, d.lon)}`,
     };
   },
 
@@ -117,7 +166,7 @@ const VIEWS = {
     return {
       head: d.title || d.site, deck: d.deck, meta: [d.site, d.author, d.published ? stamp(d.published) : ''].filter(Boolean).join(', '),
       hero: d.image ? picture(d.image) : null,
-      side: d.also?.length ? `<h3>Also covered by</h3><ul class="plain">${d.also.map((o) => `<li><a href="${reading(o.u)}">${esc(o.src)}</a></li>`).join('')}</ul>` : '',
+      side: spread(d.spread),
       body: d.body ? storyBody(d) : `<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
     };
   },
@@ -207,16 +256,24 @@ function page(v, m) {
   const art = v.backdrop ? `<div class="backdrop"><img src="${esc(v.backdrop)}" alt=""></div>` : '';
   const hero = v.hero ? `<button type="button" class="hero ink" data-reveal aria-pressed="false" aria-label="Show the photograph in colour"><img src="${esc(v.hero)}" alt=""></button>` : '';
   const left = v.poster ? `<button type="button" class="page-poster ink" data-reveal aria-pressed="false" aria-label="Show the poster in colour"><img src="${esc(v.poster)}" alt=""></button>` : '';
-  const where = v.locate?.[0] != null ? `<div class="locator"><canvas data-lat="${esc(v.locate[0])}" data-lon="${esc(v.locate[1])}" tabindex="0" role="img" aria-label="Globe centred on this place. Tap a dot to open that report."></canvas></div>` : '';
+  const stage = v.scene ? '<div class="scene-host" data-scene></div>' : '';
+  const where = !v.scene && v.locate?.[0] != null ? `<div class="locator"><canvas data-lat="${esc(v.locate[0])}" data-lon="${esc(v.locate[1])}" tabindex="0" role="img" aria-label="Globe centred on this place. Tap a dot to open that report."></canvas></div>` : '';
   const sub = `${v.deck ? `<p class="deck">${esc(v.deck)}</p>` : ''}${v.meta ? `<p class="byline">${esc(v.meta)}</p>` : ''}`;
   const side = where || v.side ? `<aside class="page-side">${where}${v.side || ''}</aside>` : '';
   return `<nav class="crumb" aria-label="Back">${back}</nav>${art}
-    <header class="page-top${v.poster ? ' with-poster' : ''}">${left}<h1 class="page-head" tabindex="-1">${tight(v.head)}</h1><div class="page-sub">${sub}</div></header>${hero}
+    <header class="page-top${v.poster ? ' with-poster' : ''}">${left}<h1 class="page-head" tabindex="-1">${tight(v.head)}</h1><div class="page-sub">${sub}</div></header>${hero}${stage}
     <div class="page-grid${side ? '' : ' solo'}"><div class="page-main">${v.body || ''}</div>${side}</div>`;
 }
 
-let front = 0, turn = 0, still = null, getDots = () => [];
+let front = 0, turn = 0, still = null, stage = null, getDots = () => [];
 const sheet = () => $('#page');
+
+function mountStage(v) {
+  stage?.destroy();
+  stage = null;
+  const host = $('[data-scene]', sheet());
+  if (host && v.scene) stage = mountScene(host, v.scene, { open: go });
+}
 
 function mountLocator() {
   still?.destroy();
@@ -249,6 +306,8 @@ export async function route() {
   if (!m) {
     still?.destroy();
     still = null;
+    stage?.destroy();
+    stage = null;
     if (!sheet().hidden) await swap(false, () => { sheet().replaceChildren(); document.title = NAME; });
     const target = location.hash && $(location.hash);
     if (target) target.scrollIntoView();
@@ -275,6 +334,7 @@ export async function route() {
   }
   sheet().innerHTML = page(v, m);
   mountLocator();
+  mountStage(v);
   document.title = `${v.head} | ${NAME}`;
   $('.page-head', sheet())?.focus({ preventScroll: true });
 }
@@ -307,7 +367,7 @@ export function start(fly, dots) {
       return undefined;
     }
     const a = e.target.closest('a[href^="/"]');
-    if (!a || a.target || a.pathname === '/settings' || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return undefined;
+    if (!a || a.target || ['/settings', '/ask'].includes(a.pathname) || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return undefined;
     e.preventDefault();
     go(a.getAttribute('href'));
     return undefined;

@@ -266,6 +266,8 @@ components:
 
 # Design System: The Times
 
+The title has its own face, picked in Settings: Manufacturing Consent (blackletter, the default), UnifrakturCook (fraktur), Abril Fatface, Frank Ruhl Libre, or the theme's display face. Everything else follows the type below.
+
 ## Overview
 
 **Creative North Star: "The Halftone Broadsheet"**

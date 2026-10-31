@@ -1,0 +1,101 @@
+# kubectl apply -f deploy/kubernetes.yaml
+#
+# One replica on purpose: the paper's database is SQLite, so one writer at a time, and the volume is ReadWriteOnce. Use a
+# local or block storage class. SQLite's locking is unreliable on NFS.
+#
+# First run: kubectl logs deploy/paper prints the setup code. To reach it: kubectl port-forward svc/paper 8095
+# Keys can go in Settings, or in a Secret, which locks those fields:
+#   kubectl create secret generic paper-env --from-literal=PLEX_TOKEN=... --from-literal=PAPER_AI_TOKEN=...
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: paper-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paper
+  labels:
+    app: paper
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: paper
+  template:
+    metadata:
+      labels:
+        app: paper
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: paper
+          image: ghcr.io/neoo-blue/halftone:latest
+          ports:
+            - name: http
+              containerPort: 8095
+          envFrom:
+            - secretRef:
+                name: paper-env
+                optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: paper-data
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paper
+spec:
+  selector:
+    app: paper
+  ports:
+    - name: http
+      port: 8095
+      targetPort: http

@@ -119,6 +119,15 @@ function world(p) {
   const idx = Math.round(w.index?.value ?? w.index ?? 0);
   const assessed = w.assessed != null ? `The analyst's hourly reading, ${ago(w.ts)}, was ${Math.round(w.assessed)}, on a narrower window than the live index. ` : '';
   const fc = w.forecast.map((f) => `<li><span class="odds" style="--v:${Math.round((f.probability || 0) * 100)}"><i></i></span><b>${Math.round((f.probability || 0) * 100)}%</b><span class="fc-t">${esc(f.statement)} <em>${esc(f.horizon)}</em></span></li>`).join('');
+  const claim = { confirmed: 'Confirmed', reported: 'Reported', claimed: "One side's claim" };
+  const front = (w.front || []).map((s) => {
+    const ref = (s.refs || []).find((r) => /^[0-9a-f]{32}$/.test(r));
+    return `<li><span class="claim ${esc(s.certainty)}">${esc(claim[s.certainty] || s.certainty)}${s.where ? `, ${esc(s.where)}` : ''}</span>
+      <h4>${ref ? `<a href="${eventHref({ k: 'k', i: ref })}">${esc(s.headline)}</a>` : esc(s.headline)}</h4>
+      <p class="prose">${esc(s.what_happened)}</p>
+      <p class="prose"><b>Why it matters.</b> ${esc(s.why_it_matters)}</p>
+      <p class="prose"><b>What to watch.</b> ${esc(s.what_next)}</p></li>`;
+  }).join('');
   const alerts = w.alerts.map((a) => `<li><a href="${a.theater ? `/world/theater/${esc(a.theater)}` : '/#world'}">${esc(a.t)}</a><time>${esc(ago(a.ts))}</time></li>`).join('');
   const haz = w.hazards ? `${whole(w.hazards.red)} red and ${whole(w.hazards.orange)} orange disaster alerts are open.` : '';
   const sp = w.space ? ` Space weather: Kp ${esc(w.space.kp)}, ${w.space.g === 'none' ? 'no geomagnetic storm' : esc(w.space.g)}.` : '';
@@ -126,6 +135,7 @@ function world(p) {
   $('#worldbody').innerHTML = `
     <div class="wire" id="wire"></div>
     <div class="world-main">
+      ${front ? `<h3 class="sub-head">What matters today</h3><ol class="desk">${front}</ol>` : ''}
       <h3 class="sub-head">The escalation index stands at ${idx}</h3>
       <p class="prose">${esc(assessed)}${esc(w.rationale || w.headline)}</p>
       ${w.most ? `<p class="prose">${esc(w.most)}</p>` : ''}
@@ -445,6 +455,7 @@ function systems(p) {
 
 function render() {
   const p = paper;
+  $('#ask-link').hidden = !p.on.ai;
   for (const [id, key] of DESKS) {
     $(`#${id}`).hidden = !p.on[key];
     $(`.desks a[href="/#${id}"]`).parentNode.hidden = !p.on[key];

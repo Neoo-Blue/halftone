@@ -228,5 +228,28 @@ none = s.enrich({"u": "https://paywall.example/b", "src": "Paywall", "sum": "", 
 assert none["text"] == "" and none["via"] is None
 s.read_page = real_read
 
+# every kind of hazard comes from whoever published it, and strangers' addresses aren't followed
+for url in ("http://169.254.169.254/x", "https://gdacs.org.evil.example/x", "https://www.gdacs.org.evil.example/x", "file:///etc/passwd"):
+    try:
+        s.open_json(url, s.GDACS)
+    except ValueError:
+        continue
+    raise AssertionError(url)
+assert [s.area_level(n) for n in ("Poly_Green", "Poly_Orange", "Poly_Red", "Poly_Cones", "Poly_Circle", "Point_Centroid", "Poly_SMPInt_4", "Poly_SMPInt_6", "Poly_SMPInt_9", "Poly_Other")] == [1, 2, 3, 0, None, None, 1, 2, 3, 2]
+assert len(s.thin_ring([[i, i] for i in range(1000)])) <= 125 and s.rings_of({"type": "Point", "coordinates": [1, 2]}) == []
+assert len(s.rings_of({"type": "MultiPolygon", "coordinates": [[[[1, 2], [3, 4]]], [[[5, 6], [7, 8]]]]})) == 2
+real_open = s.open_json
+s.open_json = lambda url, *a: {"channel": {"item": [
+    {"latitude": "16", "longitude": "89.1", "wind_speed": "18", "storm_status": ["Storm", "Storm"], "advisory_datetime": "27 Oct 2026 06:00", "actual": "True", "windrad39km": "120", "pop39": "5", "pop74": "0", "popstormsurge": ""},
+    {"latitude": "21", "longitude": "81", "wind_speed": "12", "storm_status": "Depression", "advisory_datetime": "26 Oct 2026 06:00", "actual": "False"}]}}
+t = s.cyclone("x")
+assert [p["la"] for p in t] == [21, 16] and t[1]["v"] == 65 and t[1]["label"] == "Storm" and t[0]["fc"] and not t[1]["fc"] and t[1]["gale"] == 5 and t[1]["r"] == 120, t
+s.open_json = lambda *a: (_ for _ in ()).throw(OSError("down"))
+assert s.hazard_depth("gdacs:TC:1")["track"] == [], "a source that doesn't answer leaves the page standing"
+s.open_json = real_open
+for hostile in ("gdacs:TC:1/../../x", "gdacs:T C:1", "eonet:../../x", "other:1"):
+    assert s.hazard_depth(hostile)["track"] == [], hostile
+assert s.number("") == 0.0 and s.number(None) == 0.0 and s.number("2.5") == 2.5
 exec(open(Path(__file__).with_name("test_settings.py")).read())
+exec(open(Path(__file__).with_name("test_ai.py")).read())
 print("all good")

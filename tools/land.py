@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Rasterize world-atlas land-50m.json (curl it from jsdelivr) to web/land.png, the globe's mask."""
+"""Rasterize world-atlas land-50m.json (curl it from jsdelivr) to web/land.png, the globe's mask. With a width and a path (land-10m.json 5400 web/land-sharp.png) it makes the sharper map the scenes zoom into."""
 import json, sys
 from PIL import Image, ImageDraw
 
-W, H, SCALE = 1024, 512, 4  # supersampled, then shrunk for soft coastlines
+W, H, SCALE = int(sys.argv[2]) if len(sys.argv) > 2 else 1024, int(sys.argv[2]) // 2 if len(sys.argv) > 2 else 512, 4 if len(sys.argv) < 3 else 2  # supersampled, then shrunk for soft coastlines
 topo = json.load(open(sys.argv[1]))
 sx, sy = topo["transform"]["scale"]; tx, ty = topo["transform"]["translate"]
 arcs = []
@@ -28,4 +28,4 @@ for g in topo["objects"]["land"]["geometries"]:
         d.polygon(ring(poly[0]), fill=255)
         for hole in poly[1:]:
             d.polygon(ring(hole), fill=0)
-img.resize((W, H), Image.LANCZOS).save("web/land.png", optimize=True)
+img.resize((W, H), Image.LANCZOS).convert("1").save(sys.argv[3], optimize=True) if len(sys.argv) > 3 else img.resize((W, H), Image.LANCZOS).save("web/land.png", optimize=True)

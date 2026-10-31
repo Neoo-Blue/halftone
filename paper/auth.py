@@ -138,6 +138,20 @@ def _session_key(token):
     return _digest(token + os.environ.get("PAPER_PASSWORD", "")).hex()
 
 
+def new_token():
+    """For AI clients. Shown once and stored hashed, so losing the file doesn't lose it to anyone."""
+    token = "paper_" + secrets.token_urlsafe(32)
+    settings.set_token(_digest(token).hex())
+    return token
+
+
+def token_ok(token):
+    env, saved = os.environ.get("PAPER_AI_TOKEN"), settings.token_record()
+    if env:
+        return hmac.compare_digest(_digest(token), _digest(env))
+    return bool(saved) and hmac.compare_digest(_digest(token).hex(), saved)
+
+
 def start_session():
     token = secrets.token_urlsafe(32)
     now = int(time.time())
