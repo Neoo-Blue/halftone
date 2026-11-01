@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """A private newspaper for one reader.
 
-Background jobs snapshot every source into SQLite. The page only ever reads those snapshots, so a slow or dead
-source can never slow the paper: it shows the last good copy, marked with its age. Stdlib apart from the Anthropic
-SDK, which only mail triage imports. Everything about the owner lives in settings.py, and a section with nothing
+Background jobs snapshot every source into SQLite. The front page only ever reads those snapshots, so a slow or dead
+source can never slow it: it shows the last good copy, marked with its age. Stdlib apart from the Anthropic SDK and
+websockets, which only AI calls and LiveKit voices import. Everything about the owner lives in settings.py, and a section with nothing
 set is simply off. Nothing is served to anyone who hasn't passed auth.py. A browser that has signed in keeps the last edition
 for offline reading until its session ends, for three days at most.
 """

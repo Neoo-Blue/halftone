@@ -58,7 +58,7 @@ SECTIONS = [
     {"id": "world", "title": "World", "about": "The globe, the conflict desk and the odds. Works from the first minute.", "needs": ("WARROOM_URL",), "fields": [
         F("WARROOM_URL", "WARROOM address", "url", "https://war.wakxi.com/api/v1", "The free public API. Change it only if you run your own WARROOM."),
     ]},
-    {"id": "news", "title": "News", "about": "More than 60 outlets are already on the wire. Add your own here.", "needs": (), "fields": [
+    {"id": "news", "title": "News", "about": "Nearly 60 outlets are already on the wire, and 24 more count toward who is covering a story. Add your own here.", "needs": (), "fields": [
         F("FOLLOW", "Follow", hint="Names or subjects, separated by commas, or use the Follow button on any search. They get their own place on the front page."),
         F("MUTE", "Mute", hint="Names or subjects, separated by commas. Stories about them leave the paper."),
         F("SIDES_AI", "Compare each side's case with AI", "bool", True, hint="On a story several outlets carry, sets out the case for and against. About one cheap question a story."),
@@ -69,7 +69,7 @@ SECTIONS = [
     ]},
     {"id": "search", "title": "Search", "about": "Search reaches past the paper. A question to the wider web sends the words you typed, and nothing else, to the services below.", "needs": (), "fields": [
         F("FIND_OUTSIDE", "Search outside the paper", "bool", True, hint="Wikipedia, Bing News, Hacker News, arXiv, GitHub, Polymarket, Yahoo Finance, ESPN and Open-Meteo. No keys needed."),
-        F("WEB_SEARCH", "Web search", "select", "ai", options=(("off", "Off"), ("ai", "Your AI provider, if it has one"), ("searxng", "A SearXNG of your own"), ("brave", "Brave Search")), hint="Anthropic's costs about a cent a search."),
+        F("WEB_SEARCH", "Web search", "select", "ai", options=(("off", "Off"), ("ai", "Your AI provider, if it's Anthropic"), ("searxng", "A SearXNG of your own"), ("brave", "Brave Search")), hint="Anthropic's costs about a cent a search."),
         F("SEARXNG_URL", "SearXNG address", "url", placeholder="http://searxng:8080"),
         F("BRAVE_KEY", "Brave Search key", "secret"),
         F("FIND_AI", "Answer at the top of a search", "bool", True, hint="One cheap AI question a search, from the sources on the page. Your mail, money and machines are never part of it."),
@@ -170,7 +170,7 @@ SECTIONS = [
         F("AI_MODEL", "Model", placeholder="claude-opus-5-5", hint="Its exact name at your provider. For Anthropic, blank means claude-opus-5-5."),
         F("AI_URL", "Address", "url", hint="Only if yours differs from the provider's. In Docker, a model on the host is at http://host.docker.internal:11434/v1."),
     ]},
-    {"id": "access", "title": "AI access", "about": "Let Claude, ChatGPT, Cursor or any agent read this paper, over MCP or plain HTTP. News and world are shared. The rest stays private until you tick it. Headlines are strangers' words too, so don't give a token to an agent that acts without asking you.", "needs": (), "fields": [
+    {"id": "access", "title": "AI access", "about": "Let Claude, ChatGPT, Cursor or any agent read this paper, over MCP or plain HTTP. News, world, weather and sports are shared. The rest stays private until you tick it. Headlines are strangers' words too, so don't give a token to an agent that acts without asking you.", "needs": (), "fields": [
         F("AI_SHARE_MONEY", "Share money", "bool", False),
         F("AI_SHARE_MEDIA", "Share media", "bool", False),
         F("AI_SHARE_SYSTEMS", "Share systems", "bool", False),

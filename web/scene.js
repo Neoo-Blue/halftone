@@ -55,7 +55,7 @@ export function mountScene(host, spec, { open = () => {} } = {}) {
       <div class="scene-zoom"><button type="button" data-zoom="1.5" aria-label="Zoom in">${ICONS.plus}</button><button type="button" data-zoom="0.66" aria-label="Zoom out">${ICONS.minus}</button></div>
       ${spec.key ? `<ul class="scene-key">${spec.key.map(([cls, text]) => `<li><i class="${esc(cls)}"></i>${esc(text)}</li>`).join('')}</ul>` : ''}
     </div>
-    ${timed ? `<figcaption class="scene-clock"><button type="button" class="scene-play" aria-label="Play"></button>
+    ${timed ? `<figcaption class="scene-clock"><button type="button" class="scene-play" aria-label="Play">${ICONS.play}</button>
       <div class="scene-time"><canvas class="scene-curve" aria-hidden="true"></canvas><input type="range" min="0" max="1000" value="0" aria-label="Move through time"></div>
       <output class="scene-now"></output></figcaption>` : ''}
   </figure>`;

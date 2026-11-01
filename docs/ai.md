@@ -4,7 +4,7 @@ There are two separate things here: the paper using an AI, and an AI using the p
 
 ## The paper using an AI
 
-Add a provider under **AI provider** in Settings. That turns on three things:
+Add a provider under **AI provider** in Settings. That turns on:
 
 - **Ask**: a page in the paper for questions about today's edition and everything you've connected.
 - **Set it up by asking**: describe what you want at the top of Settings and it proposes the changes. Nothing changes until you press Apply.

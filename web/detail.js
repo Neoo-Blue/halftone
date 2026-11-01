@@ -273,7 +273,7 @@ async function fillTakes(url) {
   const t = await fetch('/api/takes', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ url }) }).then((r) => r.json()).catch(() => ({}));
   if (!box.isConnected || (!t.agreed && !t.contested)) return;
   const said = Object.values(t.stances || {}), n = (k) => said.filter((x) => x === k).length;
-  box.innerHTML = `${t.contested ? `<h4>On ${esc(t.subject)}</h4>
+  box.innerHTML = `${t.contested ? `<h4>On ${esc(t.subject.replace(/^The /, 'the '))}</h4>
       ${n('for') + n('against') ? `<p class="stance-line"><span class="stance-bar" role="img" aria-label="${n('for')} for, ${n('against')} against, ${n('neutral')} neutral">${[['f', n('for')], ['n', n('neutral')], ['a', n('against')]].filter(([, x]) => x).map(([k, x]) => `<i class="st-${k}" style="flex:${x}"></i>`).join('')}</span>${n('for')} for, ${n('against')} against, ${n('neutral')} neutral</p>` : '<p class="stance-line">Every outlet here reports it straight, without taking a side.</p>'}
       <div class="cases">${t.for ? `<div><b>The case for</b><p>${esc(t.for)}</p></div>` : ''}${t.against ? `<div><b>The case against</b><p>${esc(t.against)}</p></div>` : ''}</div>` : ''}
     ${t.agreed ? `<p class="agreed"><b>Every report agrees:</b> ${esc(t.agreed)}</p>` : ''}<small>Written by AI from ${t.n} outlets. It can be wrong.</small>`;

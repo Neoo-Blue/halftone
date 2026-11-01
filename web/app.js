@@ -543,7 +543,7 @@ function tape(p) {
 
 // ---------------------------------------------------------------- arranging the page
 
-const USUAL = ['world', 'tech', 'sports', 'mail', 'business', 'usage', 'arts', 'systems'];
+const USUAL = ['world', 'sides', 'tech', 'sports', 'mail', 'business', 'usage', 'arts', 'systems'];
 const screenForm = () => (innerWidth < 860 ? 'phone' : 'wide');
 const saveLayout = (body) => fetch('/api/layout', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify(body) });
 let order = null, arranging = false;
