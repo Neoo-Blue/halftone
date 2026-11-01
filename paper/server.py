@@ -3228,6 +3228,8 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     os.umask(0o077)  # the database holds mail subjects and sessions: nobody else on the box needs to read it
     init_db()
+    with db() as c:
+        c.execute("DELETE FROM page")  # a saved story keeps the cleaning it was read with, so a new build reads them afresh
     auth.announce()
     socket.setdefaulttimeout(60)
     for name, fn, every in JOBS:

@@ -244,21 +244,30 @@ const rail = (title, rows) => (rows?.length ? `<h3>${title}</h3><ul class="rail-
 
 // A wide page sets the story in newspaper columns, in blocks short enough that the eye never scrolls back up to find the next column. The first block sits beside the photograph.
 function storyBody(s, photo = '') {
-  const src = document.createElement('template'), blocks = [[]];
+  const src = document.createElement('template'), blocks = [{ html: [], words: 0 }];
   src.innerHTML = s.body;
   const same = (a, b) => a?.replace(/\s+/g, ' ').trim().slice(0, 80) === b?.replace(/\s+/g, ' ').trim().slice(0, 80);
   if (same(src.content.firstElementChild?.textContent, s.deck)) src.content.firstElementChild.remove();  // a feed's summary is often the story's first line, and the deck has just said it
-  let words = 0;
-  for (const el of src.content.children) {
-    if (words >= (blocks.length === 1 ? 150 : 420) || (/^H\d$/.test(el.tagName) && words > 60)) {
-      blocks.push([]);
-      words = 0;
+  const close = () => {  // a scrap left before a heading joins the block above rather than being spread over the columns
+    const [last, prev] = [blocks.at(-1), blocks.at(-2)];
+    if (prev && last.words < 90 && !/^<h\d/.test(last.html[0])) {
+      prev.html.push(...last.html);
+      prev.words += last.words;
+      blocks.pop();
     }
-    blocks[blocks.length - 1].push(el.outerHTML);
-    words += el.textContent.split(/\s+/).length;
+  };
+  for (const el of src.content.children) {
+    const now = blocks.at(-1);
+    if (now.words >= (blocks.length === 1 ? 150 : 420) || (/^H\d$/.test(el.tagName) && now.words)) {  // a heading always opens a block, so it can sit over all its columns
+      close();
+      blocks.push({ html: [], words: 0 });
+    }
+    blocks.at(-1).html.push(el.outerHTML);
+    blocks.at(-1).words += el.textContent.split(/\s+/).length;
   }
-  const [first, ...rest] = blocks.map((b) => b.join(''));
-  return `<div class="page-body story-body"><div class="story-chunk story-lead">${photo}<div>${first}</div></div>${rest.map((b) => `<div class="story-chunk">${b}</div>`).join('')}</div>
+  close();
+  const [first, ...rest] = blocks;
+  return `<div class="page-body story-body"><div class="story-chunk story-lead">${photo}<div>${first.html.join('')}</div></div>${rest.map((b) => `<div class="story-chunk${b.words < 90 ? ' short' : ''}">${b.html.join('')}</div>`).join('')}</div>
     <p class="source">Original at <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.site)}</a></p>`;
 }
 const photograph = (url) => (url ? `<button type="button" class="hero ink" data-reveal aria-pressed="false" aria-label="Show the photograph in colour"><img src="${esc(picture(url))}" alt=""></button>` : '');

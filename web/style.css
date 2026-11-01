@@ -416,6 +416,7 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 .page-side { position: sticky; top: var(--stick, 64px); min-width: 0; padding-bottom: 72px; }  /* the bottom clears the Ask button */
 .page-side > :first-child { margin-top: 0; }
 .story-lead > .hero { margin-bottom: 18px; }
+.story-body .story-chunk > :is(h2, h3, h4):first-child { margin: 1.5em 0 .6em; padding-top: 14px; border-top: var(--heavy) solid var(--line); font: 800 clamp(26px, calc(var(--read) * 1.5), 36px)/1.12 var(--display); letter-spacing: var(--head-track); text-wrap: balance; }
 .page-cols, #machine-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 18px clamp(24px, 3vw, 44px); align-items: start; }
 .page-main > .wire-list { columns: 380px; column-gap: clamp(24px, 3vw, 44px); column-rule: var(--rule) solid var(--hair); }
 .page-cols .plain { columns: 300px; column-gap: clamp(24px, 3vw, 44px); }
@@ -957,9 +958,10 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 }
 @media (min-width: 1240px) {
   .story-body { max-width: min(100%, 2300px); }
-  .story-chunk { column-count: 2; column-gap: clamp(32px, 3vw, 56px); column-rule: var(--rule) solid var(--hair); margin-bottom: 1.1em; padding-bottom: 1.1em; border-bottom: var(--rule) solid var(--hair); }
-  .story-chunk:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
-  .story-chunk :is(h2, h3) { break-after: avoid; margin-top: 0; }
+  .story-chunk { column-count: 2; column-gap: clamp(32px, 3vw, 56px); column-rule: var(--rule) solid var(--hair); margin-bottom: 1.5em; }  /* no rule between blocks: only a heading marks a new section */
+  .story-chunk:last-child { margin-bottom: 0; }
+  .story-chunk.short { column-count: 1; max-width: calc(var(--read) * 33.4); }
+  .story-chunk > :is(h2, h3, h4):first-child { column-span: all; }
   .story-chunk p { orphans: 2; widows: 2; }
   .story-chunk p:last-child { margin-bottom: 0; }
   .story-lead:has(> .hero) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(32px, 3vw, 56px); column-count: auto; }
