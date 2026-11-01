@@ -69,6 +69,16 @@ The paper is full of text written by strangers: headlines, articles, your mail. 
 | Set it up by asking | No, only your request and your settings | Only by proposing, and you press Apply |
 | AI clients over MCP or REST | Yes | No |
 
-Set it up by asking also can't touch keys, the AI settings, who may read the paper, or file paths. Whatever it proposes goes through the same checks as the settings page. If you connect another AI over MCP, what that AI can do with what it reads is up to that AI, which is why mail is off until you share it.
+Set it up by asking also can't touch keys, the AI settings, who may read the paper, which mailboxes are read, or file paths, and it can't move a connection that already has a saved key. You see each old value beside its new one before you press Apply, and whatever it proposes goes through the same checks as the settings page.
 
-Anything you type into Ask or Set it up by asking goes to your AI provider, along with the parts of the paper it needs. With Ask, that can include mail subjects and money. Use Ollama or LM Studio to keep it on your own machine.
+If you connect another AI over MCP, what it does with what it reads is up to that AI. Headlines are strangers' words too, so don't give a token to an agent that acts without asking you, and share mail only with an AI you trust not to act on it.
+
+## What your AI provider sees
+
+- **Ask** sends every desk you've connected with each question, including mail subjects and money, whatever you've ticked under AI access. Those boxes are for other AIs.
+- **Set it up by asking** sends your request and your settings, with keys left out and anything after a `?` in an address removed. That still includes your machine names, addresses on your network and SSH logins.
+- **Mail sorting** sends senders, subjects and the first lines of each message.
+
+Use Ollama or LM Studio to keep all of it on your own machine.
+
+If you think someone got into your paper, change the password, which also ends the AI token, and check the provider's Address in Settings, because mail sorting sends mail details to it.

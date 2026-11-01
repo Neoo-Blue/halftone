@@ -137,9 +137,9 @@ async function suggest() {
     if (!r.ok) throw new Error(body.error);
     say.textContent = '';
     proposal = body.changes;
-    const list = body.changes.map((c) => `<li><b>${esc(c.label)}</b><code>${esc(shown(c.value))}</code></li>`).join('');
+    const list = body.changes.map((c) => `<li><b>${esc(c.label)}</b><span>${c.was && shown(c.was) !== shown(c.value) && (!Array.isArray(c.was) || c.was.length) ? `<code>${esc(shown(c.was))}</code> becomes ` : ''}<code>${esc(shown(c.value))}</code></span></li>`).join('');
     out.innerHTML = `<p>${esc(body.say)}</p>${list ? `<ul>${list}</ul><div class="set-foot"><button type="button" class="btn" id="help-apply">Apply these changes</button></div>` : ''}
-      ${body.needs.length ? `<p>Then enter yourself: ${esc(body.needs.join(', '))}.</p>` : ''}${body.refused.length ? `<p>Left out, because Settings wouldn't accept them: ${esc(body.refused.join(', '))}.</p>` : ''}`;
+      ${body.needs.length ? `<p>Then enter yourself: ${esc(body.needs.join(', '))}.</p>` : ''}${body.refused.length ? `<p>Left out: ${esc(body.refused.join(', '))}. An address with a saved key has to be changed by hand, and Settings has to accept every value.</p>` : ''}`;
   } catch (e) {
     say.textContent = e.message && !e.message.includes('fetch') ? e.message : 'The paper did not answer.';
   }
@@ -287,7 +287,7 @@ try {
   data = await r.json();
   draw();
   if (location.hash) $(location.hash)?.scrollIntoView();
-  data.sections.filter((s) => s.on && s.can_test).forEach((s) => test(s.id));
+  data.sections.filter((s) => s.on && s.can_test && s.id !== 'ai').forEach((s) => test(s.id));  // a test of the AI costs money, so that one waits for the button
 } catch {
   $('#set-deck').textContent = 'Settings did not load. Reload the page to try again.';
 }

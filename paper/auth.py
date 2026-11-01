@@ -22,6 +22,7 @@ if MODE not in ("password", "none"):
 COOKIE = "paper_session"
 SESSION_DAYS = 30
 MIN_PASSWORD = 10
+MIN_TOKEN = 32
 FAIL_LIMIT, FAIL_WINDOW = 10, 300
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 
@@ -50,6 +51,8 @@ def announce():
     global _setup_code
     if MODE == "password" and 0 < len(os.environ.get("PAPER_PASSWORD", "")) < MIN_PASSWORD:
         raise SystemExit(f"PAPER_PASSWORD needs at least {MIN_PASSWORD} characters")
+    if 0 < len(os.environ.get("PAPER_AI_TOKEN", "")) < MIN_TOKEN:  # the ports have no failure limit, so length is what stops guessing
+        raise SystemExit(f"PAPER_AI_TOKEN needs at least {MIN_TOKEN} characters")
     if state() == "setup":
         _setup_code = secrets.token_urlsafe(9)
         print(f"\n  This paper has no password yet. Open it and enter this setup code: {_setup_code}\n", flush=True)
@@ -130,6 +133,7 @@ def change_password(current, new):
         return False
     store_password(new)
     end_all()
+    settings.set_token(None)  # a stolen session could have made one, and it must not outlive the change
     return True
 
 
@@ -141,7 +145,7 @@ def _session_key(token):
 def new_token():
     """For AI clients. Shown once and stored hashed, so losing the file doesn't lose it to anyone."""
     token = "paper_" + secrets.token_urlsafe(32)
-    settings.set_token(_digest(token).hex())
+    settings.set_token(_session_key(token))
     return token
 
 
@@ -149,7 +153,7 @@ def token_ok(token):
     env, saved = os.environ.get("PAPER_AI_TOKEN"), settings.token_record()
     if env:
         return hmac.compare_digest(_digest(token), _digest(env))
-    return bool(saved) and hmac.compare_digest(_digest(token).hex(), saved)
+    return bool(saved) and hmac.compare_digest(_session_key(token), saved)
 
 
 def start_session():

@@ -33,6 +33,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import ai
+from ai import read_all
 import auth
 import settings
 
@@ -160,23 +161,10 @@ CHECKED = urllib.request.build_opener(KeptRedirect)
 UNCHECKED = urllib.request.build_opener(KeptRedirect, urllib.request.HTTPSHandler(context=NO_VERIFY))
 
 
-def read_all(response, limit, seconds=30):
-    """A socket timeout is per read, so a server could drip a byte a minute forever. The whole body gets a deadline."""
-    body, end = bytearray(), time.monotonic() + seconds
-    while len(body) < limit:
-        part = response.read1(65536)
-        if not part:
-            break
-        body += part
-        if time.monotonic() > end:
-            raise OSError("too slow")
-    return bytes(body)
-
-
 def fetch(url, headers=None, timeout=30, insecure=False, raw=False):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json", **(headers or {})})
     with (UNCHECKED if insecure else CHECKED).open(req, timeout=timeout) as r:
-        body = r.read()
+        body = read_all(r, 20_000_000, max(timeout, 30))  # whoever answers, it can't fill the memory or hold a job forever
     return body if raw else json.loads(body)
 
 
@@ -953,14 +941,17 @@ def host_stats(name, role, target):
         out = subprocess.run(["ssh", "-i", C("PAPER_SSH_KEY"), "-o", "BatchMode=yes", "-o", "ConnectTimeout=6", "-o", "StrictHostKeyChecking=accept-new", "-o", f"UserKnownHostsFile={DATA / 'known_hosts'}", "--", target],
                              capture_output=True, text=True, timeout=15)
         s = json.loads(out.stdout)
-    except (subprocess.SubprocessError, ValueError, OSError) as e:
+        return host_row(name, role, s)
+    except (subprocess.SubprocessError, ValueError, OSError, KeyError, TypeError, IndexError, AttributeError) as e:
         return {"name": name, "role": role, "ok": False, "error": type(e).__name__}
-    if not isinstance(s, dict) or "disks" not in s:
-        return {"name": name, "role": role, "ok": False, "error": "bad stats"}
+
+
+def host_row(name, role, s):
+    """A machine's answer is checked here, so one odd reply marks that machine down instead of breaking the page."""
     disk = max(s["disks"], key=lambda d: d["total"], default={"total": 0, "used": 0, "mount": "/"})
     fullest = max(s["disks"], key=lambda d: d["used"] / (d["total"] or 1), default=disk)
     return {"name": name, "fullest": {"mount": fullest["mount"], "pct": round(100 * fullest["used"] / (fullest["total"] or 1))}, "role": role, "ok": True, "cpu": s["cpu"], "mem_used": (s["mem_total"] - s["mem_avail"]) * 1024, "mem_total": s["mem_total"] * 1024,
-            "disk_used": disk["used"] * 1024, "disk_total": disk["total"] * 1024, "disk_mount": disk["mount"], "load": s["load"], "cores": s["cores"], "uptime": s["uptime"],
+            "disk_used": disk["used"] * 1024, "disk_total": disk["total"] * 1024, "disk_mount": disk["mount"], "load": [float(x) for x in s["load"][:3]] or [0.0], "cores": int(s["cores"]), "uptime": s["uptime"],
             "temp": s["temp"], "raid_degraded": s["raid_degraded"], "failed_units": s["failed_units"]}
 
 
@@ -1404,6 +1395,13 @@ def note(sections):
     return " ".join(parts)
 
 
+def safe_money(feed, costs, days):
+    try:
+        return money_report(feed, costs, days) if feed else None
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None  # a stored report from before this check, or one a change of address left behind
+
+
 def desks_on():
     return {"ai": ai.ready(), "world": settings.enabled("world"), "brief": settings.enabled("brief"), "mail": settings.enabled("mail"), "money": settings.enabled("money"), "media": settings.enabled("plex"),
             "systems": job_on("probes") or job_on("machines")}
@@ -1423,7 +1421,7 @@ def paper(days=30):
     feed = live("feed")
     costs = get_costs()
     sections["costs"] = costs
-    sections["money"] = money_report(feed["data"], costs, days) if feed["data"] else None
+    sections["money"] = safe_money(feed["data"], costs, days)
     sections["money_as_of"], sections["money_error"] = feed["as_of"], feed["error"]
     found = sorted(worries(sections["machines"]["data"], sections["probes"]["data"], sections["storage"]["data"]) + stale_worries(), key=lambda w: -w[0])
     sections["worries"] = [{"level": lv, "text": t} for lv, t in found]
@@ -1456,7 +1454,7 @@ def view_world(args):
 
 def view_money(args):
     feed = live("feed")
-    m = money_report(feed["data"], get_costs(), 30) if feed["data"] else None
+    m = safe_money(feed["data"], get_costs(), 30)
     return {"as_of": feed["as_of"], "last_30_days": m and {k: m[k] for k in ("gross", "refunds", "fees", "spend", "known", "missing", "result", "orders", "mrr", "subs", "visitors", "abandoned", "products", "lifetime")}, "note": "Amounts are in cents."}
 
 
@@ -1509,7 +1507,8 @@ MCP_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 
 def mcp_reply(message):
     """One JSON-RPC message in, its answer out, or None for a notification, which gets none."""
-    method, rid, params = message.get("method"), message.get("id"), message.get("params") or {}
+    method, rid, params = message.get("method"), message.get("id"), message.get("params")
+    params = params if isinstance(params, dict) else {}
     if rid is None:
         return None
     result = None
@@ -1525,7 +1524,7 @@ def mcp_reply(message):
             result = {"content": [{"type": "text", "text": json.dumps(read_tool(params.get("name"), params.get("arguments")))}], "isError": False}
         except LookupError:
             return {"jsonrpc": "2.0", "id": rid, "error": {"code": -32602, "message": "No such tool."}}
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             result = {"content": [{"type": "text", "text": "Those arguments are not valid."}], "isError": True}
     if result is None:
         return {"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": "No such method."}}
@@ -1572,10 +1571,45 @@ def ask_paper(question):
     return ai.ask(ASK_SYSTEM, f"<paper>{paper_text}</paper>\n\nQuestion: {question.strip()}", max_tokens=1000)
 
 
+HELD_BACK = ("PAPER_SSH_KEY", "PVE_INSECURE", "MAILBOXES", "MAIL_ABOUT")  # a path on this machine, a safety check, whose mail is read, and words in a system prompt
+
+
 def configurable():
-    """What Configure may touch: not secrets, not the AI's own settings, not who may read the paper, not paths on this machine."""
-    held = ("ai", "access")
-    return [f for s in settings.SECTIONS if s["id"] not in held for f in s["fields"] if f["kind"] != "secret" and f["key"] != "PAPER_SSH_KEY" and not settings.from_env(f["key"])]
+    """What Configure may touch: not secrets, not the AI's own settings, not who may read the paper, and not HELD_BACK."""
+    return [f for s in settings.SECTIONS if s["id"] not in ("ai", "access") for f in s["fields"] if f["kind"] != "secret" and f["key"] not in HELD_BACK and not settings.from_env(f["key"])]
+
+
+def bare(url):
+    """People put keys in query strings to check an authenticated address, and those mustn't reach a provider."""
+    return urllib.parse.urlsplit(url)._replace(query="", fragment="").geturl()
+
+
+def url_columns(field):
+    return [c["key"] for c in field["columns"] or [] if c["kind"] == "url"]
+
+
+def shown_to_model(field, value):
+    if field["kind"] == "url":
+        return bare(value)
+    if field["kind"] == "rows":
+        return [{k: bare(v) if k in url_columns(field) else v for k, v in row.items()} for row in value]
+    return value
+
+
+def with_saved_urls(field, value, saved):
+    """A row the model kept comes back without its query string, so put back what it was never shown."""
+    known = {bare(u): u for u in ([saved] if field["kind"] == "url" else [r[k] for r in saved for k in url_columns(field)])}
+    if field["kind"] == "url":
+        return known.get(value, value)
+    if field["kind"] == "rows" and isinstance(value, list):
+        return [{k: known.get(v, v) if k in url_columns(field) and isinstance(v, str) else v for k, v in r.items()} if isinstance(r, dict) else r for r in value]
+    return value
+
+
+def holds_key(key):
+    """Moving a connection that has a saved key is done by hand: a proposal could otherwise move it, then ask for the key to be typed again."""
+    section = next(s for s in settings.SECTIONS if any(f["key"] == key for f in s["fields"]))
+    return settings.FIELDS[key]["kind"] == "url" and any(f["kind"] == "secret" and C(f["key"]) for f in section["fields"])
 
 
 def propose(request):
@@ -1583,7 +1617,7 @@ def propose(request):
     if not isinstance(request, str) or not request.strip() or len(request) > 2000:
         raise ValueError("Say what you want in up to 2,000 characters.")
     open_fields = {f["key"]: f for f in configurable()}
-    described = [{"key": k, "label": f["label"], "kind": f["kind"], "hint": f["hint"], "value": C(k), "options": f["options"], "columns": [{"key": c["key"], "label": c["label"], "options": c["options"]} for c in f["columns"] or []] or None} for k, f in open_fields.items()]
+    described = [{"key": k, "label": f["label"], "kind": f["kind"], "hint": f["hint"], "value": shown_to_model(f, C(k)), "options": f["options"], "columns": [{"key": c["key"], "label": c["label"], "options": c["options"]} for c in f["columns"] or []] or None} for k, f in open_fields.items()]
     secrets_named = [{"key": f["key"], "label": f["label"], "set": bool(C(f["key"]))} for f in settings.FIELDS.values() if f["kind"] == "secret" and f["key"] != "AI_KEY"]
     spend_ai()
     got = ai.json_in(ai.ask(CONFIGURE_SYSTEM, json.dumps({"settings": described, "secrets": secrets_named, "owner_wants": request.strip()}), max_tokens=3000))
@@ -1591,9 +1625,9 @@ def propose(request):
     for key, value in (got.get("changes") or {}).items() if isinstance(got.get("changes"), dict) else ():
         field = open_fields.get(key)
         try:
-            if not field:
+            if not field or holds_key(key):
                 raise ValueError
-            changes.append({"key": key, "label": field["label"], "value": settings.clean(field, value)})
+            changes.append({"key": key, "label": field["label"], "was": shown_to_model(field, C(key)), "value": settings.clean(field, with_saved_urls(field, value, C(key)))})
         except ValueError:
             refused.append(plain(str(key), 40))
     needs = [settings.FIELDS[k]["label"] for k in got.get("needs") or [] if isinstance(k, str) and k in settings.FIELDS and settings.FIELDS[k]["kind"] == "secret"]
@@ -1738,7 +1772,7 @@ def hazard_depth(hid):
             return gdacs_depth(bits[1], bits[2])
         if bits[0] == "eonet" and re.fullmatch(r"EONET_\d+", bits[-1]):
             return eonet_depth(bits[-1])
-    except (OSError, ValueError, KeyError, TypeError, IndexError, http.client.HTTPException):
+    except Exception:  # noqa: BLE001 - a stranger's JSON, in any shape: the page must still stand
         pass
     return {"track": [], "areas": [], "impact": [], "countries": [], "source": None, "report": None}
 
@@ -1753,6 +1787,8 @@ def related_news(*names):
 def d_hazard(hid):
     h = war(f"/hazards/{urllib.parse.quote(hid, safe=':')}")
     depth = hazard_depth(hid)
+    if not str(depth.get("report") or "").startswith(("https://", "http://")):
+        depth["report"] = None  # it comes from their JSON, and a link can carry any scheme
     return {**depth, "related": related_news((h.get("name") or "").split("-")[0] if h.get("kind") == "cyclone" else None, h.get("country") if h.get("kind") in ("earthquake", "volcano", "flood") else None), "kind": "hazard", "title": f"{h.get('name') or h.get('kind')}", "text": h.get("severity_text"), "about": plain((h.get("extra") or {}).get("description"), 600), "alert": h.get("alert"), "country": h.get("country"), "hkind": h.get("kind"), "from": h.get("from_ts"), "to": h.get("to_ts"), "lat": h.get("lat"), "lon": h.get("lon"), "url": h.get("url")}
 
 
@@ -1893,8 +1929,14 @@ def cached_image(source):
 
 # ---------------------------------------------------------------------- jobs + web
 
+MONEY_LISTS = ("sales", "refunds", "spend", "subs", "visitors", "abandoned")
+
+
 def money_feed():
-    return fetch(C("MONEY_URL"), {"Authorization": f"Bearer {C('FEED_TOKEN')}"}, timeout=30)
+    """A report that isn't one raises here, so the last good copy stands."""
+    report = fetch(C("MONEY_URL"), {"Authorization": f"Bearer {C('FEED_TOKEN')}"}, timeout=30)
+    money_report(report, [], 7)
+    return report
 
 
 JOBS = [("brief", brief, 1800), ("world", world, 300), ("news", news, 180), ("mail", scan_mail, 300), ("media", media, 300), ("playing", now_playing, 60), ("probes", probes, 60),
@@ -1948,7 +1990,7 @@ CHECKS = {
     "mail": lambda: counted([bool(special_folders(b)) for b, _ in mailboxes()], "mailboxes"),
     "money": lambda: f"The report answered with {len(money_feed().get('sales', []))} sales.",
     "brief": lambda: f"Found {brief()['title']}.",
-    "ai": lambda: ai.ask("Reply with the word ready.", "Are you there?", max_tokens=20) and f"{dict((v, t) for v, t, _ in settings.PROVIDERS)[ai.provider()]} answered, using {ai.model()}.",
+    "ai": lambda: (spend_ai(), ai.ask("Reply with the word ready.", "Are you there?", max_tokens=20)) and f"{dict((v, t) for v, t, _ in settings.PROVIDERS)[ai.provider()]} answered, using {ai.model()}.",
 }
 REFUSED = {400: "It said the request was wrong. Check the IDs.", 401: "It refused the key. Check it and save again.", 403: "It refused the key. Check what the key is allowed to do.", 404: "Something answered, but this isn't the right address."}
 
@@ -1963,6 +2005,8 @@ def check(section):
         return {"ok": True, "text": CHECKS[section]()}
     except urllib.error.HTTPError as e:
         return {"ok": False, "text": REFUSED.get(e.code, f"It answered with an error, status {e.code}.")}
+    except OverflowError:
+        return {"ok": False, "text": "That's today's limit for AI calls. It resets at midnight."}
     except (OSError, ValueError, KeyError, TypeError, StopIteration, subprocess.SubprocessError, http.client.HTTPException):
         return {"ok": False, "text": "No usable answer from that address."}
 
@@ -2098,7 +2142,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(read_tool(url.path.rsplit("/", 1)[1], args))
             except LookupError:
                 return self.send_json({"error": "There is nothing at this address, or it isn't shared."}, 404)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, OverflowError):
                 return self.send_json({"error": "Those arguments are not valid."}, 400)
         if (url.path == "/api/read" or url.path.startswith("/img/remote")) and self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
             return self.send(403, b"", "text/plain")  # these fetch from the owner's connection and write to disk, so another site can't be allowed to trigger them
@@ -2179,6 +2223,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "The token is set by the environment, so change it there."}, 400)
             return self.send_json({"token": auth.new_token()})
         if path == "/api/ai-token/revoke":
+            if E("PAPER_AI_TOKEN"):
+                return self.send_json({"error": "The token is set by the environment, so change it there."}, 400)
             settings.set_token(None)
             return self.send_json({"ok": True})
         if path not in ("/api/login", "/api/setup"):

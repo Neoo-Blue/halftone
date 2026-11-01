@@ -101,7 +101,7 @@ SECTIONS = [
         F("AI_MODEL", "Model", placeholder="claude-opus-5-5", hint="Its exact name at your provider. For Anthropic, blank means claude-opus-5-5."),
         F("AI_URL", "Address", "url", hint="Only if yours differs from the provider's. In Docker, a model on the host is at http://host.docker.internal:11434/v1."),
     ]},
-    {"id": "access", "title": "AI access", "about": "Let Claude, ChatGPT, Cursor or any agent read this paper, over MCP or plain HTTP. News and world are shared. The rest stays private until you tick it.", "needs": (), "fields": [
+    {"id": "access", "title": "AI access", "about": "Let Claude, ChatGPT, Cursor or any agent read this paper, over MCP or plain HTTP. News and world are shared. The rest stays private until you tick it. Headlines are strangers' words too, so don't give a token to an agent that acts without asking you.", "needs": (), "fields": [
         F("AI_SHARE_MONEY", "Share money", "bool", False),
         F("AI_SHARE_MEDIA", "Share media", "bool", False),
         F("AI_SHARE_SYSTEMS", "Share systems", "bool", False),
@@ -238,6 +238,7 @@ def update(values):
     A saved secret only ever goes to the address it was saved with. Change the address and the secret must be typed
     again, so a stolen session can't point a connection at another host and collect the token.
     """
+    global _saved
     if not isinstance(values, dict):
         raise ValueError("Nothing to save.")
     with _lock:
@@ -270,8 +271,7 @@ def update(values):
                     if fresh.pop(f["key"], None):
                         dropped.append(f["key"])
         _write(fresh)
-        _saved.clear()
-        _saved.update(fresh)
+        _saved = fresh  # in one step: a reader in between would see every setting back at its default
     return dropped
 
 

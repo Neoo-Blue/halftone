@@ -1,11 +1,12 @@
 """One door to any AI model.
 
 Anthropic goes through its SDK. Everything else goes through the OpenAI-compatible chat API, which nearly every provider
-and local runner speaks, so one small adapter covers them all. Keys go only to the provider's own address and never
-follow a redirect.
+and local runner speaks, so one small adapter covers them all. A key goes only to its provider's address, and the adapter
+follows no redirect.
 """
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -23,6 +24,19 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 OPENER = urllib.request.build_opener(NoRedirect)
+
+
+def read_all(response, limit, seconds=30):
+    """A socket timeout is per read, so a server could drip a byte a minute forever. The whole body gets a deadline."""
+    body, end = bytearray(), time.monotonic() + seconds
+    while len(body) < limit:
+        part = response.read1(65536)
+        if not part:
+            break
+        body += part
+        if time.monotonic() > end:
+            raise OSError("too slow")
+    return bytes(body)
 
 
 def provider():
@@ -74,12 +88,14 @@ def _anthropic(system, text, max_tokens, cheap, schema):
 
 def _compatible(system, text):
     """No token limit is sent: providers disagree on what the field is called, and refuse the wrong one."""
+    url = f"{base()}/chat/completions"  # the address before the key, so a save between the two can't pair a saved key with a new host
     body = {"model": model(), "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}]}
     headers = {"Content-Type": "application/json", "User-Agent": "MorningPaper/1.0"}
-    if key():
-        headers["Authorization"] = f"Bearer {key()}"
-    with OPENER.open(urllib.request.Request(f"{base()}/chat/completions", json.dumps(body).encode(), headers), timeout=120) as r:
-        return json.loads(r.read(4_000_000))["choices"][0]["message"]["content"]
+    token = key()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    with OPENER.open(urllib.request.Request(url, json.dumps(body).encode(), headers), timeout=120) as r:
+        return json.loads(read_all(r, 4_000_000, 120))["choices"][0]["message"]["content"]
 
 
 def ask(system, text, max_tokens=1500, cheap=False, schema=None):
