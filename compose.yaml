@@ -1,6 +1,6 @@
 services:
   paper:
-    image: ghcr.io/neoo-blue/halftone:latest
+    image: ghcr.io/neoo-blue/halftone/paper:latest
     build: .
     restart: unless-stopped
     ports:
