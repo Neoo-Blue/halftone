@@ -86,9 +86,9 @@ Ratings are about an outlet's overall slant, not one story. They ship as a start
 
 ## Search, and following anything
 
-Search reaches past the paper. As you type it offers what the paper already knows. On the results page it works out what the words are, then shows them the way that kind of thing is best read: a stock with its price and month, a team with its last result and next game, a town with its forecast, a conflict with who is reporting it, and anything else with its encyclopedia entry. Below that come the paper's own stories, the web, more reporting, what people are saying, research, code, and what the betting markets expect.
+Search reaches past the paper. As you type it offers what the paper already knows. On the results page it works out what the words are, then shows them the way that kind of thing is best read: a stock with its price and month, a team with its last result and next game, a town with its forecast, a conflict with who is reporting it, and anything else with its encyclopedia entry. Below that come the paper's own stories, the web, what the betting markets expect, more reporting, what people are saying now, research and code.
 
-With an AI connected, an answer sits at the top with each claim numbered to its source, and three questions you might ask next. Ask more and it reads the same sources again. Press Follow on anything and it takes its own place on the front page, in that same form, kept up to date.
+With an AI connected, an answer sits at the top with each claim numbered to its source, and three questions you might ask next. Ask more and it reads the same sources again, and says so when they don't have the answer. Press Follow on anything and it takes its own place on the front page, in that same form, kept up to date.
 
 None of this needs a key: Wikipedia, Bing News, Hacker News, arXiv, GitHub, Polymarket, Yahoo Finance, ESPN and Open-Meteo all answer without one. For the open web, use your AI provider's search (Anthropic's costs about a cent), a SearXNG of your own, or Brave Search. Settings has a switch for each.
 
