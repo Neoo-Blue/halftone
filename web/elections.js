@@ -243,11 +243,43 @@ function schedule(us, tz) {
   return us.phase === 'final' ? '' : `<dl class="el-times">${marks.map(([k, t]) => `<div><dt>${esc(k)}</dt><dd>${esc(clock(t, tz))}</dd></div>`).join('')}</dl>`;
 }
 
+// While votes are counted. WARROOM reads every race every 30 seconds, so a read this old means something on the way has stopped.
+const LATE = 180;
+const secs = (ts) => new Date(ts * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+function liveLine(o) {
+  if (!o.live) return '';
+  const late = o.read && Date.now() / 1000 - o.read > LATE;
+  return `<p class="el-live${late ? ' late' : ''}"><i aria-hidden="true"></i>${late ? `The count hasn't been reached since ${esc(secs(o.read))}. This is what it last said.` : `Live. Every race updates every 30 seconds.${o.read ? ` Count read at ${esc(secs(o.read))}.` : ''}`}</p>`;
+}
+
+// Whether two copies differ in anything but when they were read: a time alone isn't worth a redraw.
+const stampOf = (o) => JSON.stringify(o, (k, v) => (k === 'as_of' || k === 'read' ? 0 : v));
+
+// An open page keeps up by itself. It asks nothing while nobody's looking, asks at once when they're back, and stops once the count is over or the page has gone.
+function keepUp(o, root, url, draw) {
+  const over = (x) => !x || (!x.live && x.phase === 'final');
+  if (!root || over(o)) return;
+  let held = o;
+  const stop = () => { clearInterval(timer); document.removeEventListener('visibilitychange', beat); };
+  const beat = async () => {
+    if (!root.isConnected) { stop(); return; }
+    if (document.hidden) return;
+    const fresh = await fetch(url, { cache: 'no-store', credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!root.isConnected) return;
+    if (!fresh) { $('.el-now', root).innerHTML = liveLine(held); return; }  // once this is old enough the line says so
+    draw(fresh);
+    held = fresh.kind === 'elections' ? fresh.us : fresh;
+    if (over(held)) stop();
+  };
+  const timer = setInterval(beat, 30000);
+  document.addEventListener('visibilitychange', beat);
+}
+
 function usBlock(us, tz) {
   const calls = us.calls?.length ? `<section class="el-part"><h3>Latest calls</h3>${raceList(us.calls)}</section>` : '';
   const said = us.note?.text ? `<p class="el-note">${esc(us.note.text)}</p><small class="el-by">Written by AI from these numbers and today's stories, ${esc(ago(us.note.at))}. It can be wrong.</small>` : '';
   const house = us.chambers.find((c) => c.kind === 'house')?.ladder;
-  return `<div class="el-lead"><div><p class="el-title">${esc(us.title)}</p><p class="el-line">${esc(us.line)}</p>${said}${schedule(us, tz)}${us.ballot ? `<p class="small">Generic ballot: Democrats ${esc(us.ballot.d)}, Republicans ${esc(us.ballot.r)}.</p>` : ''}</div>
+  return `<div class="el-now">${liveLine(us)}</div><div class="el-lead"><div><p class="el-title">${esc(us.title)}</p><p class="el-line">${esc(us.line)}</p>${said}${schedule(us, tz)}${us.ballot ? `<p class="small">Generic ballot: Democrats ${esc(us.ballot.d)}, Republicans ${esc(us.ballot.r)}.</p>` : ''}</div>
     <div class="el-houses">${us.chambers.map(chamberCard).join('')}</div></div>
     <div class="el-insights">${tipCard(us.chambers.find((c) => c.kind === 'senate') || {})}${gainsCard(us)}${signalsCard(us.signals)}</div>
     ${house ? `<p class="el-more">In the House, Democrats need ${esc(house.need)} seats. Counted the same way, the tipping point is <a href="/elections/race/${esc(house.tip.key)}">${seatName(house.tip)}</a>, at ${pct(house.chance)}.</p>` : ''}
@@ -258,17 +290,18 @@ let printed = '';
 export function electionDesk(p) {
   const v = p.elections;
   if (!v) { printed = ''; return; }
-  const stamp = JSON.stringify(v);
-  if (stamp === printed) return;
-  printed = stamp;
-  const body = $('#electionsbody'), us = v.us;
-  body.classList.toggle('el-fresh', !body.dataset.seen);
-  body.dataset.seen = '1';
-  body.innerHTML = `${us ? usBlock(us, p.tz) : ''}<div class="page-cols">${us ? `<section class="el-part"><h3>Closest Senate and governor races</h3>${raceList(us.closest)}</section><section class="el-part"><h3>House races to watch</h3>${raceList(us.house)}</section>` : ''}${abroad(v.world)}</div>${us ? '<p class="el-all"><a href="/elections">Every race</a></p>' : ''}`;
-  const age = Date.now() / 1000 - (v.as_of || 0), foot = $('#asof-elections');
+  const body = $('#electionsbody'), us = v.us, stamp = stampOf(v);
+  if (stamp !== printed) {
+    printed = stamp;
+    body.classList.toggle('el-fresh', !body.dataset.seen);
+    body.dataset.seen = '1';
+    body.innerHTML = `${us ? usBlock(us, p.tz) : ''}<div class="page-cols">${us ? `<section class="el-part"><h3>Closest Senate and governor races</h3>${raceList(us.closest)}</section><section class="el-part"><h3>House races to watch</h3>${raceList(us.house)}</section>` : ''}${abroad(v.world)}</div>${us ? '<p class="el-all"><a href="/elections">Every race</a></p>' : ''}`;
+    if (us) mountMap(body, us, (st) => go(`/elections?state=${st}`));
+  }
+  const now = $('.el-now', body), age = Date.now() / 1000 - (v.as_of || 0), foot = $('#asof-elections');
+  if (now) now.innerHTML = liveLine(us);
   foot.textContent = `${v.as_of ? `Updated ${ago(v.as_of)}. ` : ''}From WARROOM. ${us ? `Sources: ${us.sources.join(', ')}.` : 'Calendar: IFES ElectionGuide.'}`;
   foot.classList.toggle('stale', age > 600);
-  if (us) mountMap(body, us, (st) => go(`/elections?state=${st}`));
 }
 
 // ---------------------------------------------------------------- the pages
@@ -279,7 +312,7 @@ export function electionsView(d) {
   const us = d.us, wanted = new URLSearchParams(location.search).get('state');
   return {
     head: us ? us.name : 'Election watch', deck: us ? `${us.title}. ${us.line}` : 'Votes around the world this month.', meta: '',
-    body: `<div id="el-page">${us ? `<div class="el-houses wide">${us.chambers.map(chamberCard).join('')}</div>${mapBlock(us)}
+    body: `<div id="el-page">${us ? `<div class="el-now">${liveLine(us)}</div><div class="el-houses wide">${us.chambers.map(chamberCard).join('')}</div>${mapBlock(us)}
       <section class="el-part" id="el-state" ${wanted ? '' : 'hidden'}></section>
       <section class="el-part"><h3>Every race</h3><div class="el-filter"><input type="search" id="el-q" placeholder="A state, a name or a seat" aria-label="Filter the races" autocomplete="off"><div class="seg" role="group" aria-label="Which races">${['all', ...us.chambers.map((c) => c.kind)].map((k, i) => `<button type="button" data-el-kind="${esc(k)}" aria-pressed="${i === 0}">${esc(k === 'all' ? 'All' : us.chambers.find((c) => c.kind === k).name)}</button>`).join('')}</div></div><ul class="wire-list el-races two" id="el-list"></ul></section>` : ''}${abroad(d.world)}</div>`,
     side: stories(d.stories, 'The latest'),
@@ -287,19 +320,24 @@ export function electionsView(d) {
 }
 
 export function fillElections(d) {
-  const root = $('#el-page'), us = d.us;
-  if (!root || !us) return;
-  let kind = 'all';
+  const root = $('#el-page');
+  if (!root || !d.us) return;
+  let kind = 'all', open = null;
   const list = $('#el-list', root), q = $('#el-q', root);
   const show = () => {
     const words = q.value.toLowerCase().trim();
     const rows = d.races.filter((r) => (kind === 'all' || r.kind === kind) && (!words || `${r.seat} ${r.where} ${Object.values(r.noms).join(' ')}`.toLowerCase().includes(words)));
     list.innerHTML = rows.slice(0, 120).map(raceRow).join('') || '<li class="empty">No race matches that.</li>';
   };
-  const state = (st) => {
-    const box = $('#el-state', root), rows = d.races.filter((r) => r.state === st);
+  const stateRows = () => {
+    const box = $('#el-state', root), rows = d.races.filter((r) => r.state === open);
     box.hidden = false;
-    box.innerHTML = `<h3>${esc(STATES[st] || st)}</h3>${rows.length ? raceList(rows) : '<p class="empty">Nothing federal on the ballot here.</p>'}`;
+    box.innerHTML = `<h3>${esc(STATES[open] || open)}</h3>${rows.length ? raceList(rows) : '<p class="empty">Nothing federal on the ballot here.</p>'}`;
+    return box;
+  };
+  const state = (st) => {
+    open = st;
+    const box = stateRows();
     history.replaceState(null, '', `/elections?state=${st}`);
     box.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' });
   };
@@ -312,9 +350,21 @@ export function fillElections(d) {
     show();
   };
   show();
-  mountMap(root, us, state);
+  mountMap(root, d.us, state);
   const wanted = new URLSearchParams(location.search).get('state');
   if (wanted && STATES[wanted]) state(wanted);
+  keepUp(d.us, root, '/api/detail/elections/', (fresh) => {  // whatever the reader has typed or opened stays as it was
+    if (!fresh.us) return;
+    const moved = stampOf(fresh.us) !== stampOf(d.us) || stampOf(fresh.races) !== stampOf(d.races);
+    d = fresh;
+    $('.el-now', root).innerHTML = liveLine(d.us);
+    if (!moved) return;
+    $('.page-sub .deck').textContent = `${d.us.title}. ${d.us.line}`;
+    $('.el-houses', root).innerHTML = d.us.chambers.map(chamberCard).join('');
+    mountMap(root, d.us, state);
+    if (!list.contains(document.activeElement)) show();  // someone moving through a list by keyboard keeps their place
+    if (open && !$('#el-state', root).contains(document.activeElement)) stateRows();
+  });
 }
 
 const followBox = (kind, key, name, on) => `<div class="story-tools"><button type="button" class="ghost text" data-track="${esc(JSON.stringify({ kind, key, name }))}" aria-pressed="${!!on}">${on ? 'Following' : 'Follow'}</button></div>`;
@@ -355,18 +405,36 @@ function placeLine(d) {
 
 const asked = (title) => `<section class="el-part"><h3>${esc(title)}</h3><div id="el-answer"></div></section>`;
 
-export function raceView(d) {
+// What moves with the count.
+function counted(d) {
   const total = d.runners.reduce((a, c) => a + c.votes, 0);
   const tally = total ? `<section class="el-part"><h3>The count</h3><p class="small">${Math.round(d.rep)}% counted.</p><ul class="plain el-count">${d.runners.map((c) => `<li><b>${esc(c.n)}${c.won ? ' wins' : ''}</b><span>${esc(c.votes.toLocaleString('en-US'))}, ${esc(c.pct)}%</span><i class="${c.p === 'D' ? 's-l' : c.p === 'R' ? 's-r' : 's-c'}" style="width:${c.pct}%"></i></li>`).join('')}</ul></section>` : '';
+  return `<div class="el-now">${liveLine(d)}</div><p class="el-verdict">${esc(d.reading.join(' '))}</p>${placeLine(d)}${chaseBlock(d)}${tally}`;
+}
+
+export function raceView(d) {
   const facts = [['Held by', d.holder ? `${d.holder.n}${d.inc ? ` (${d.inc})` : ''}` : PARTY[d.inc]], ['Since', d.holder?.since?.slice(0, 4)], ['Seat', d.open ? 'Open' : d.holder ? 'Incumbent running' : ''], ['Rating', d.rating.replace('Tossup', 'Toss-up')]].filter(([, v]) => v);
   return {
     head: seatText(d), deck: nameLine(d), meta: d.won ? `${d.won.n} wins` : '',
-    body: `${followBox('race', d.key, d.seat, d.followed)}<p class="el-verdict">${esc(d.reading.join(' '))}</p>${placeLine(d)}${chaseBlock(d)}${tally}${signalScale(d)}${d.ai ? asked('What this race is about') : ''}${pollTrail(d)}${stories(d.stories)}${d.news.length ? `<section class="el-part"><h3>More reporting</h3><ul class="wire-list">${d.news.map(storyRow).join('')}</ul></section>` : ''}`,
+    body: `${followBox('race', d.key, d.seat, d.followed)}<div id="el-live">${counted(d)}</div>${signalScale(d)}${d.ai ? asked('What this race is about') : ''}${pollTrail(d)}${stories(d.stories)}${d.news.length ? `<section class="el-part"><h3>More reporting</h3><ul class="wire-list">${d.news.map(storyRow).join('')}</ul></section>` : ''}`,
     side: `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`,
   };
 }
 
-export const fillRace = (d) => { const box = $('#el-answer'); if (box) answerInto(box, d.q); };
+export function fillRace(d) {
+  const box = $('#el-answer'), root = $('#el-live');
+  if (box) answerInto(box, d.q);
+  let shown = d;
+  keepUp(d, root, `/api/detail/count/${encodeURIComponent(d.key)}`, (fresh) => {
+    const moved = stampOf(fresh.runners) !== stampOf(shown.runners) || stampOf(fresh.reading) !== stampOf(shown.reading);
+    shown = fresh;
+    if (!moved) { $('.el-now', root).innerHTML = liveLine(fresh); return; }
+    root.classList.add('el-tick');  // on its children, which are new each time, so it plays each time
+    root.innerHTML = counted(fresh);
+    $('.page-sub .byline')?.remove();
+    if (fresh.won) $('.page-sub').insertAdjacentHTML('beforeend', `<p class="byline">${esc(fresh.won.n)} wins</p>`);
+  });
+}
 
 export function ballotView(d) {
   const won = d.won, rows = won?.rows?.length ? `<section class="el-part"><h3>${won.decided ? 'Results' : 'Early results'}</h3>${won.line ? `<p>${esc(won.line)}</p>` : ''}<ul class="plain el-count">${won.rows.map((r) => `<li><b>${esc(r.party)}${r.person ? `, ${esc(r.person)}` : ''}</b><span>${[r.seats != null && plural(r.seats, 'seat'), r.pct != null && `${r.pct}%`].filter(Boolean).map(esc).join(', ')}</span><i class="s-c" style="width:${r.pct || 0}%"></i></li>`).join('')}</ul>${won.url ? `<p class="source"><a href="${esc(won.url)}" target="_blank" rel="noopener noreferrer">Results from Wikipedia</a></p>` : ''}</section>` : '';

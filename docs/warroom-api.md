@@ -29,9 +29,11 @@ All are `GET`.
 | `/hazards/{id}` | One hazard | 5 min |
 | `/spaceweather` | Geomagnetic conditions and forecast | 5 min |
 | `/elections` | The world's election calendar, each with its stage and any result | 1 min |
-| `/elections/us` | The next US general election, race by race: who holds each seat, the candidates, the composite forecast, each forecaster's rating, market odds, poll averages, and on the night the count | 1 min |
-| `/elections/us/races/{key}` | One race with its latest polls. A key is `S-GA`, `G-GA` or `H-GA-05` | 1 min |
+| `/elections/us` | The next US general election, race by race: who holds each seat, the candidates, the composite forecast, each forecaster's rating, market odds, poll averages, and on the night the count | 1 min, 10 s while `live` |
+| `/elections/us/races/{key}` | One race with its latest polls. A key is `S-GA`, `G-GA` or `H-GA-05` | 1 min, 10 s while `live` |
 | `/elections/{id}/outcome` | Who won an election abroad, from Wikipedia's results box (CC BY-SA) | 5 min |
+
+`/elections/us` has `live: true` from the first polls until every race is called, and WARROOM reads every race every 30 seconds while it is. `updated.races` and `updated.markets` say when each was last read. A race nobody calls stops counting as live two weeks after the vote.
 
 The election routes carry their sources and terms in `sources` and `meta.license`, and each source's own terms apply. The calendar is IFES ElectionGuide, free for non-commercial use with attribution.
 | `/intel` | Analyst notes | 5 min |

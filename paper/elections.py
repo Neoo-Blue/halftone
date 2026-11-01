@@ -87,7 +87,7 @@ def us(d):
     control = {k: {"seats": number(c.get("seats"), 0, 1000), "majority": number(c.get("majority"), 0, 1000), "held": {p: number(n, 0, 1000) or 0 for p, n in table(c.get("holdover")).items() if p in ("D", "R", "I")}, "md": number(table(c.get("market")).get("d"), 0, 1), "mr": number(table(c.get("market")).get("r"), 0, 1)}
                for k, c in table(d.get("control")).items() if k in NAMES and isinstance(c, dict)}
     ballot = table(d.get("generic_ballot"))
-    return {"id": text(d.get("id"), 20), "name": text(d.get("name"), 60), "date": str(d["date"])[:10], "presidential": d.get("presidential") is True, "phase": d.get("phase") if d.get("phase") in ("campaign", "voting", "counting", "final") else "campaign",
+    return {"id": text(d.get("id"), 20), "name": text(d.get("name"), 60), "date": str(d["date"])[:10], "presidential": d.get("presidential") is True, "live": d.get("live") is True, "read": number(table(d.get("updated")).get("races"), 0, 1e11), "phase": d.get("phase") if d.get("phase") in ("campaign", "voting", "counting", "final") else "campaign",
             "schedule": {k: number(when.get(k), 0, 1e11) for k in ("polls_open", "first_close", "last_close")}, "control": control, "ballot": {"d": number(ballot.get("d")), "r": number(ballot.get("r")), "last": text(ballot.get("last"), 10)} if ballot.get("d") is not None else None,
             "races": [r for r in map(race, [x for x in d.get("races") or [] if isinstance(x, dict)]) if r], "sources": [text(table(s).get("label"), 60) for s in d.get("sources") or []][:8]}
 
@@ -339,7 +339,7 @@ def phase(s, now):
 
 
 def summary(data, today, now=None):
-    """What the page polls every minute, or None, and the desk disappears."""
+    """What the page polls, every 30 seconds while votes are counted, or None, and the desk disappears."""
     data = data or {}
     abroad = [e for e in data.get("world") or [] if abroad_on(e, today)]
     abroad.sort(key=lambda e: (PHASES.index(e["phase"]), e["start"]))
@@ -361,7 +361,7 @@ def summary(data, today, now=None):
         held = c["held"]
         c["ladder"] = ladder(rows, held.get("D", 0) + held.get("I", 0), c["majority"]) if c["majority"] else None
         c["gains"] = gains(rows)
-    out = {**{k: s[k] for k in ("id", "name", "date", "phase", "presidential", "schedule", "ballot", "sources")}, "chambers": chambers, "map": state_map, "closest": [row(r) for r in big], "house": [row(r) for r in house], "calls": [row(r) for r in calls],
+    out = {**{k: s[k] for k in ("id", "name", "date", "phase", "presidential", "schedule", "ballot", "sources")}, "live": s.get("live") is True, "read": s.get("read"), "chambers": chambers, "map": state_map, "closest": [row(r) for r in big], "house": [row(r) for r in house], "calls": [row(r) for r in calls],
            "signals": signals(races), "hours": hours(races, s["schedule"].get("first_close"))}
     return {"us": {**out, **headline({**s, "chambers": chambers}, today)}, "world": abroad}
 

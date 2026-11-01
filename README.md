@@ -119,6 +119,8 @@ Every race has its own page. It says in plain words who has it, who holds the se
 
 On the night it follows the count. The numbers turn into what's been called, the map fills in, and a race that's still open says how many votes are left and what share of them the trailing candidate needs. That's an estimate from the share counted, and the page says so. Abroad, each vote gets its date, its stage, the result when there is one, and what it's about.
 
+From the first polls until the last race is called, every race updates every 30 seconds: the desk, the map, each race's page and any race you follow. An open page keeps up by itself and says when the count was last read, and if the count can't be reached it says that too.
+
 All of it comes from WARROOM's public API, which credits its sources: civicAPI, Polymarket, The New York Times, VoteHub, IFES ElectionGuide and the forecasters it relays.
 
 ## On a phone

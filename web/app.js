@@ -900,5 +900,9 @@ startPhone({ go, onTab: (id) => { if (id === 'world') startGlobe(); }, onForm: s
 addEventListener('paper:reload', load);
 start((lat, lon) => globe?.fly(lat, lon), () => paper?.world.data?.dots || []);
 load();
-setInterval(load, 60000);
+let beats = 0;
+setInterval(() => {  // once a minute, and every 30 seconds to an open page while votes are counted
+  beats += 1;
+  if (paper?.elections?.us?.live ? !document.hidden : beats % 2 === 0) load();
+}, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });

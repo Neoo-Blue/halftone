@@ -2841,7 +2841,7 @@ FIND_DAILY = {"web": 60, "answer": 150, "around": 300}  # a day: what costs mone
 FIND_WAIT = 8  # seconds: one slow source shouldn't hold up the rest, and a late one is simply left off
 FIND_KEEP = {"around": 1800, "web": 3600, "answer": 3600}
 FOLLOW_MOST = 40
-FOLLOW_EVERY = {"place": 1800, "topic": 1800, "team": 300, "market": 300, "conflict": 300, "race": 120, "ballot": 300}
+FOLLOW_EVERY = {"place": 1800, "topic": 1800, "team": 300, "market": 300, "conflict": 300, "race": 30, "ballot": 300}
 WEB_PRICE = 0.01  # dollars a search
 
 FIND_SYSTEM = """You write the short answer at the top of a search page in a private newspaper, for one reader.
@@ -3099,7 +3099,7 @@ def elections_run():
     old = (load("elections")["data"] or {}).get("us")
     s = None
     if elect.us_on(when.get("date"), today):
-        calm = phase in ("campaign", "final") and old and old["id"] == when.get("id") and old["phase"] == phase and now - old.get("fetched", 0) < ELECTION_CALM
+        calm = phase in ("campaign", "final") and old and not old.get("live") and old["id"] == when.get("id") and old["phase"] == phase and now - old.get("fetched", 0) < ELECTION_CALM
         s = old if calm else {**elect.us(war_open("/elections/us", timeout=30)), "fetched": now}
     fresh = {"us": s, "world": elect.world([e for e in cal.get("items") or [] if isinstance(e, dict)], today)}
     elect.summary(fresh, today, now)  # if this can't be read it mustn't replace a copy that can, and the job keeps the last good one
@@ -3162,16 +3162,30 @@ def d_elections(_):
     return {"kind": "elections", **view, "races": [elect.row(r) for r in s["races"]] if s else [], "stories": vote_stories()}
 
 
-def d_race(key):
+def race_held(key):
     s = (live("elections")["data"] or {}).get("us") or {}
     r = next((x for x in s.get("races", []) if x["key"] == key), None)
     if not r:
         raise LookupError(key)
+    return s, r
+
+
+def race_count(s, r):
+    return {**r, "kind": "race", "office": r["kind"], "phase": elect.phase(s, time.time()), "live": s.get("live") is True, "read": s.get("read"), "reading": elect.reading(r), "chase": elect.chase(r), "place": elect.place(r, s)}
+
+
+def d_count(key):
+    """What an open race page asks for every 30 seconds: the snapshot alone, nothing from outside."""
+    return race_count(*race_held(key))
+
+
+def d_race(key):
+    s, r = race_held(key)
     on = {f["id"] for f in follow_rows()}
     names = [elect.surname(n).title() for n in list(r["noms"].values())[:2]]
     q = plain(f"{r['seat']} {' '.join(names)}", 110)
     got = waited({"polls": lambda: elect.polls(war_open(f"/elections/us/races/{key}", timeout=8)), "news": lambda: outside_news(q)})
-    return {**r, "kind": "race", "office": r["kind"], "phase": s["phase"], "reading": elect.reading(r), "open": elect.open_seat(r), "chase": elect.chase(r), "place": elect.place(r, s), "calls": elect.forecasters(r), "polls": got.get("polls") or [],
+    return {**race_count(s, r), "open": elect.open_seat(r), "calls": elect.forecasters(r), "polls": got.get("polls") or [],
             "q": q, "ai": bool(ai.ready() and C("FIND_AI")), "stories": vote_stories(*r["noms"].values()), "news": got.get("news") or [], "followed": follow_id("race", key) in on}
 
 
@@ -3325,7 +3339,7 @@ DETAILS = {
     "machine": (r"[^/]{1,80}", d_machine), "topic": (r"[^/]{1,80}", d_topic), "weather": (r"", d_weather), "usage": (r"", d_usage), "investments": (r"", d_investments), "saved": (r"", d_saved), "archive": (r"(\d{4}-\d{2}-\d{2})?", d_archive),
     "event": (r"[0-9a-f]{16,64}", d_event), "theater": (r"[a-z0-9_]{2,40}", d_theater), "thread": (r"thr:[0-9a-f]{8,64}", d_thread), "hazard": (r"[\w:.-]{3,80}", d_hazard), "market": (r"[a-z0-9_]{2,40}", d_market),
     "mail": (r"[0-9a-f]{24}", d_mail), "plex": (r"\d{1,9}", d_plex), "show": (r"\d{1,9}", d_show), "movie": (r"\d{1,9}", d_movie), "issue": (r"[a-z0-9-]{3,80}", d_issue), "container": (r"\d{3,4}", d_container),
-    "product": (r"[a-z]{1,40}", d_product), "service": (r"[^/]{1,120}", d_service), "sides": (r"", d_sides), "elections": (r"", d_elections), "race": (elect.RACE.pattern, d_race), "ballot": (elect.ELECTION.pattern, d_ballot), "following": (r"", d_following),
+    "product": (r"[a-z]{1,40}", d_product), "service": (r"[^/]{1,120}", d_service), "sides": (r"", d_sides), "elections": (r"", d_elections), "count": (elect.RACE.pattern, d_count), "race": (elect.RACE.pattern, d_race), "ballot": (elect.ELECTION.pattern, d_ballot), "following": (r"", d_following),
 }
 HOT, HOT_TTL = {}, 120  # ponytail: a plain dict, cleared when full, because one reader tapping around needs nothing cleverer
 
@@ -3336,8 +3350,8 @@ def detail(kind, ident):
     if not re.fullmatch(pattern, ident):
         raise KeyError(ident)
     hit = HOT.get((kind, ident))
-    if hit and time.time() - hit[0] < HOT_TTL and kind not in ("investments", "saved", "following"):
-        return {**hit[1], "look": C("CHART_STYLE")}
+    if hit and time.time() - hit[0] < HOT_TTL and kind not in ("investments", "saved", "following", "elections", "count"):
+        return {**hit[1], **(d_count(ident) if kind == "race" else {}), "look": C("CHART_STYLE")}  # what's outside can wait two minutes, the count can't
     data = fn(ident)
     if len(HOT) > 300:
         HOT.clear()
@@ -3671,7 +3685,7 @@ def cost_rows():
     return out
 
 
-JOBS = [("elections", elections_run, 60), ("election_note", election_note_run, 600), ("takes", takes_run, 3600), ("following", following_run, 60), ("portfolio", portfolio, 300), ("tape", tape_quotes, 300), ("certs", cert_checks, 43200), ("notify", notify, 120), ("usage", usage_report, 3600), ("costs", cost_rows, 3600), ("sports", sports, 120), ("weather", weather, 1800), ("editor", editor_note, 900), ("brief", brief, 1800), ("world", world, 300), ("news", news_run, 180), ("mail", scan_mail, 300), ("media", media, 300), ("playing", now_playing, 60), ("probes", probes, 60),
+JOBS = [("elections", elections_run, 30), ("election_note", election_note_run, 600), ("takes", takes_run, 3600), ("following", following_run, 30), ("portfolio", portfolio, 300), ("tape", tape_quotes, 300), ("certs", cert_checks, 43200), ("notify", notify, 120), ("usage", usage_report, 3600), ("costs", cost_rows, 3600), ("sports", sports, 120), ("weather", weather, 1800), ("editor", editor_note, 900), ("brief", brief, 1800), ("world", world, 300), ("news", news_run, 180), ("mail", scan_mail, 300), ("media", media, 300), ("playing", now_playing, 60), ("probes", probes, 60),
         ("machines", machines, 60), ("storage", storage, 1800), ("feed", money_feed, 300)]
 WAKE = threading.Event()  # a saved setting shouldn't wait out a job's sleep
 

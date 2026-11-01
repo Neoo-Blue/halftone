@@ -1295,7 +1295,14 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 .el-find { display: inline-flex; align-items: center; gap: 8px; font: 500 13.5px/1 var(--ui); color: var(--ink2); }
 .el-find select { min-height: 40px; padding: 0 8px; font: 500 14px/1 var(--ui); color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: var(--radius); }
 .el-canvas { position: relative; }
-.el-canvas canvas { display: block; width: 100%; cursor: pointer; touch-action: pan-y; }
+.el-canvas canvas { display: block; width: 100%; aspect-ratio: 1.69; cursor: pointer; touch-action: pan-y; }
+.el-live { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font: 500 14px/1.35 var(--ui); color: var(--ink2); }
+.el-live i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: el-beat 2.4s ease-in-out infinite; }
+.el-live.late { color: var(--bad); } .el-live.late i { background: var(--bad); animation: none; }
+@keyframes el-beat { 50% { opacity: .35; transform: scale(.72); } }
+.el-tick > * { animation: el-moved .9s ease-out; }
+@keyframes el-moved { from { background: color-mix(in srgb, var(--accent) 12%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .el-live i, .el-tick > * { animation: none; } }
 .el-tip { position: absolute; top: 0; left: 0; max-width: 240px; padding: 6px 9px; font: 500 13px/1.3 var(--ui); color: var(--bg); background: var(--ink); border-radius: var(--radius); pointer-events: none; }
 .el-map figcaption { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font: 400 13px/1.35 var(--ui); color: var(--ink2); }
 .el-key { display: inline-flex; align-items: center; gap: 6px; }

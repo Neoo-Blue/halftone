@@ -131,6 +131,56 @@ except (TypeError, AttributeError, KeyError):
     _bad = True
 assert _bad or s.elections_run()["us"]["races"] == [], "an answer that can't be read raises, and the job keeps the last good copy"
 
+# while votes are counted nothing on the way waits: every job is 30 seconds, and a late count still gets looked at after the phase turns final
+assert dict((n, e) for n, _, e in s.JOBS)["elections"] == 30 == dict((n, e) for n, _, e in s.JOBS)["following"], "the job can't hold the count back"
+assert s.FOLLOW_EVERY["race"] == 30, "nor can a followed race's card"
+_doc = {**_us, "date": _soon, "live": True, "updated": {"races": 1793750000}}
+s.war_open = lambda path, timeout=30: _asked.append(path) or ({"featured": {"id": "us-2026", "date": _soon, "phase": "final"}, "items": []} if path == "/elections" else _doc)
+_asked.clear()
+s.save("elections", s.elections_run())
+_held = s.load("elections")["data"]
+assert _held["us"]["live"] is True and _held["us"]["read"] == 1793750000, "WARROOM's word, and when it last read the count"
+_v = s.election_view()
+assert _v["us"]["live"] is True and _v["us"]["read"] == 1793750000
+s.save("elections", {**_held, "us": {**_held["us"], "phase": "final"}})
+s.save("elections", s.elections_run())
+assert _asked.count("/elections/us") == 2, "a late count isn't left calm"
+_doc = {**_us, "date": _soon, "live": False}
+s.save("elections", s.elections_run())
+assert _asked.count("/elections/us") == 3
+_held = s.load("elections")["data"]
+assert _held["us"]["live"] is False and _held["us"]["read"] is None
+s.save("elections", {**_held, "us": {**_held["us"], "phase": "final"}})
+s.save("elections", s.elections_run())
+assert _asked.count("/elections/us") == 3, "and once it's over, it is"
+
+# an open race page: the count alone, from the snapshot, never two minutes old
+_doc = {**_us, "date": _soon, "live": True, "updated": {"races": 1793750000}}
+s.save("elections", {**_held, "us": {**_held["us"], "phase": "final", "fetched": 1}})
+s.save("elections", s.elections_run())
+_key = s.load("elections")["data"]["us"]["races"][0]["key"]
+_asked.clear()
+_now = s.detail("count", _key)
+assert not _asked, "it asks nobody"
+assert _now["live"] is True and _now["read"] == 1793750000 and "reading" in _now and "runners" in _now and "polls" not in _now and _now["phase"], _now
+_held = s.load("elections")["data"]
+s.save("elections", {**_held, "us": {**_held["us"], "read": 1793750030}})
+assert s.detail("count", _key)["read"] == 1793750030, "and isn't kept in the two-minute cache"
+_ok, s.outside_news = s.outside_news, lambda q: []
+_page = s.detail("race", _key)
+assert _page["kind"] == "race" and _page["office"] and _page["live"] is True and _page["read"] == 1793750030, "the whole page has them too"
+s.save("elections", {**_held, "us": {**_held["us"], "read": 1793750060}})
+_again = s.detail("race", _key)
+assert _again["read"] == 1793750060 and _again["q"] == _page["q"], "a page in the cache still opens on the latest count"
+assert s.detail("elections", "")["us"]["read"] == 1793750060, "and so does the elections page"
+try:
+    s.detail("count", "S-ZZ")
+    raise AssertionError("a race that isn't there")
+except LookupError:
+    pass
+s.outside_news = _ok
+s.HOT.clear()
+
 _real_ask, _real_ready, _tried, _notes = s.ai.ask, s.ai.ready, [], {}
 s.ai.ready = lambda: True
 s.ai.ask = lambda *a, **k: _tried.append(1) or "A note."

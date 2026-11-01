@@ -12,6 +12,7 @@ import random
 import struct
 import sys
 import tempfile
+import threading
 import time
 import zlib
 from datetime import datetime, timedelta, timezone
@@ -297,7 +298,14 @@ def us_vote():
         races.append(ballot_row(f"S-{state}", "senate", state, f"{STATE_NAMES[state]} Senate", r))
     for state in "AK AL AR AZ CA CO CT FL GA HI IA ID IL KS MA MD ME MI MN NE NH NM NV NY OH OK OR PA RI SC SD TN TX VT WI WY".split():
         races.append(ballot_row(f"G-{state}", "governor", state, f"{STATE_NAMES[state]} Governor", r))
-    return {"id": "us-demo", "name": "US midterm elections", "date": day, "presidential": False, "phase": "counting" if NIGHT else "campaign", "schedule": {"polls_open": held + 36000, "first_close": held + 82800, "last_close": held + 108000},
+    if NIGHT:  # the count keeps coming in, so a page can be watched catching up
+        moved = (int(time.time()) - NOW) // 30
+        for x in races:
+            for c in x.get("candidates") or []:
+                c["votes"] += moved * 1200
+            if x.get("candidates"):
+                x["reporting"] = min(99.5, x["reporting"] + moved * .2)
+    return {"id": "us-demo", "name": "US midterm elections", "date": day, "presidential": False, "live": NIGHT, "updated": {"races": int(time.time())}, "phase": "counting" if NIGHT else "campaign", "schedule": {"polls_open": held + 36000, "first_close": held + 82800, "last_close": held + 108000},
             "control": {"house": {"seats": 435, "majority": 218, "market": {"d": .82, "r": .18}}, "senate": {"seats": 100, "majority": 51, "holdover": {"D": 30, "R": 33, "I": 2}, "market": {"d": .46, "r": .54}}, "governor": {"seats": 50, "majority": 26}},
             "generic_ballot": {"d": 48.6, "r": 44.1, "n": 6, "last": "2026-10-28"}, "races": races, "sources": [{"label": "Made up for the demo"}]}
 
@@ -380,6 +388,12 @@ def demo_world():
     s.save("editor", {"text": "A calmer morning in the strait, a fight over rents at home, and a battery plant that wants four thousand people. Read the harbor story first: it's the one that will cost someone money by January.", "at": NOW - 40 * 60})
 
 
+def the_count():
+    while True:
+        time.sleep(30)
+        s.save("elections", s.elections_run())
+
+
 def main():
     s.init_db()
     s.check = lambda section: {"ok": True, "text": "This is the demo, so nothing was really tested."}
@@ -419,6 +433,8 @@ def main():
     mail()
     s.set_costs([("Hosting", 4000, "month"), ("Email", 1200, "month"), ("Domains", 3600, "year"), ("Ads", None, "month")])
     demo_world()
+    if NIGHT:
+        threading.Thread(target=the_count, daemon=True).start()
     print("The demo is at http://127.0.0.1:8096. Every word of it is made up.", flush=True)
     ThreadingHTTPServer(("127.0.0.1", 8096), s.Handler).serve_forever()
 
