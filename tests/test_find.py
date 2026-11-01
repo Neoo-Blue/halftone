@@ -54,6 +54,10 @@ got = find.news("x", at)
 assert got == [{"t": "A story", "u": "https://site.example/a", "src": "CNN", "sum": "What it says", "ts": 1793524174}], got
 raw[find.HN] = {"hits": [{"title": "Big", "url": "https://a.example/1", "points": 300, "num_comments": 9, "created_at_i": 5, "objectID": "42"}, {"title": "Small", "url": "https://a.example/2", "points": 2, "objectID": "1"}, {"title": "No link", "points": 900, "objectID": "1"}]}
 assert [(r["t"], r["sum"]) for r in find.talk("x", at)] == [("Big", "300 points, 9 comments")]
+asked = []
+assert find.talk("x", lambda url, *allowed, **how: asked.append(url) or {}) == [] and "numericFilters=created_at_i" in asked[0], "what people are saying now, not in 2022"
+assert find.row("graphsearch.epfl.ch", "https://graphsearch.epfl.ch/", "graphsearch.epfl.ch") is None, "a title that is only its address says nothing"
+assert find.row("Example.com", "https://www.example.com/a", "x") is None and find.row("Example", "https://www.example.com/a", "x")
 raw[find.GITHUB] = {"items": [{"full_name": "a/sqlite", "html_url": "https://github.com/a/sqlite", "description": "x", "stargazers_count": 9000}, {"full_name": "b/other", "html_url": "https://github.com/b/other", "description": "y", "stargazers_count": 9000}, {"full_name": "c/sqlite", "html_url": "https://github.com/c/sqlite", "stargazers_count": 3}]}
 assert [r["t"] for r in find.code("sqlite", at)] == ["a/sqlite"], "popular, and plainly about the words"
 raw[find.POLY] = {"events": [

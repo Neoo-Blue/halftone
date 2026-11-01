@@ -13,12 +13,14 @@ import email.utils
 import html
 import json
 import re
+import time
 import urllib.parse
 import xml.etree.ElementTree as ET
 
 WIKI = "https://en.wikipedia.org/"
 BING = "https://www.bing.com/news/search?"
 HN = "https://hn.algolia.com/api/v1/"
+TALK_DAYS = 90
 ARXIV = "https://export.arxiv.org/api/query?"
 GITHUB = "https://api.github.com/search/repositories?"
 POLY = "https://gamma-api.polymarket.com/"
@@ -56,7 +58,9 @@ def host(url):
 
 def row(title, url, src, summary="", ts=None, **more):
     u, t = link(url), text(title, 200)
-    return {"t": t, "u": u, "src": text(src, 60), "sum": text(summary, 280), "ts": ts, **more} if u and t else None
+    if not u or not t or t.lower().removeprefix("www.") == host(u).removeprefix("www."):  # a title that is only its address says nothing
+        return None
+    return {"t": t, "u": u, "src": text(src, 60), "sum": text(summary, 280), "ts": ts, **more}
 
 
 def rows(found, most):
@@ -191,8 +195,9 @@ def news(q, at, most=8):
 
 
 def talk(q, at, most=4):
-    """What people who build things are saying. Twenty points keeps out what nobody read."""
-    hits = at(HN + "search?" + urllib.parse.urlencode({"query": q, "tags": "story", "hitsPerPage": 12}), HN).get("hits") or []
+    """What people who build things are saying now. Twenty points keeps out what nobody read."""
+    since = int(time.time()) - TALK_DAYS * 86400
+    hits = at(HN + "search?" + urllib.parse.urlencode({"query": q, "tags": "story", "hitsPerPage": 12, "numericFilters": f"created_at_i>{since}"}), HN).get("hits") or []
     wanted = [h for h in hits if (h.get("points") or 0) >= 20 and h.get("url")]
     return rows([row(h.get("title"), h.get("url"), "Hacker News", f"{h['points']} points, {h.get('num_comments') or 0} comments", h.get("created_at_i")) for h in wanted], most)
 

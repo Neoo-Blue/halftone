@@ -3,8 +3,11 @@
 // Everything printed here came from strangers or from a model that read them, so it all goes through esc, and it stays plain text.
 import { $, esc, ago, compact, whole, reading, picture } from '/lib.js';
 
+const POST_WAIT = 75000;
 const post = async (path, body) => {
-  const r = await fetch(path, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify(body) });
+  const r = await fetch(path, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify(body), signal: AbortSignal.timeout(POST_WAIT) }).catch(() => {
+    throw new Error('That took too long. Try again.');
+  });
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || 'That could not be finished.');
   return data;
@@ -205,7 +208,7 @@ const waiting = (lines) => `<div class="find-wait" aria-hidden="true">${'<i></i>
 
 function oddsPart(rows) {
   if (!rows?.length) return '';
-  return `<section class="find-part"><h3>What the betting markets expect</h3><p class="small">Prices on Polymarket, not facts. They move on what people will bet.</p><ul class="odds">${rows.map((e) => `<li><a href="${esc(e.u)}" target="_blank" rel="noopener noreferrer">${esc(e.t)}</a><span class="odds-sum">$${compact(e.volume)} traded</span>${e.lines.map((l) => `<div class="odds-row"><span>${esc(l.t)}</span><i style="--p:${Math.min(100, Number(l.pct) || 0)}%"></i><b>${esc(Math.round(l.pct))}%</b></div>`).join('')}</li>`).join('')}</ul></section>`;
+  return `<section class="find-part"><h3>What the betting markets expect</h3><p class="small">Prices on Polymarket, not facts. They move on what people will bet.</p><ul class="bets">${rows.map((e) => `<li><a href="${esc(e.u)}" target="_blank" rel="noopener noreferrer">${esc(e.t)}</a><span class="bets-sum">$${compact(e.volume)} traded</span>${e.lines.map((l) => `<div class="bets-row"><span>${esc(l.t)}</span><i style="--p:${Math.min(100, Number(l.pct) || 0)}%"></i><b>${esc(Math.round(l.pct))}%</b></div>`).join('')}</li>`).join('')}</ul></section>`;
 }
 
 function codeRows(rows) {
@@ -225,7 +228,7 @@ function nextQuestions(next, box) {
 }
 
 function drawAnswer(root, q, a) {
-  const said = [];
+  const said = [{ q, a: a.answer }];
   root.hidden = false;
   root.innerHTML = `<div class="find-said"><p>${cited(a.answer, a.sources)}</p></div><small>Written by AI from ${whole(a.sources.length)} ${a.sources.length === 1 ? 'source' : 'sources'}. It can be wrong, so follow the numbers.</small>
     <div class="find-next" id="find-next"></div>

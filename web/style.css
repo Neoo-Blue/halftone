@@ -1068,14 +1068,14 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 .find-ask input:focus { border-color: var(--ink); outline: 2px solid var(--accent); outline-offset: 1px; }
 .find-part { margin-top: 22px; }
 .find-rows p { margin-top: 3px; font: 400 14.5px/1.38 var(--body); color: var(--ink2); }
-.odds { margin: 0; padding: 0; list-style: none; }
-.odds li { padding: 10px 0; border-top: var(--rule) solid var(--hair); }
-.odds a { font: 700 16px/1.24 var(--display); text-decoration: none; }
-.odds-sum { display: block; margin: 2px 0 6px; font: 400 13px/1.2 var(--ui); color: var(--ink2); }
-.odds-row { display: grid; grid-template-columns: minmax(0, 9em) 1fr 3em; align-items: center; gap: 10px; min-height: 24px; font: 400 14px/1.2 var(--ui); }
-.odds-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.odds-row i { display: block; height: 6px; background: linear-gradient(90deg, var(--ink) var(--p), var(--hair) var(--p)); }
-.odds-row b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bets { margin: 0; padding: 0; list-style: none; }
+.bets li { padding: 10px 0; border-top: var(--rule) solid var(--hair); }
+.bets a { font: 700 16px/1.24 var(--display); text-decoration: none; }
+.bets-sum { display: block; margin: 2px 0 6px; font: 400 13px/1.2 var(--ui); color: var(--ink2); }
+.bets-row { display: grid; grid-template-columns: minmax(0, 9em) 1fr 3em; align-items: center; gap: 10px; min-height: 24px; font: 400 14px/1.2 var(--ui); }
+.bets-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bets-row i { display: block; height: 6px; background: linear-gradient(90deg, var(--ink) var(--p), var(--hair) var(--p)); }
+.bets-row b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .find-wait { display: grid; gap: 9px; padding: 6px 0; }
 .find-wait i { display: block; height: 12px; background: var(--hair); animation: wait 1.4s ease-in-out infinite; }
 .find-wait i:nth-child(2) { width: 92%; animation-delay: .1s; } .find-wait i:nth-child(3) { width: 78%; animation-delay: .2s; } .find-wait i:nth-child(4) { width: 60%; animation-delay: .3s; }
