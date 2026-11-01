@@ -973,6 +973,17 @@ def d_saved(_):
     return {"kind": "saved", **shelf_view()}
 
 
+def beside(url, title, limit=8):
+    """What sits next to a story: the same subject first, then the day's most widely carried, none of it muted."""
+    mute, own = word_list("MUTE"), words(title or "")
+    rest = [s for s in (load("news")["data"] or {}).get("stories", []) if not about(s["t"], mute) and all(o["u"] != url for o in s["outlets"])]
+    shared = lambda s: len(own & words(s["t"]))
+    near = sorted((s for s in rest if shared(s) >= 2), key=lambda s: (-shared(s), -s["ts"]))[:5]
+    top = sorted((s for s in rest if s not in near), key=lambda s: -len(s["outlets"]))[:limit]
+    card = lambda s: {"t": s["t"], "u": s["u"], "src": s["src"], "n": len(s["outlets"]), "ts": s["ts"], "img": s.get("img")}
+    return {"related": [card(s) for s in near], "top": [card(s) for s in top]}
+
+
 def reader(url):
     item = known_item(url)
     try:
@@ -986,7 +997,7 @@ def reader(url):
                       "also": [o for o in item["outlets"] if o["u"] != url], "spread": sorted(item["outlets"], key=lambda o: o.get("ts") or 0), "homes": coverage(item["outlets"])})
     if story.get("url"):
         note_read(story["url"], story.get("title"), story.get("site"))
-    return {"kind": "read", **story, "saved": any(r["url"] == story.get("url") for r in shelf_view()["saved"])}
+    return {"kind": "read", **story, **beside(url, story.get("title")), "saved": any(r["url"] == story.get("url") for r in shelf_view()["saved"])}
 
 
 # ---------------------------------------------------------------------- Plex, Sonarr, Radarr
@@ -2199,7 +2210,7 @@ def d_event(eid):
     return {"kind": "event", "title": clean_title(e.get("title_en") or e.get("title")), "summary": e.get("summary_en") or e.get("summary"), "ts": e.get("ts"), "domain": e.get("domain"), "category": e.get("category"),
             "severity": e.get("severity"), "confidence": e.get("confidence"), "place": e.get("place"), "admin1": e.get("admin1"), "country": e.get("country"), "lat": e.get("lat"), "lon": e.get("lon"), "actors": [a for a in (e.get("actor_a"), e.get("actor_b")) if a],
             "fatalities": e.get("fatalities"), "theater": e.get("theater"), "thread": {"id": d["thread"].get("id"), "title": clean_title(d["thread"].get("title"))} if d.get("thread") else None, "sources": sources[:6],
-            "story": story if story and story["body"] else None, "note": intel_notes([d["intel_note"]])[0] if d.get("intel_note") else None, "nearby": curated(near, 8)}
+            "story": story if story and story["body"] else None, "note": intel_notes([d["intel_note"]])[0] if d.get("intel_note") else None, "nearby": curated(near, 8), **beside(e.get("source_url"), clean_title(e.get("title_en") or e.get("title")))}
 
 
 def clean_history(h):

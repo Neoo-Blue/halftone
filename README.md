@@ -68,7 +68,7 @@ Stories you open are remembered on the server, not in a browser, so one you read
 
 Follow a name or subject and its stories get their own place on the front page. Mute one and it leaves the paper, the lead and old editions included. Do either from a topic page, or under Settings.
 
-Every day's edition is kept under Back issues, so a story that scrolled away can still be found. A story page says which outlets carry it, flags claims nobody has confirmed yet, and has an Ask button with Explain this simply, What led to this? and Who disagrees?
+Every day's edition is kept under Back issues, so a story that scrolled away can still be found. A story page says which outlets carry it, flags claims nobody has confirmed yet, and has an Ask button with Explain this simply, What led to this? and Who disagrees? On a wide screen the text keeps a readable column and everything else fills the rest of the sheet: the photo, how the story spread, others on the same subject and the day's top stories, staying in view as you read.
 
 The last edition stays readable when your server or connection is down, with a line saying it may be old. That copy is held in the browser that signed in, it goes when the session ends, and after three days it stops being offered.
 

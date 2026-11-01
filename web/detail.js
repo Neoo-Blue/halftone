@@ -74,7 +74,7 @@ let machine = null, machineRange = '24h';
 function machineCharts(d, range) {
   const r = d.series[range] || [], percent = (v) => `${Math.round(v)}%`, rate = (v) => `${bytes(v)}/s`;
   if (r.length < 2) return '<p class="empty">Readings build up from the moment a machine is connected. Check back in a few minutes.</p>';
-  const plot = (title, keys, o) => (r.some((x) => keys.some((k) => x[k.key] != null)) ? `<h3>${title}</h3>${dotPlot(r, keys, { caption: '', aria: `${title} for ${d.name}, ${range}`, style: look.style, ...o })}` : '');
+  const plot = (title, keys, o) => (r.some((x) => keys.some((k) => x[k.key] != null)) ? `<section><h3>${title}</h3>${dotPlot(r, keys, { caption: '', aria: `${title} for ${d.name}, ${range}`, style: look.style, ...o })}</section>` : '');
   return plot('CPU', [{ key: 'cpu', name: 'CPU', cls: 'k1' }, { key: 'io', name: 'Disk wait', cls: 'k3' }], { fmt: percent, lo: 0 })
     + plot('Memory', [{ key: 'mem', name: 'Memory', cls: 'k2' }], { fmt: percent, lo: 0, hi: 100 })
     + plot('Disk used', [{ key: 'disk', name: 'Disk', cls: 'k3' }], { fmt: (v) => `${v.toFixed(1)}%` })
@@ -203,12 +203,12 @@ function usageBody() {
   const rows = row.rows.map((r) => `<tr><th scope="row">${esc(r.who)}<small>${esc(r.model)}</small></th><td class="r">${esc(used(r))}</td><td class="r">${dollars(r.worth)}</td><td class="r">${dollars(r.charged)}</td></tr>`).join('');
   const who = Object.values(by).sort((a, b) => b.worth - a.worth).map((w) => `<tr><th scope="row">${esc(w.who)}</th><td class="r">${dollars(w.worth)}</td><td class="r">${dollars(w.charged)}</td></tr>`).join('');
   const at = d.days.indexOf(row);
-  return `<h3>Worth at list price</h3>${dayBars(days, 'worth', { picked: row.day })}
-    <h3>Really charged</h3>${dayBars(days, 'charged', { picked: row.day, label: ' charged', over: 'worth' })}
+  return `<div class="page-cols"><section><h3>Worth at list price</h3>${dayBars(days, 'worth', { picked: row.day })}</section>
+    <section><h3>Really charged</h3>${dayBars(days, 'charged', { picked: row.day, label: ' charged', over: 'worth' })}</section></div>
     <div class="use-day"><h3>${esc(dayName(`${row.day}T12:00:00`))}</h3><span>${dollars(row.worth)} worth, ${dollars(row.charged)} charged</span>
       <button type="button" class="ghost text" data-usage-step="-1" ${at ? '' : 'disabled'}>Earlier</button><button type="button" class="ghost text" data-usage-step="1" ${at < d.days.length - 1 ? '' : 'disabled'}>Later</button></div>
-    <table class="num-table">${head('Used by')}<tbody>${rows}</tbody></table>
-    <h3>Last ${days.length} days, by who used it</h3><table class="num-table">${head('Source')}<tbody>${who}</tbody></table>`;
+    <div class="page-cols"><section><table class="num-table">${head('Used by')}<tbody>${rows}</tbody></table></section>
+    <section><h3>Last ${days.length} days, by who used it</h3><table class="num-table">${head('Source')}<tbody>${who}</tbody></table></section></div>`;
 }
 
 const around = (lat, lon, deg = 12) => getDots().filter((x) => Math.abs(x.la - lat) < deg && Math.abs(x.lo - lon) < deg * 1.4);
@@ -240,6 +240,8 @@ const notes = (list) => (list || []).map((n) => `<section class="intel"><h3>${es
 const stories = (rows) => `<ul class="wire-list">${rows.map((s) => `<li><a href="${eventHref(s)}">${esc(s.t)}</a><span>${esc([s.src, s.place, ago(s.ts)].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>`;
 const onGlobe = (lat, lon) => (lat != null ? `<button type="button" class="ghost text" data-globe="${esc(lat)},${esc(lon)}">Show on the globe</button>` : '');
 
+const rail = (title, rows) => (rows?.length ? `<h3>${title}</h3><ul class="rail-list">${rows.map((s) => `<li><a href="${esc(reading(s.u))}"><b>${esc(s.t)}</b><span>${esc(s.n > 1 ? `${s.src} and ${s.n - 1} more` : s.src)}, ${esc(ago(s.ts))}</span>${s.img ? `<i class="thumb ink"><img src="${esc(picture(s.img))}" alt="" loading="lazy"></i>` : ''}</a></li>`).join('')}</ul>` : '');
+
 function storyBody(s) {
   return `<div class="page-body">${s.body}</div><p class="source">Original at <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.site)}</a></p>`;
 }
@@ -265,11 +267,11 @@ const VIEWS = {
       ${d.lat == null ? '' : onGlobe(d.lat, d.lon)}
       ${d.theater && d.theater !== 'global' ? `<p class="to"><a href="/world/theater/${esc(d.theater)}">This conflict</a></p>` : ''}
       ${d.thread ? `<p class="to"><a href="/world/thread/${esc(d.thread.id)}">${esc(d.thread.title)}</a></p>` : ''}
-      ${d.sources.length ? `<h3>Sources</h3><ul class="plain">${d.sources.map((s) => `<li><a href="${reading(s.url)}">${esc(s.title || s.publisher || s.url)}</a>${s.title ? `<time>${esc(s.publisher)}</time>` : ''}</li>`).join('')}</ul>` : ''}`;
+      ${d.sources.length ? `<h3>Sources</h3><ul class="plain">${d.sources.map((s) => `<li><a href="${reading(s.url)}">${esc(s.title || s.publisher || s.url)}</a>${s.title ? `<time>${esc(s.publisher)}</time>` : ''}</li>`).join('')}</ul>` : ''}
+      ${d.nearby.length ? `<h3>Nearby in the last three days</h3>${stories(d.nearby)}` : ''}${rail('On the same subject', d.related)}${rail('Top stories', d.top)}`;
     const long = (d.summary || '').length > 220;
     const body = `${long ? `<div class="page-body"><p>${esc(d.summary)}</p></div>` : ''}${d.note ? notes([d.note]) : ''}
-      ${d.story ? storyBody(d.story) : `<p class="empty">${d.sources.length ? 'The publisher would not share the full story with the paper. The sources alongside may have more.' : 'WARROOM has no article for this event, only the report itself.'}</p>`}
-      ${d.nearby.length ? `<h3>Nearby in the last three days</h3>${stories(d.nearby)}` : ''}`;
+      ${d.story ? storyBody(d.story) : `<p class="empty">${d.sources.length ? 'The publisher would not share the full story with the paper. The sources alongside may have more.' : 'WARROOM has no article for this event, only the report itself.'}</p>`}`;
     return {
       scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: (d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title, deck: `${d.confidence != null && d.confidence < 0.4 ? "Unconfirmed: one side's account, not yet checked against another. " : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
   },
@@ -280,8 +282,8 @@ const VIEWS = {
       head: d.name, deck: h?.summary || `Escalation stands at ${d.esc} of 100.`, meta: `${whole(d.events.length)} recent ${d.events.length === 1 ? 'story' : 'stories'}`,
       scene: reportScene(uniqueReports([...d.events, ...getDots().filter((x) => x.w === d.id)]), null, `Reports in ${d.name}, over time`),
       wide: h ? arc(h, d) : '',
-      body: `<h3>What's happening now</h3>${notes(d.intel.slice(0, 1))}${d.intel.length > 1 ? `<details class="older"><summary>Earlier notes</summary>${notes(d.intel.slice(1))}</details>` : ''}<h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}`,
-      side: `${facts([['Escalation', `${d.esc} of 100`], ['Began', h?.began ? longDate(h.began) : ''], ['Running for', years ? `${whole(years)} years` : ''], ['Turning points', turns || '']])}${h?.began_note ? `<p class="small">${esc(h.began_note)}</p>` : ''}${d.lat == null ? '<p class="small">This one is about what two sides do, not one place, so it has no spot on the globe.</p>' : onGlobe(d.lat, d.lon)}`,
+      body: `<h3>What's happening now</h3>${notes(d.intel.slice(0, 1))}${d.intel.length > 1 ? `<details class="older"><summary>Earlier notes</summary>${notes(d.intel.slice(1))}</details>` : ''}`,
+      side: `${facts([['Escalation', `${d.esc} of 100`], ['Began', h?.began ? longDate(h.began) : ''], ['Running for', years ? `${whole(years)} years` : ''], ['Turning points', turns || '']])}${h?.began_note ? `<p class="small">${esc(h.began_note)}</p>` : ''}${d.lat == null ? '<p class="small">This one is about what two sides do, not one place, so it has no spot on the globe.</p>' : onGlobe(d.lat, d.lon)}<h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}`,
       locate: [d.lat, d.lon],
     };
   },
@@ -290,8 +292,8 @@ const VIEWS = {
     return {
       head: d.title, deck: d.summary, meta: `${whole(d.count)} reports since ${stamp(d.first)}`,
       scene: reportScene(d.events, d.events.some((e) => e.la != null) ? null : d.lat != null ? [d.lat, d.lon] : null, `How ${d.title} developed`),
-      body: `${notes(d.intel)}<h3>Latest</h3>${stories(d.events)}`,
-      side: `${facts([['Status', title(d.status)], ['Last report', ago(d.last)], ['Who', d.actors.join(', ')]])}${onGlobe(d.lat, d.lon)}${d.theater && d.theater !== 'global' ? `<p class="to"><a href="/world/theater/${esc(d.theater)}">This conflict</a></p>` : ''}`,
+      body: notes(d.intel) || `<h3>Latest</h3>${stories(d.events)}`,
+      side: `${facts([['Status', title(d.status)], ['Last report', ago(d.last)], ['Who', d.actors.join(', ')]])}${onGlobe(d.lat, d.lon)}${d.theater && d.theater !== 'global' ? `<p class="to"><a href="/world/theater/${esc(d.theater)}">This conflict</a></p>` : ''}${d.intel?.length ? `<h3>Latest</h3>${stories(d.events)}` : ''}`,
       locate: [d.lat, d.lon],
     };
   },
@@ -302,8 +304,8 @@ const VIEWS = {
     const scene = (moved || d.areas?.length || d.lat != null) ? { track: moved ? t : [], areas: d.areas || [], pin: moved ? null : [d.lat, d.lon], ripple: quake && d.areas?.length ? true : null, unit: d.unit || 'km/h', key, span: quake ? 6 : 4, rippleText: 'The shaking spreading from the epicentre', alt: `Map of ${d.title}` } : null;
     return {
       head: d.title, deck: d.text, meta: [title(d.hkind), (d.countries?.length ? d.countries.join(', ') : d.country)].filter(Boolean).join(', '), scene,
-      body: `<div class="page-body"><p>${esc(hazardStory(d, t))}</p></div>${impactList(d)}${d.about && d.about !== d.text ? `<div class="page-body"><p>${esc(d.about)}</p></div>` : ''}${advisories(t, d.unit)}${relatedNews(d.related)}`,
-      side: `${facts([['Alert', title(d.alert)], ['From', stamp(d.from)], ['Until', stamp(d.to)], ['Reported by', d.source]])}${d.report ? `<p class="source"><a href="${esc(d.report)}" target="_blank" rel="noopener noreferrer">Full report</a></p>` : ''}${onGlobe(d.lat, d.lon)}`,
+      body: `<div class="page-body"><p>${esc(hazardStory(d, t))}</p></div>${impactList(d)}${d.about && d.about !== d.text ? `<div class="page-body"><p>${esc(d.about)}</p></div>` : ''}${advisories(t, d.unit)}`,
+      side: `${facts([['Alert', title(d.alert)], ['From', stamp(d.from)], ['Until', stamp(d.to)], ['Reported by', d.source]])}${d.report ? `<p class="source"><a href="${esc(d.report)}" target="_blank" rel="noopener noreferrer">Full report</a></p>` : ''}${onGlobe(d.lat, d.lon)}${relatedNews(d.related)}`,
     };
   },
 
@@ -348,11 +350,11 @@ const VIEWS = {
       head: d.name, deck: `CPU ${Math.round(d.cpu)}%, memory ${Math.round((100 * d.mem_used) / (d.mem_total || 1))}%, disk ${Math.round((100 * d.disk_used) / (d.disk_total || 1))}%.`, meta: `${d.role}, up ${span(d.uptime)}`,
       body: `<div class="plot-tools"><div class="seg ranges" role="group" aria-label="Time range">${['1h', '24h', '7d', '30d'].map((r) => `<button type="button" data-range="${r}" aria-pressed="${r === '24h'}">${r}</button>`).join('')}</div>${lookPicker()}</div>
         <div id="machine-charts">${machineCharts(d, '24h')}</div>
-        ${volumes ? `<h3>Volumes</h3><table class="num-table"><tbody>${volumes}</tbody></table>` : ''}
-        ${pools ? `<h3>Storage pools</h3><ul class="plain">${pools}</ul>` : ''}
-        ${top ? `<h3>Using the most right now</h3><table class="num-table"><thead><tr><th scope="col">Process</th><th scope="col" class="r">CPU</th><th scope="col" class="r">Memory</th></tr></thead><tbody>${top}</tbody></table>` : ''}
-        ${guests ? `<h3>Containers</h3><ul class="plain">${guests}</ul>` : ''}
-        ${docker ? `<h3>Docker</h3><table class="num-table"><tbody>${docker}</tbody></table>` : ''}`,
+        <div class="page-cols">${volumes ? `<section><h3>Volumes</h3><table class="num-table"><tbody>${volumes}</tbody></table></section>` : ''}
+        ${pools ? `<section><h3>Storage pools</h3><ul class="plain">${pools}</ul></section>` : ''}
+        ${top ? `<section><h3>Using the most right now</h3><table class="num-table"><thead><tr><th scope="col">Process</th><th scope="col" class="r">CPU</th><th scope="col" class="r">Memory</th></tr></thead><tbody>${top}</tbody></table></section>` : ''}
+        ${guests ? `<section><h3>Containers</h3><ul class="plain">${guests}</ul></section>` : ''}
+        ${docker ? `<section><h3>Docker</h3><table class="num-table"><tbody>${docker}</tbody></table></section>` : ''}</div>`,
       side: facts([['Docker', docker ? `${d.containers.filter((c) => c.state === 'running').length} of ${d.containers.length} running` : ''], ['Load', load], ['Memory', `${bytes(d.mem_used)} of ${bytes(d.mem_total)}`], ['Disk fills', fills], ['Temperature', d.temp ? `${d.temp} C` : ''], ['Kernel', d.kernel]]),
     };
   },
@@ -410,7 +412,7 @@ const VIEWS = {
     return {
       head: d.title || d.site, deck: d.deck, meta: [d.site, d.author, d.published ? stamp(d.published) : ''].filter(Boolean).join(', '),
       hero: d.image ? picture(d.image) : null,
-      side: `${d.homes?.length ? `<p class="small">Carried in ${esc(d.homes.map(([home, n]) => `${home} ${n}`).join(', '))}.${d.homes.length === 1 && d.homes[0][1] > 2 ? ` So far only ${esc(d.homes[0][0])} outlets.` : ''}</p>` : ''}${spread(d.spread)}`,
+      side: `${d.homes?.length ? `<p class="small">Carried in ${esc(d.homes.map(([home, n]) => `${home} ${n}`).join(', '))}.${d.homes.length === 1 && d.homes[0][1] > 2 ? ` So far only ${esc(d.homes[0][0])} outlets.` : ''}</p>` : ''}${spread(d.spread)}${rail('On the same subject', d.related)}${rail('Top stories', d.top)}`,
       body: d.body ? `<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${'speechSynthesis' in window ? '<button type="button" class="ghost text" data-listen aria-pressed="false">Listen</button>' : ''}</div>${storyBody(d)}` : `<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
     };
   },
@@ -495,6 +497,14 @@ function match() {
   return null;
 }
 
+const DATA = new Set(['usage', 'machine', 'weather', 'topic', 'product', 'service', 'container']);  // charts and lists take the width. Anything to read keeps a readable measure and the rail takes the rest
+
+// The rail runs out before a long story does, so it scrolls until its end is showing and then stays, and the right of the page is never empty.
+let side = null;
+const fitSide = () => side?.style.setProperty('--stick', `${Math.min(64, innerHeight - side.offsetHeight - 16)}px`);
+const sideGrew = new ResizeObserver(fitSide);
+addEventListener('resize', fitSide);
+
 function page(v, m) {
   const back = m.desk ? `<a href="${DESK[m.desk]}">Back to ${m.desk}</a>` : '<a href="/">Back to the paper</a>';
   const art = v.backdrop ? `<div class="backdrop"><img src="${esc(v.backdrop)}" alt=""></div>` : '';
@@ -504,9 +514,10 @@ function page(v, m) {
   const where = !v.scene && v.locate?.[0] != null ? `<div class="locator"><canvas data-lat="${esc(v.locate[0])}" data-lon="${esc(v.locate[1])}" tabindex="0" role="img" aria-label="Globe centred on this place. Tap a dot to open that report."></canvas></div>` : '';
   const sub = `${v.deck ? `<p class="deck">${esc(v.deck)}</p>` : ''}${v.meta ? `<p class="byline">${esc(v.meta)}</p>` : ''}`;
   const side = where || v.side ? `<aside class="page-side">${where}${v.side || ''}</aside>` : '';
+  const grid = ['page-grid', !side && 'solo', DATA.has(m.kind) && 'data', v.hero && 'with-hero'].filter(Boolean).join(' ');
   return `<nav class="crumb" aria-label="Back">${back}</nav>${art}
-    <header class="page-top${v.poster ? ' with-poster' : ''}">${left}<h1 class="page-head" tabindex="-1">${tight(v.head)}</h1><div class="page-sub">${sub}</div></header>${hero}${stage}
-    ${v.wide || ''}<div class="page-grid${side ? '' : ' solo'}"><div class="page-main">${v.body || ''}</div>${side}</div>`;
+    <header class="page-top${v.poster ? ' with-poster' : ''}">${left}<h1 class="page-head" tabindex="-1">${tight(v.head)}</h1><div class="page-sub">${sub}</div></header>${stage}
+    ${v.wide || ''}<div class="${grid}">${hero}<div class="page-main">${v.body || ''}</div>${side}</div>`;
 }
 
 let front = 0, turn = 0, still = null, stage = null, getDots = () => [];
@@ -586,6 +597,9 @@ export async function route() {
   dockStory(m.kind === 'read' && body.body ? body.url : null);
   document.title = `${v.head} | ${NAME}`;
   $('.page-head', sheet())?.focus({ preventScroll: true });
+  sideGrew.disconnect();
+  side = $('.page-side', sheet());
+  if (side) sideGrew.observe(side);
 }
 
 export function go(href) {
@@ -607,7 +621,7 @@ export function start(fly, dots) {
     saveValues({ TAPE_OFF: $$('[data-tape]').filter((b) => !b.checked).map((b) => b.dataset.tape).join(',') }).then(() => dispatchEvent(new Event('paper:reload')));
   });
   addEventListener('popstate', route);
-  document.addEventListener('error', (e) => { if (e.target.matches?.('.hero img, .page-poster img')) e.target.parentNode.remove(); }, true);  // a dead picture leaves no hole
+  document.addEventListener('error', (e) => { if (e.target.matches?.('.hero img, .page-poster img, .thumb img')) e.target.parentNode.remove(); }, true);  // a dead picture leaves no hole
   document.addEventListener('click', (e) => {
     const range = e.target.closest('[data-range]');
     if (range && machine) {

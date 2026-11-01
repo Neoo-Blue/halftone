@@ -72,14 +72,14 @@ assert s.paper()["layout"]["order"]["wide"] == default
 page = """<html><head><meta property="og:title" content="A real story"><meta property="og:site_name" content="ABC News"><meta name="author" content="ABC News"><meta property="og:description" content="The first thing that happened in this story, told plainly for everybody."></head><body><article>
 <p>The first thing that happened in this story, told plainly for everybody.</p>
 <p>A second paragraph with enough words in it to count as part of the story itself.</p>
-<h3>Recommended Stories</h3><ul><li><a href="/a">Some other headline about something else entirely</a></li><li><a href="/b">Another one nobody asked for</a></li></ul>
+<h3>Recommended Stories</h3><ul><li>list 1 of 3<a href="/a">Some other headline about something else entirely</a></li><li><a href="/b">Another one nobody asked for</a></li></ul>
 <p><a href="/c">'Inexplicable' order probed in a different story altogether</a></p>
 <p>Sponsored Content by Taboola</p>
 <p>A third paragraph that carries on with the story after the interruption, and it has plenty of words in it to make the body long enough to keep, which the reader wants to do, and it goes on a little while longer still so that the sixty word floor is comfortably passed by the time we reach the end of this sentence right here.</p>
 <h2>Most viewed</h2><ul><li>One thing</li><li>Another thing people clicked</li></ul>
 </article></body></html>"""
 story = s.extract(page, "https://abc.example/x")
-assert "Recommended" not in story["body"] and "Inexplicable" not in story["body"] and "Taboola" not in story["body"] and "Most viewed" not in story["body"] and "people clicked" not in story["body"], story["body"]
+assert "list 1 of 3" not in story["body"] and "Recommended" not in story["body"] and "Inexplicable" not in story["body"] and "Taboola" not in story["body"] and "Most viewed" not in story["body"] and "people clicked" not in story["body"], story["body"]
 assert "A second paragraph" in story["body"] and "carries on" in story["body"], "the story itself stays, either side of the interruption"
 assert "The first thing" not in story["body"], "the summary isn't repeated as a first line"
 assert story["author"] is None, "a site isn't its own byline"
@@ -147,6 +147,19 @@ assert s.d_topic("first")["earlier"][0]["u"] == "a", "search reaches back throug
 assert s.detail("archive", today)["stories"]
 settings.update({"MUTE": "first"})
 assert [r["u"] for r in s.d_archive(today)["stories"]] == ["c"] and not s.d_topic("first")["earlier"], "muted subjects leave old editions too"
+settings.update({"MUTE": ""})
+news_now = s.load
+story = lambda t, u, n, ts=1, img=None: {"t": t, "u": u, "src": "Wire", "ts": ts, "img": img, "outlets": [{"u": u}] + [{"u": f"{u}/{i}"} for i in range(n - 1)]}
+s.load = lambda name: {"data": {"stories": [story("Harbor strike talks collapse in Oslo", "a", 1), story("Oslo harbor strike enters third week", "b", 2, ts=9, img="i"), story("Oslo harbor strike ends the season", "c", 1, ts=5), story("Rain due Tuesday", "d", 9), story("Team wins final", "e", 3), story("AirPods harbor strike Oslo", "f", 7)]}}
+settings.update({"MUTE": "airpods"})
+got = s.beside("a", "Harbor strike talks collapse in Oslo", limit=2)
+assert [r["u"] for r in got["related"]] == ["b", "c"], "the same subject first, newest of equals first, never the story itself or anything muted"
+assert [r["u"] for r in got["top"]] == ["d", "e"] and got["related"][0]["n"] == 2 and got["related"][0]["img"] == "i", "then the biggest of the rest"
+unknown = s.beside("gone", None)
+assert unknown["related"] == [] and len(unknown["top"]) == 5, "a story the paper doesn't know still has a rail"
+s.load = lambda name: {"data": None}
+assert s.beside("a", "x") == {"related": [], "top": []}, "and a first run with no news has an empty one"
+s.load = news_now
 settings.update({"MUTE": ""})
 real_issue = s.file_issue
 s.file_issue = lambda stories: (_ for _ in ()).throw(s.sqlite3.OperationalError("locked"))
