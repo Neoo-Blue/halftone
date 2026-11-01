@@ -3,6 +3,7 @@
 import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight } from '/lib.js';
 import { makeGlobe } from '/globe.js';
 import { dockStory } from '/dock.js';
+import { phoneTab, phonePage } from '/phone.js';
 import { mountScene } from '/scene.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -640,6 +641,8 @@ export async function route() {
     stage?.destroy();
     stage = null;
     if (!sheet().hidden) await swap(false, () => { sheet().replaceChildren(); document.title = NAME; });
+    phonePage(null);
+    if (phoneTab(location.hash.slice(1), front)) return;
     const target = location.hash && $(location.hash);
     if (target) target.scrollIntoView();
     else scrollTo(0, front);
@@ -668,6 +671,7 @@ export async function route() {
   mountStage(v);
   mountArc();
   dockStory(m.kind === 'read' && body.body ? body.url : null);
+  phonePage(m.kind);
   document.title = `${v.head} | ${NAME}`;
   $('.page-head', sheet())?.focus({ preventScroll: true });
   sideGrew.disconnect();

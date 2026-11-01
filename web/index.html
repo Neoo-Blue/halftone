@@ -2,7 +2,7 @@
 <html lang="en" data-theme="morning" data-masthead="blackletter">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#f6d3bd">
 <title>The Times</title>
@@ -29,6 +29,7 @@
 
 <nav class="bar" aria-label="Sections">
   <ul class="desks">
+    <li class="only-phone"><a href="/" data-today>Today</a></li>
     <li><a href="/#world">World</a></li>
     <li><a href="/#tech">Tech</a></li>
     <li><a href="/#sports">Sports</a></li>
@@ -37,10 +38,10 @@
     <li><a href="/#usage">AI use</a></li>
     <li><a href="/#arts">Arts</a></li>
     <li><a href="/#systems">Systems</a></li>
-    <li><a href="/investments">Investments</a></li>
-    <li><a href="/archive">Back issues</a></li>
-    <li><button type="button" class="arrange" id="arrange" aria-pressed="false">Arrange</button></li>
-    <li><a href="/settings">Settings</a></li>
+    <li class="not-phone"><a href="/investments">Investments</a></li>
+    <li class="not-phone"><a href="/archive">Back issues</a></li>
+    <li class="not-phone"><button type="button" class="arrange" id="arrange" aria-pressed="false">Arrange</button></li>
+    <li class="not-phone"><a href="/settings">Settings</a></li>
   </ul>
   <div class="tape" id="tape" aria-label="Markets"></div>
   <div class="plates" role="radiogroup" aria-label="Theme">
@@ -50,6 +51,52 @@
     <button type="button" role="radio" data-theme-pick="glass" aria-label="Glass" title="Glass"><i></i></button>
   </div>
 </nav>
+
+<nav class="tabbar" id="tabbar" aria-label="Quick actions">
+  <div class="tab-main">
+    <a href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2zM17 9h3v10a2 2 0 0 1-2 2M8 9h5M8 13h5M8 17h3"/></svg><span>Today</span></a>
+    <button type="button" data-phone="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><span>Search</span></button>
+    <button type="button" data-phone="ask" class="tab-ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/></svg><span>Ask</span></button>
+    <a href="/saved"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z"/></svg><span>Saved</span></a>
+    <button type="button" data-phone="more"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>More</span></button>
+  </div>
+  <div class="tab-read" hidden>
+    <button type="button" data-phone="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button>
+    <button type="button" data-phone="listen" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10v4h3l5 4V6l-5 4zM16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/></svg><span>Listen</span></button>
+    <button type="button" data-phone="ask" class="tab-ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/></svg><span>Ask</span></button>
+    <button type="button" data-phone="save" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z"/></svg><span>Save</span></button>
+    <button type="button" data-phone="share"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M8 7.5L12 4l4 3.5M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7"/></svg><span>Share</span></button>
+  </div>
+</nav>
+
+<dialog class="phone-sheet" id="sheet-find" aria-label="Search the paper" closedby="any">
+  <form id="sheet-find-form" role="search"><input type="search" id="sheet-q" placeholder="Search the paper" aria-label="Search the paper" maxlength="80" autocomplete="off" enterkeyhint="search"></form>
+  <div class="sheet-tags trend-tags" id="sheet-tags"></div>
+</dialog>
+
+<dialog class="phone-sheet" id="sheet-more" aria-label="More" closedby="any">
+  <h2>Look</h2>
+  <div class="sheet-themes" role="radiogroup" aria-label="Theme">
+    <button type="button" role="radio" data-theme-pick="auto"><i class="auto"></i><span>Match phone</span></button>
+    <button type="button" role="radio" data-theme-pick="morning"><i></i><span>Morning</span></button>
+    <button type="button" role="radio" data-theme-pick="night"><i></i><span>Night</span></button>
+    <button type="button" role="radio" data-theme-pick="cobalt"><i></i><span>Cobalt</span></button>
+    <button type="button" role="radio" data-theme-pick="glass"><i></i><span>Glass</span></button>
+  </div>
+  <h2>Text size</h2>
+  <div class="seg sheet-text" role="group" aria-label="Text size">
+    <button type="button" data-text="0.92" aria-pressed="false">Small</button>
+    <button type="button" data-text="1" aria-pressed="true">Usual</button>
+    <button type="button" data-text="1.12" aria-pressed="false">Large</button>
+    <button type="button" data-text="1.26" aria-pressed="false">Largest</button>
+  </div>
+  <ul class="sheet-links">
+    <li><a href="/investments">Investments</a></li>
+    <li><a href="/archive">Back issues</a></li>
+    <li><button type="button" data-arrange>Arrange the sections</button></li>
+    <li><a href="/settings">Settings</a></li>
+  </ul>
+</dialog>
 
 <p class="banner moved" id="moved" role="status" hidden><span id="moved-text"></span> <button type="button" id="moved-undo">Undo</button> <button type="button" id="moved-keep">Keep</button></p>
 <p class="banner" id="banner" role="alert" hidden>This copy may be out of date: the connection dropped, or your sign-in ended. <button type="button" id="reload">Reload</button></p>
@@ -94,7 +141,7 @@
     <form class="find" id="find" role="search"><input type="search" id="find-q" placeholder="Search the paper" aria-label="Search the paper" maxlength="80" autocomplete="off"></form>
   </section>
 
-  <p class="arrange-note sheet" id="arrange-note" hidden><span id="arrange-text"></span> <button type="button" class="ghost text" id="arrange-reset">Back to the usual order</button></p>
+  <p class="arrange-note sheet" id="arrange-note" hidden><span id="arrange-text"></span> <button type="button" class="ghost text" id="arrange-reset">Back to the usual order</button> <button type="button" class="ghost text only-phone" id="arrange-done">Done</button></p>
 
   <section class="desk sheet" id="world" aria-labelledby="h-world">
     <h2 class="desk-name" id="h-world">World</h2>

@@ -2,6 +2,7 @@ import { makeGlobe } from '/globe.js';
 import { $, $$, esc, usd, whole, dollars, pct, plural, ago, span, bytes, dayName, dayKey, when, ICON, lineChart, dayBars, look, lookPicker, tight } from '/lib.js';
 import { showDock, openDock } from '/dock.js';
 import { start, go, reading, picture, eventHref, isFront } from '/detail.js';
+import { startPhone, onPhone, phoneCheck } from '/phone.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const THEMES = ['morning', 'night', 'cobalt', 'glass'];
@@ -33,7 +34,7 @@ function asof(el, source, s) {
 function front(p) {
   const now = new Date(p.now * 1000);
   $('#dateline').textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  $('#edition').textContent = `Vol. I, No. ${p.edition}${p.news.as_of ? `. News updated ${ago(p.news.as_of)}` : ''}`;
+  $('#edition').innerHTML = `<span class="not-phone">Vol. I, No. ${esc(p.edition)}${p.news.as_of ? '. ' : ''}</span>${p.news.as_of ? `News updated ${esc(ago(p.news.as_of))}` : ''}`;
   $('#note').textContent = p.note || 'The first edition is still on the press.';
   $('#colophon-time').textContent = `Updated ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
 
@@ -76,6 +77,7 @@ function front(p) {
   if (L) {
     const story = reading(L.via?.u || L.u), also = p.news.data.also || [];
     $('#lead').innerHTML = `
+      ${L.img ? `<a class="lead-photo ink only-phone" href="${story}" tabindex="-1" aria-hidden="true"><img src="${esc(picture(L.img))}" alt=""></a>` : ''}
       <h1 class="headline"><a href="${story}">${tight(L.t)}</a></h1>
       ${L.sum ? `<p class="deck">${esc(L.sum)}</p>` : ''}
       ${L.text ? `<div class="lead-body">${L.text}</div>` : ''}
@@ -613,6 +615,7 @@ function render() {
   desk(sinceLast);
   desk(following);
   fitAlso();
+  phoneCheck();
   if (!drawn) {
     drawn = true;
     document.body.classList.add('inked');
@@ -634,10 +637,13 @@ async function load() {
 
 // ---------------------------------------------------------------- behaviour
 
+const chosen = () => { try { return localStorage.getItem('paper-theme'); } catch { return null; } };
+const deviceTheme = () => (matchMedia('(prefers-color-scheme: dark)').matches || new Date().getHours() < 6 || new Date().getHours() >= 18 ? 'night' : 'morning');
+
 function markTheme() {
-  const t = document.documentElement.dataset.theme;
+  const t = document.documentElement.dataset.theme, mine = chosen();
   $$('[data-theme-pick]').forEach((b) => {
-    const on = b.dataset.themePick === t;
+    const on = b.closest('.phone-sheet') ? b.dataset.themePick === (mine || 'auto') : b.dataset.themePick === t;
     b.setAttribute('aria-checked', String(on));
     b.tabIndex = on ? 0 : -1;
   });
@@ -645,10 +651,14 @@ function markTheme() {
   document.querySelector('meta[name=theme-color]').content = bg;
 }
 
-function setTheme(t, e) {
+function setTheme(pick, e) {
+  const t = pick === 'auto' ? deviceTheme() : pick;
   const apply = () => {
     document.documentElement.dataset.theme = t;
-    try { localStorage.setItem('paper-theme', t); } catch { /* private window: it just won't stick */ }
+    try {
+      if (pick === 'auto') localStorage.removeItem('paper-theme');
+      else localStorage.setItem('paper-theme', t);
+    } catch { /* private window: it just won't stick */ }
     markTheme();
   };
   if (!document.startViewTransition || reduce) {
@@ -666,6 +676,14 @@ document.addEventListener('click', (e) => {
   const t = e.target.closest('button');
   if (!t) return;
   if (t.dataset.themePick) setTheme(t.dataset.themePick, e);
+  else if (t.dataset.text) {
+    document.documentElement.style.setProperty('--text', t.dataset.text);
+    try { localStorage.setItem('paper-text', t.dataset.text); } catch { /* it just won't stick */ }
+    $$('[data-text]').forEach((b) => b.setAttribute('aria-pressed', String(b === t)));
+  } else if (t.hasAttribute('data-arrange')) {
+    $('#sheet-more').close();
+    arrange(true);
+  }
   else if (t.dataset.fly) {
     const [lat, lon] = t.dataset.fly.split(',').map(Number);
     globe?.fly(lat, lon);
@@ -772,6 +790,7 @@ $$('.desk').forEach((d) => {
 });
 $('#arrange').addEventListener('click', () => arrange(!arranging));
 $('#arrange-reset').addEventListener('click', () => choose(USUAL));
+$('#arrange-done').addEventListener('click', () => arrange(false));
 $('#paper').addEventListener('click', (e) => {
   const b = e.target.closest('[data-move]');
   if (!b) return;
@@ -814,7 +833,7 @@ addEventListener('scroll', () => {  // on a phone the bar and the Ask button giv
 
 const here = new IntersectionObserver((en) => {
   for (const x of en) {
-    if (x.isIntersecting) {
+    if (x.isIntersecting && !onPhone()) {
       inView = x.target.id;
       const link = $(`.desks a[href="/#${x.target.id}"]`), nav = $('.desks');
       if (link && nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: link.offsetLeft - nav.clientWidth / 2 + link.offsetWidth / 2, behavior: reduce ? 'auto' : 'smooth' });
@@ -827,24 +846,44 @@ $$('.desk').forEach((s) => here.observe(s));
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 
 markTheme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!chosen()) setTheme('auto'); });
 try {
-  globe = makeGlobe($('#globe'), {
-    onOpen(dot) {
-      go(eventHref({ k: dot.k, i: dot.i }));
-    },
-    onPick(hit) {
-      const box = $('#pick');
-      box.hidden = !hit;
-      if (!hit) return;
-      box.innerHTML = `<b>${esc(KIND[hit.dot.k])}</b> ${esc(hit.dot.t)}${hit.dot.ts ? ` <time>${esc(ago(hit.dot.ts))}</time>` : ''}`;
-      box.style.setProperty('--x', `${hit.x}px`);
-      box.style.setProperty('--y', `${hit.y}px`);
-    },
-  });
-} catch (e) {
-  console.warn('globe off', e);
+  const text = localStorage.getItem('paper-text');
+  if (text) $$('[data-text]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.text === text)));
+} catch { /* the usual size */ }
+
+function startGlobe() {
+  if (globe || $('#orb').classList.contains('flat')) return;
+  try {
+    globe = makeGlobe($('#globe'), {
+      onOpen(dot) {
+        go(eventHref({ k: dot.k, i: dot.i }));
+      },
+      onPick(hit) {
+        const box = $('#pick');
+        box.hidden = !hit;
+        if (!hit) return;
+        box.innerHTML = `<b>${esc(KIND[hit.dot.k])}</b> ${esc(hit.dot.t)}${hit.dot.ts ? ` <time>${esc(ago(hit.dot.ts))}</time>` : ''}`;
+        box.style.setProperty('--x', `${hit.x}px`);
+        box.style.setProperty('--y', `${hit.y}px`);
+      },
+    });
+  } catch (e) {
+    console.warn('globe off', e);
+  }
+  if (!globe) $('#orb').classList.add('flat');
+  else if (paper) world(paper);
 }
-if (!globe) $('#orb').classList.add('flat');
+
+// A phone shows the globe on the World tab, and doesn't spin it up until that tab opens.
+function seatGlobe(phone) {
+  if (phone) $('#worldbody').before($('#orb'));
+  else {
+    $('#front').append($('#orb'));
+    startGlobe();
+  }
+}
+startPhone({ go, onTab: (id) => { if (id === 'world') startGlobe(); }, onForm: seatGlobe });
 
 addEventListener('paper:reload', load);
 start((lat, lon) => globe?.fly(lat, lon), () => paper?.world.data?.dots || []);

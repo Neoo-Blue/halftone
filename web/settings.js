@@ -104,11 +104,14 @@ function mark(s) {
   return s.on ? ['good', 'Saved'] : ['off', 'Off'];
 }
 
+// A phone would otherwise scroll past thirty sections to reach one, so each folds shut until you open it.
+const openSets = new Set(location.hash.startsWith('#set-') ? [location.hash.slice(5)] : []);
+
 function block(s) {
   const [cls, text] = mark(s);
-  const always = ALWAYS.includes(s.id);
-  return `<section class="set" id="set-${s.id}" aria-labelledby="t-${s.id}">
-    <div class="set-head"><h2 id="t-${s.id}">${esc(s.title)}</h2>${always ? '' : `<p class="set-state ${cls}">${text}</p>`}</div>
+  const always = ALWAYS.includes(s.id), shown = openSets.has(s.id);
+  return `<section class="set${shown ? '' : ' shut'}" id="set-${s.id}" aria-labelledby="t-${s.id}">
+    <div class="set-head"><h2 id="t-${s.id}"><button type="button" class="set-open" data-open-set="${s.id}" aria-expanded="${shown}">${esc(s.title)}</button></h2>${always ? '' : `<p class="set-state ${cls}">${text}</p>`}</div>
     <p class="set-about">${esc(s.about)}</p>
     <div class="set-fields">${s.fields.map(field).join('')}</div>
     ${s.id === 'access' ? connect() : ''}
@@ -292,6 +295,14 @@ addEventListener('beforeunload', (e) => { if ($$('[data-save]').some((b) => !b.d
 
 document.addEventListener('click', async (e) => {
   if (e.target.closest('[data-sample]')) { await hearVoice(e.target.closest('[data-sample]')); return; }
+  const fold = e.target.closest('[data-open-set]');
+  if (fold) {
+    const id = fold.dataset.openSet, on = !openSets.has(id);
+    if (on) openSets.add(id); else openSets.delete(id);
+    $(`#set-${id}`).classList.toggle('shut', !on);
+    fold.setAttribute('aria-expanded', String(on));
+    return;
+  }
   const t = e.target.closest('button');
   if (!t) return;
   if (t.dataset.save) save(t.dataset.save);

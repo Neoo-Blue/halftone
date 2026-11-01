@@ -3,13 +3,14 @@ import { $, askPaper } from '/lib.js';
 
 const dock = $('#dock'), button = $('#dock-btn'), panel = $('#dock-panel'), form = $('#dock-form'), box = $('#dock-q'), go = $('#dock-go'), log = $('#dock-log'), tries = $('#dock-try');
 let asked = false, story = null, front = [];
+const touch = matchMedia('(pointer: coarse)');
 
 function open(on) {
   dock.style.setProperty('--pill-w', `${button.offsetWidth}px`);
   panel.inert = !on;
   dock.classList.toggle('open', on);
   button.setAttribute('aria-expanded', String(on));
-  (on ? box : button).focus({ preventScroll: true });
+  (on ? (touch.matches ? panel : box) : button).focus({ preventScroll: true });  // on a phone the keyboard would cover the suggestions
 }
 
 async function ask(question) {
@@ -64,6 +65,7 @@ export function dockStory(url) {
 
 export function showDock(p) {
   dock.hidden = !p.on.ai;
+  document.body.classList.toggle('no-ask', !p.on.ai);
   if (asked || !p.on.ai) return;
   asked = true;
   front = [['What needs me today?', true], ['What changed in the world overnight?', p.on.world], ['Am I making money?', p.on.money], ['Is anything broken?', p.on.systems]].filter(([, on]) => on).map(([text]) => text);
