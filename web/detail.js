@@ -243,6 +243,57 @@ const onGlobe = (lat, lon) => (lat != null ? `<button type="button" class="ghost
 const rail = (title, rows) => (rows?.length ? `<h3>${title}</h3><ul class="rail-list">${rows.map((s) => `<li><a href="${esc(reading(s.u))}"><b>${esc(s.t)}</b><span>${esc(s.n > 1 ? `${s.src} and ${s.n - 1} more` : s.src)}, ${esc(ago(s.ts))}</span>${s.img ? `<i class="thumb ink"><img src="${esc(picture(s.img))}" alt="" loading="lazy"></i>` : ''}</a></li>`).join('')}</ul>` : '');
 
 // A wide page sets the story in newspaper columns, in blocks short enough that the eye never scrolls back up to find the next column. The first block sits beside the photograph.
+let reading_ = null;
+const stopReading = () => { window.speechSynthesis?.cancel(); reading_?.(); reading_ = null; };
+
+function readOnDevice(button) {
+  const talk = new SpeechSynthesisUtterance($('.page-body', sheet()).textContent), done = () => { button.setAttribute('aria-pressed', 'false'); button.textContent = 'Listen'; };
+  talk.voice = speechSynthesis.getVoices().find((v) => v.name === button.dataset.voice) || null;
+  talk.onend = done;
+  reading_ = done;
+  button.setAttribute('aria-pressed', 'true');
+  button.textContent = 'Stop';
+  speechSynthesis.speak(talk);
+}
+
+// One piece at a time, the next fetched while this one plays, so the voice starts quickly and a long story never waits on all of itself.
+async function readWithService(button) {
+  const audio = new Audio();
+  let off = false, skip = () => {};
+  const done = () => { off = true; skip(); audio.pause(); button.setAttribute('aria-pressed', 'false'); button.textContent = 'Listen'; };
+  reading_ = done;
+  button.setAttribute('aria-pressed', 'true');
+  button.textContent = 'Loading';
+  audio.src = URL.createObjectURL(new Blob([Uint8Array.from(atob('UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='), (c) => c.charCodeAt(0))], { type: 'audio/wav' }));
+  audio.play().catch(() => {});  // while the tap still counts, so a phone lets the real audio play
+  const piece = async (part) => {
+    const r = await fetch('/api/listen', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ url: button.dataset.url, part }) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'no audio');
+    return { blob: await r.blob(), parts: Number(r.headers.get('x-parts')) };
+  };
+  try {
+    let next = piece(0);
+    for (let part = 0; ; part += 1) {
+      const { blob, parts } = await next;
+      if (off) return;
+      if (part + 1 < parts) next = piece(part + 1);
+      URL.revokeObjectURL(audio.src);
+      audio.src = URL.createObjectURL(blob);
+      await audio.play();
+      button.textContent = 'Stop';
+      await new Promise((end, fail) => { audio.onended = end; audio.onerror = fail; skip = end; });
+      if (off) return;
+      if (part + 1 >= parts) break;
+    }
+    done();
+  } catch {
+    if (off) return;
+    done();
+    readOnDevice(button);  // a dead service leaves the story readable, and the button says whose voice this is
+    button.textContent = 'Stop device voice';
+  }
+}
+
 function storyBody(s, photo = '') {
   const src = document.createElement('template'), blocks = [{ html: [], words: 0 }];
   src.innerHTML = s.body;
@@ -438,7 +489,7 @@ const VIEWS = {
     return {
       head: d.title || d.site, deck: d.deck, meta: [d.site, d.author, d.published ? stamp(d.published) : ''].filter(Boolean).join(', '),
       side: `${d.homes?.length ? `<p class="small">Carried in ${esc(d.homes.map(([home, n]) => `${home} ${n}`).join(', '))}.${d.homes.length === 1 && d.homes[0][1] > 2 ? ` So far only ${esc(d.homes[0][0])} outlets.` : ''}</p>` : ''}${spread(d.spread)}${rail('On the same subject', d.related)}${rail('Top stories', d.top)}`,
-      body: d.body ? `<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${'speechSynthesis' in window ? '<button type="button" class="ghost text" data-listen aria-pressed="false">Listen</button>' : ''}</div>${storyBody(d, photograph(d.image))}` : `${photograph(d.image)}<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
+      body: d.body ? `<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${d.listen !== 'browser' || 'speechSynthesis' in window ? `<button type="button" class="ghost text" data-listen="${esc(d.listen)}" data-voice="${esc(d.voice || '')}" data-url="${esc(d.url)}" aria-pressed="false">Listen</button>` : ''}</div>${storyBody(d, photograph(d.image))}` : `${photograph(d.image)}<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
     };
   },
 
@@ -581,6 +632,7 @@ const sick = (c) => c.state === 'restarting' || c.status.includes('unhealthy');
 
 export async function route() {
   const m = match(), mine = (turn += 1);
+  stopReading();
   dockStory(null);  // set again below if this page is a story: a question on the front page isn't about the last one you read
   if (!m) {
     still?.destroy();
@@ -686,14 +738,8 @@ export function start(fly, dots) {
     const listen = e.target.closest('[data-listen]');
     if (listen) {
       const on = listen.getAttribute('aria-pressed') !== 'true';
-      speechSynthesis.cancel();
-      listen.setAttribute('aria-pressed', String(on));
-      listen.textContent = on ? 'Stop' : 'Listen';
-      if (on) {
-        const talk = new SpeechSynthesisUtterance($('.page-body', sheet()).textContent);
-        talk.onend = () => { listen.setAttribute('aria-pressed', 'false'); listen.textContent = 'Listen'; };
-        speechSynthesis.speak(talk);
-      }
+      stopReading();
+      if (on) (listen.dataset.listen === 'browser' ? readOnDevice : readWithService)(listen);
       return undefined;
     }
     const pick = e.target.closest('[data-look]');

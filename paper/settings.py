@@ -145,6 +145,12 @@ SECTIONS = [
         F("TWILIO_KEY", "API key SID", placeholder="SK...", hint="An API key, so your auth token stays where it is. Console, Account, API keys.", guards=True),
         F("TWILIO_SECRET", "API key secret", "secret"),
     ]},
+    {"id": "listen", "title": "Listen", "about": "How the Listen button sounds on a story. Your device's own voice is free. A voice service sounds like a person, and reads the story's text, not your mail or your money.", "needs": ("TTS_PROVIDER",), "fields": [
+        F("TTS_PROVIDER", "Voice service", "select", "browser", options=[("browser", "This device's own voice, free"), ("livekit", "LiveKit"), ("deepgram", "Deepgram")]),
+        F("TTS_VOICE", "Voice", "voice", hint="Save after choosing a service to see its voices with your key."),
+        F("LIVEKIT_TTS_TOKEN", "LiveKit speech token", "secret", hint="A token with the inference grant, so your API secret stays where it is. Uses your plan's inference credits."),
+        F("DEEPGRAM_TTS_KEY", "Deepgram key", "secret", hint="Any key that can speak. About $0.03 per 1,000 characters, so about 15 cents for a long story."),
+    ]},
     {"id": "deepgram", "title": "Deepgram", "about": "Fills in what Deepgram cost over the last 30 days on the Business desk.", "needs": ("DEEPGRAM_KEY",), "fields": [
         F("DEEPGRAM_KEY", "API key", "secret", hint="It has to be able to read billing. A key that can only transcribe is refused."),
     ]},
@@ -275,6 +281,8 @@ def clean(field, value):
     value = value.strip()
     if field["key"] == "BEAT_TOKEN" and value and len(value) < 32:
         raise ValueError(f"{label} needs at least 32 characters. Nothing limits guesses at it, so length is what stops them.")
+    if kind == "voice" and value and not re.fullmatch(r"[\w ./:()+-]{1,120}", value):
+        raise ValueError(f"{label} can't be used.")
     if kind == "url":
         return clean_url(label, value)
     if kind == "date":

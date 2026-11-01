@@ -37,6 +37,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import ai
+import tts
 from ai import read_all
 import auth
 import invest
@@ -997,7 +998,110 @@ def reader(url):
                       "also": [o for o in item["outlets"] if o["u"] != url], "spread": sorted(item["outlets"], key=lambda o: o.get("ts") or 0), "homes": coverage(item["outlets"])})
     if story.get("url"):
         note_read(story["url"], story.get("title"), story.get("site"))
-    return {"kind": "read", **story, **beside(url, story.get("title")), "saved": any(r["url"] == story.get("url") for r in shelf_view()["saved"])}
+    return {"kind": "read", **story, **beside(url, story.get("title")), "listen": speech()[0] if speech() else "browser", "voice": C("TTS_VOICE"), "saved": any(r["url"] == story.get("url") for r in shelf_view()["saved"])}
+
+
+# ---------------------------------------------------------------------- Reading aloud
+
+LISTEN_DAILY = 150000  # characters a day, about three hours of a voice: a hard ceiling on the bill
+SPEECH_KEY = {"deepgram": "DEEPGRAM_TTS_KEY", "livekit": "LIVEKIT_TTS_TOKEN"}
+
+
+def speech(provider=None, voice=None):
+    """The voice service in use, as (service, key, voice), or None for the device's own voice."""
+    provider, voice = provider or C("TTS_PROVIDER"), voice if voice is not None else C("TTS_VOICE")
+    key = C(SPEECH_KEY[provider]) if provider in SPEECH_KEY else None
+    return (provider, key, voice if tts.fits(provider, voice) else tts.DEFAULT[provider]) if key else None
+
+
+def spend_listen(chars):
+    day = f"listen:{datetime.now(zone()).date()}"
+    with db() as c:
+        c.execute("BEGIN IMMEDIATE")  # or two requests at once both read the same total, and the ceiling isn't one
+        row = c.execute("SELECT v FROM meta WHERE k = ?", (day,)).fetchone()
+        used = int(row["v"]) if row else 0
+        if used + chars > LISTEN_DAILY:
+            raise OverflowError("daily limit")
+        c.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (day, str(used + chars)))
+
+
+def record_listen(provider, voice, chars):
+    """Worth at list price. LiveKit's comes out of the plan's inference credits, so any overage shows on its bill rather than here."""
+    worth = chars * tts.price(voice) / 1e6
+    try:
+        with db() as c:
+            c.execute("""INSERT INTO usage_day VALUES ('paper', ?, ?, ?, ?, 'characters', ?, ?) ON CONFLICT (source, day, who, model) DO UPDATE SET qty = qty + excluded.qty,
+                         worth = COALESCE(worth, 0) + excluded.worth, charged = charged + excluded.charged""", (utc_day(), "This paper, Listen", provider, chars, worth, worth if provider == "deepgram" else 0))
+    except sqlite3.Error:
+        pass
+
+
+def say(provider, key, voice, text):
+    """Audio for this text in this voice. It's kept, so hearing a story twice costs once. The news picture sweep clears these after a fortnight."""
+    name = hashlib.sha256(f"{provider}\n{voice}\n{text}".encode()).hexdigest()
+    kinds = {"speech-": "audio/mpeg", "speechw-": "audio/wav"}
+    for prefix, ctype in kinds.items():
+        if (CACHE / f"{prefix}{name}").exists():
+            return (CACHE / f"{prefix}{name}").read_bytes(), ctype
+    spend_listen(len(text))
+    audio, ctype = tts.speak(provider, key, voice, text)
+    if not audio:
+        raise OSError("no audio came back")
+    kept = CACHE / f"{'speechw-' if ctype == 'audio/wav' else 'speech-'}{name}"
+    part = kept.with_suffix(f".{threading.get_ident()}")  # all at once, so a full disk can't leave half a story to be served for a fortnight
+    part.write_bytes(audio)
+    part.replace(kept)
+    record_listen(provider, voice, len(text))
+    return audio, ctype
+
+
+def listen_part(sent):
+    """Trust boundary: one piece of a story, in the voice from Settings. The text is the paper's own reading of a public page, never what the browser sent."""
+    url, part = sent.get("url"), sent.get("part")
+    if not isinstance(url, str) or len(url) > 1000 or type(part) is not int or part < 0:
+        raise ValueError("That story could not be read.")
+    choice = speech()
+    if not choice:
+        raise ValueError("Choose a voice service in Settings first.")
+    story = read_page(url)
+    parts = tts.pieces(story.get("title"), story.get("deck"), story.get("body"))
+    if part >= len(parts):
+        raise ValueError("That story could not be read.")
+    return (*say(*choice, parts[part]), len(parts))
+
+
+def listen_sample(sent):
+    provider, voice = sent.get("provider"), sent.get("voice")
+    if provider not in SPEECH_KEY or not isinstance(voice, str) or len(voice) > 120:
+        raise ValueError("That voice could not be tried.")
+    choice = speech(provider, voice)
+    if not choice:
+        raise ValueError("Save a key for that service first.")
+    return (*say(*choice, f"This is how {C('PAPER_NAME')} will sound, reading you the news."), 1)
+
+
+def listen_voices(provider):
+    if provider not in SPEECH_KEY:
+        return {"voices": []}
+    models = None
+    if provider == "deepgram" and C("DEEPGRAM_TTS_KEY"):
+        try:
+            models = fetch("https://api.deepgram.com/v1/models", {"Authorization": f"Token {C('DEEPGRAM_TTS_KEY')}"}, timeout=10)
+        except (OSError, ValueError, http.client.HTTPException):
+            pass
+    try:
+        rows = tts.voices(provider, models)
+    except (AttributeError, TypeError, ValueError):  # a list that isn't a list
+        rows = tts.voices(provider)
+    return {"voices": rows, "default": tts.DEFAULT[provider]}
+
+
+def listen_test():
+    choice = speech()
+    if not choice:
+        return "Listen uses this device's own voice."
+    audio, _ = say(*choice, f"This is how {C('PAPER_NAME')} will sound, reading you the news.")
+    return f"{choice[0].title()} read a sample, {len(audio) // 1024} KB of audio."
 
 
 # ---------------------------------------------------------------------- Plex, Sonarr, Radarr
@@ -2098,6 +2202,7 @@ def weather():
 def spend_ai():
     day = f"ai:{datetime.now(zone()).date()}"
     with db() as c:
+        c.execute("BEGIN IMMEDIATE")  # or two requests at once both read the same total, and the ceiling isn't one
         row = c.execute("SELECT v FROM meta WHERE k = ?", (day,)).fetchone()
         used = int(row["v"]) if row else 0
         if used >= AI_DAILY:
@@ -2121,7 +2226,7 @@ def ask_paper(question, url=None):
     return ai.ask(ASK_SYSTEM, f"<paper>{paper_text}</paper>\n\n{told}Question: {question.strip()}", max_tokens=1000)
 
 
-HELD_BACK = ("PAPER_SSH_KEY", "PVE_INSECURE", "MAILBOXES", "MAIL_ABOUT", "HOLDINGS", "PORTFOLIO_URL")  # a path on this machine, a safety check, whose mail is read, and words in a system prompt
+HELD_BACK = ("PAPER_SSH_KEY", "PVE_INSECURE", "MAILBOXES", "MAIL_ABOUT", "HOLDINGS", "PORTFOLIO_URL", "TTS_PROVIDER", "TTS_VOICE")  # a path on this machine, a safety check, whose mail is read, words in a system prompt, and what costs money to use
 
 
 def configurable():
@@ -2900,6 +3005,7 @@ CHECKS = {
     "notify": lambda: (post_alert("A test from the paper."), "Sent a test message.")[1],
     "twilio": lambda: f"Twilio answered. Last month came to {twilio_month():.2f} dollars.",
     "deepgram": lambda: f"Deepgram answered. The last 30 days came to {deepgram_month():.2f} dollars.",
+    "listen": lambda: listen_test(),
     "brief": lambda: f"Found {brief()['title']}.",
     "weather": lambda: f"{weather()['place']} is {weather()['now']['sky'].lower()}.",
     "sports": lambda: f"Scores found for {len(sports())} leagues.",
@@ -2937,7 +3043,7 @@ def token_set():
 
 
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".json": "application/json"}
-CSP = "default-src 'none'; manifest-src 'self'; worker-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+CSP = "default-src 'none'; manifest-src 'self'; worker-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 
 TITLE_FONTS = {"blackletter": "manufacturing-consent", "fraktur": "unifrakturcook", "fatface": "abril-fatface"}
@@ -3073,6 +3179,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "Those arguments are not valid."}, 400)
         if (url.path == "/api/read" or url.path.startswith("/img/remote")) and self.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
             return self.send(403, b"", "text/plain")  # these fetch from the owner's connection and write to disk, so another site can't be allowed to trigger them
+        if url.path == "/api/listen/voices":
+            return self.send_json(listen_voices(urllib.parse.parse_qs(url.query).get("provider", [""])[0]))
         if url.path == "/api/read":
             return self.send_json(reader(urllib.parse.parse_qs(url.query).get("u", [""])[0]))
         if url.path.startswith("/api/detail/"):
@@ -3144,6 +3252,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.do_mcp()
         if not self.writable():
             return None
+        if path in ("/api/listen", "/api/listen/sample"):
+            return self.do_listen(path)
         if path == "/api/logout":
             auth.end_session(self.session())
             return self.send_json({"ok": True}, extra=[self.set_session("", 0)])
@@ -3192,6 +3302,17 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "That job is not on the list."}, 404)
         remember(f"beat:{name}", int(time.time()))
         return self.send_json({"ok": True})
+
+    def do_listen(self, path):
+        try:
+            audio, ctype, parts = (listen_sample if path.endswith("sample") else listen_part)(self.body(3000))
+        except ValueError as e:
+            return self.send_json({"error": str(e) if str(e).endswith(".") else "That could not be read aloud."}, 400)
+        except OverflowError:
+            return self.send_json({"error": "Today's listening allowance is used up."}, 429)
+        except (OSError, http.client.HTTPException, ImportError, TypeError, KeyError):  # a service's faults, and a reply that isn't what it promised
+            return self.send_json({"error": "The voice service did not answer."}, 502)
+        return self.send(200, audio, ctype, extra=[("X-Parts", str(parts))])
 
     def do_ai(self, path):
         if not ai.ready():

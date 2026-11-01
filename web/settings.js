@@ -49,7 +49,45 @@ function fonts(f) {
   return `<fieldset class="set-fonts"><legend>${esc(f.label)}</legend><div class="set-font-grid">${f.options.map(([value, label]) => `<label class="set-font mast-${value}"><input type="radio" name="${f.key}" value="${value}"${value === f.value ? ' checked' : ''}${off}><span data-name>${name}</span><small>${esc(label)}</small></label>`).join('')}</div></fieldset>`;
 }
 
+// The voices come from the service, or from this device, so they fill in once the page is drawn.
+function voicePicker(f) {
+  return `<label class="field"><span>${esc(f.label)}</span><select id="f-${f.key}" data-key="${f.key}" data-now="${esc(f.value)}"${f.locked ? ' disabled' : ''}><option value="${esc(f.value)}">${esc(f.value || 'Default')}</option></select></label>${hint(f)}
+    <button type="button" class="ghost text" data-sample>Hear this voice</button>`;
+}
+
+async function fillVoices() {
+  const pick = $('#f-TTS_VOICE'), service = $('#f-TTS_PROVIDER')?.value;
+  if (!pick) return;
+  const now = pick.value || pick.dataset.now, device = service === 'browser';
+  const rows = device ? (globalThis.speechSynthesis?.getVoices() || []).filter((v) => v.lang.startsWith('en')).map((v) => ({ id: v.name, name: v.name, about: v.lang, group: 'This device' }))
+    : (await (await send('GET', `/api/listen/voices?provider=${encodeURIComponent(service)}`)).json()).voices;
+  const groups = [...new Set(rows.map((r) => r.group))];
+  pick.innerHTML = `<option value="">Default</option>${groups.map((g) => `<optgroup label="${esc(g)}">${rows.filter((r) => r.group === g).map((r) => `<option value="${esc(r.id)}">${esc(`${r.name}, ${r.about}`)}</option>`).join('')}</optgroup>`).join('')}`;
+  pick.value = rows.some((r) => r.id === now) ? now : '';
+}
+
+async function hearVoice(button) {
+  const service = $('#f-TTS_PROVIDER').value, voice = $('#f-TTS_VOICE').value, say = $('#say-listen'), line = 'This is how the paper will sound, reading you the news.';
+  if (service === 'browser') {
+    const talk = new SpeechSynthesisUtterance(line);
+    talk.voice = speechSynthesis.getVoices().find((v) => v.name === voice) || null;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(talk);
+    return;
+  }
+  button.textContent = 'Loading';
+  try {
+    const r = await send('POST', '/api/listen/sample', { provider: service, voice });
+    if (!r.ok) throw new Error((await r.json()).error);
+    await new Audio(URL.createObjectURL(await r.blob())).play();
+  } catch (e) {
+    if (say) say.textContent = e.message;
+  }
+  button.textContent = 'Hear this voice';
+}
+
 function field(f) {
+  if (f.kind === 'voice') return voicePicker(f);
   if (f.kind === 'rows') return rows(f);
   if (f.kind === 'choice') return fonts(f);
   if (f.kind === 'select') return `<label class="field"><span>${esc(f.label)}</span><select id="f-${f.key}" data-key="${f.key}"${f.locked ? ' disabled' : ''}>${f.options.map(([value, label]) => `<option value="${esc(value)}"${value === f.value ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>${hint(f)}</label>`;
@@ -169,11 +207,13 @@ async function token(path) {
 function draw() {
   $('#set-main').innerHTML = helper() + data.sections.map(block).join('') + signIn();
   rail();
+  fillVoices();
 }
 
 function redraw(id) {
   $(`#set-${id}`).outerHTML = block(section(id));
   rail();
+  if (id === 'listen') fillVoices();
 }
 
 // ---------------------------------------------------------------- saving
@@ -241,6 +281,8 @@ async function changePassword() {
 // ---------------------------------------------------------------- behaviour
 
 const dirty = (el) => { const b = $('[data-save]', el.closest('.set')); if (b) { b.disabled = false; $('.set-say', el.closest('.set')).textContent = 'Not saved yet.'; } };
+document.addEventListener('change', (e) => { if (e.target.id === 'f-TTS_PROVIDER') fillVoices(); });
+if (globalThis.speechSynthesis) speechSynthesis.onvoiceschanged = () => { if ($('#f-TTS_PROVIDER')?.value === 'browser') fillVoices(); };
 document.addEventListener('input', (e) => {
   if (e.target.closest('.set') && !e.target.closest('#set-helper') && !e.target.id.startsWith('pw-')) dirty(e.target);
   if (e.target.name === 'PAPER_FONT') document.documentElement.dataset.masthead = e.target.value;  // try it on the masthead above, before saving
@@ -249,6 +291,7 @@ document.addEventListener('input', (e) => {
 addEventListener('beforeunload', (e) => { if ($$('[data-save]').some((b) => !b.disabled)) e.preventDefault(); });
 
 document.addEventListener('click', async (e) => {
+  if (e.target.closest('[data-sample]')) { await hearVoice(e.target.closest('[data-sample]')); return; }
   const t = e.target.closest('button');
   if (!t) return;
   if (t.dataset.save) save(t.dataset.save);

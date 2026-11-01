@@ -419,6 +419,7 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 .story-body .story-chunk > :is(h2, h3, h4):first-child { margin: 1.5em 0 .6em; padding-top: 14px; border-top: var(--heavy) solid var(--line); font: 800 clamp(26px, calc(var(--read) * 1.5), 36px)/1.12 var(--display); letter-spacing: var(--head-track); text-wrap: balance; }
 .page-cols, #machine-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 18px clamp(24px, 3vw, 44px); align-items: start; }
 .page-main > .wire-list { columns: 380px; column-gap: clamp(24px, 3vw, 44px); column-rule: var(--rule) solid var(--hair); }
+[data-sample] { margin-top: 10px; }
 .page-cols .plain { columns: 300px; column-gap: clamp(24px, 3vw, 44px); }
 .rail-list a { display: block; padding: 10px 0; text-decoration: none; }
 .rail-list a:has(.thumb) { display: grid; grid-template-columns: minmax(0, 1fr) 84px; gap: 2px 12px; align-content: start; }

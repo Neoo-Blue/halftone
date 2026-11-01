@@ -70,6 +70,8 @@ Follow a name or subject and its stories get their own place on the front page. 
 
 Every day's edition is kept under Back issues, so a story that scrolled away can still be found. A story page says which outlets carry it, flags claims nobody has confirmed yet, and has an Ask button with Explain this simply, What led to this? and Who disagrees? On a wide screen the story takes most of the page, set in newspaper columns in short blocks, so you never scroll back up to find the next column. A narrow column beside it holds how the story spread, others on the same subject and the day's top stories, and stays in view as you read.
 
+Listen reads a story aloud in your device's own voice for free, or in a natural voice through LiveKit or Deepgram. Choose the service under Settings and pick from its voices, with a button to hear each one first. Audio is kept, so hearing a story twice costs once, and the voice services count under AI use.
+
 The last edition stays readable when your server or connection is down, with a line saying it may be old. That copy is held in the browser that signed in, it goes when the session ends, and after three days it stops being offered.
 
 ## Every conflict from day one

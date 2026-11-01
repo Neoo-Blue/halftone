@@ -148,6 +148,126 @@ assert s.detail("archive", today)["stories"]
 settings.update({"MUTE": "first"})
 assert [r["u"] for r in s.d_archive(today)["stories"]] == ["c"] and not s.d_topic("first")["earlier"], "muted subjects leave old editions too"
 settings.update({"MUTE": ""})
+# ---------------------------------------------------------------- reading aloud
+import tts  # noqa: E402
+one = tts.pieces("A headline", "A summary", "<p>First &amp; short.</p><h3>Then</h3><p>" + ("A sentence that goes on for a while. " * 200) + "</p>")
+assert one[0].startswith("A headline.\n\nA summary.\n\nFirst & short.") and "<" not in "".join(one), "headline first, and it reads words, not markup"
+assert len(one[0]) <= tts.ROOM[0] and len(one[1]) <= tts.ROOM[1] and all(len(p) <= tts.LIMIT for p in one) and len(one) > 3, "short pieces first so the voice starts soon, and nothing a service would refuse"
+assert "goes on for a" in one[-1] and one[-1].rstrip().endswith("."), "broken between sentences"
+assert tts.pieces("", "", "") == [] and tts.pieces(None, None, None) == [], "an empty story has nothing to read"
+assert all(len(p) <= tts.LIMIT for p in tts.pieces("t", "", "<p>" + "y" * 5000 + "</p>")), "and one endless sentence is cut, not refused"
+assert tts.fits("deepgram", "aura-2-draco-en") and not tts.fits("deepgram", "deepgram/aura-2:draco") and tts.fits("livekit", "deepgram/aura-2:draco") and not tts.fits("livekit", "Google UK English Female") and not tts.fits("livekit", "a/b:c d"), "a voice belongs to one service"
+assert tts.voices("livekit")[0]["id"] == tts.DEFAULT["livekit"] and any("cartesia" in v["id"] for v in tts.voices("livekit")) and tts.voices("browser") == []
+listed = {"tts": [{"canonical_name": "aura-2-zeus-en", "metadata": {"accent": "American", "tags": ["masculine", "deep"]}}, {"canonical_name": "aura-zeus-en"}, {"canonical_name": "aura-2-ama-ja"}, "junk", {"canonical_name": "aura-2-ok-en", "metadata": "junk"}]}
+assert [v["id"] for v in tts.voices("deepgram", listed)] == ["aura-2-zeus-en", "aura-2-ok-en"] and tts.voices("deepgram", listed)[0]["about"] == "American man, deep", "only current English voices, and a strange reply costs nothing"
+assert len(tts.voices("deepgram", {"tts": "junk"})) == len(tts.AURA), "and no answer still leaves voices to pick"
+
+
+class Socket:
+    def __init__(self, replies):
+        self.replies, self.sent = list(replies), []
+
+    def __call__(self, url, **kw):
+        self.url, self.head = url, kw["additional_headers"]
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def send(self, m):
+        self.sent.append(json.loads(m))
+
+    def recv(self, timeout):
+        return self.replies.pop(0)
+
+
+b64 = tts.base64.b64encode(b"\1\2" * 8).decode()
+sock = Socket([json.dumps({"type": "session.created"}), json.dumps({"type": "output_audio", "audio": b64}), json.dumps({"type": "output_alignment"}), json.dumps({"type": "output_audio", "audio": b64}), json.dumps({"type": "done"})])
+audio, kind = tts.livekit("tok", "cartesia/sonic-3:abc-123", "Hello there.", connect=sock)
+assert kind == "audio/wav" and audio[:4] == b"RIFF" and len(audio) == 44 + 32, "audio is gathered until done and wrapped so a browser can play it"
+assert sock.url == tts.GATEWAY + "?model=cartesia%2Fsonic-3" and sock.head == {"Authorization": "Bearer tok"}
+assert [m["type"] for m in sock.sent] == ["session.create", "input_transcript", "session.flush"] and sock.sent[0]["voice"] == "abc-123" and sock.sent[0]["model"] == "cartesia/sonic-3" and sock.sent[0]["encoding"] == "pcm_s16le"
+try:
+    tts.livekit("t", "a/b:c", "x", connect=Socket([json.dumps({"type": "error", "message": "no"})]))
+except OSError:
+    pass
+else:
+    raise AssertionError("a refusal is a failure, not an empty story")
+
+real_live = tts.livekit
+tts.livekit = lambda *a: (_ for _ in ()).throw(RuntimeError("a library's own failure"))
+try:
+    tts.speak("livekit", "t", "a/b:c", "x")
+except OSError:
+    pass
+else:
+    raise AssertionError("every failure reads as a service failure")
+tts.livekit = real_live
+try:
+    tts.livekit("t", "a/b:c", "x", connect=Socket([json.dumps({"type": "done"})]))
+except OSError:
+    pass
+else:
+    raise AssertionError("no audio is a failure, not a silent story that gets kept and charged")
+settings.update({"TTS_PROVIDER": "deepgram", "DEEPGRAM_TTS_KEY": "dg-key", "TTS_VOICE": "Google UK English Female", "PAPER_NAME": "The Times"})
+assert s.speech() == ("deepgram", "dg-key", "aura-2-draco-en"), "a device's voice falls back to the service's own default"
+settings.update({"TTS_VOICE": "aura-2-zeus-en"})
+assert s.speech()[2] == "aura-2-zeus-en" and s.speech("livekit") is None, "a service with no key isn't on"
+assert refuses(settings.update, {"TTS_VOICE": "<b>"}) and refuses(settings.update, {"TTS_PROVIDER": "elevenlabs"})
+assert not ({"TTS_PROVIDER", "TTS_VOICE", "DEEPGRAM_TTS_KEY", "LIVEKIT_TTS_TOKEN"} & {f["key"] for f in s.configurable()}), "an AI can't turn on a paid service"
+real_speak, real_page, calls = tts.speak, s.read_page, []
+s.read_page = lambda url: {"title": "Headline", "deck": "", "body": "<p>" + ("Word by word. " * 400) + "</p>"}
+tts.speak = lambda p, k, v, text: (calls.append((p, k, v, text)) or (b"mp3", "audio/mpeg"))
+audio, ctype, parts = s.listen_part({"url": "https://a.example/1", "part": 0})
+assert audio == b"mp3" and ctype == "audio/mpeg" and parts > 1 and calls[0][:3] == ("deepgram", "dg-key", "aura-2-zeus-en") and calls[0][3].startswith("Headline")
+s.listen_part({"url": "https://a.example/1", "part": 0})
+assert len(calls) == 1, "hearing it twice costs once"
+for bad in ({"url": "https://a.example/1", "part": 99}, {"url": "https://a.example/1", "part": -1}, {"url": "https://a.example/1", "part": True}, {"url": 5, "part": 0}, {"part": 0}):
+    assert refuses(s.listen_part, bad), bad
+with s.db() as c:
+    row = c.execute("SELECT * FROM usage_day WHERE who = 'This paper, Listen'").fetchone()
+    assert row and row["unit"] == "characters" and row["worth"] > 0 and row["charged"] == row["worth"], "it counts under AI use"
+    c.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (f"listen:{s.datetime.now(s.zone()).date()}", str(s.LISTEN_DAILY)))
+try:
+    s.listen_part({"url": "https://a.example/1", "part": 1})
+except OverflowError:
+    pass
+else:
+    raise AssertionError("the day's allowance holds")
+assert len(calls) == 1, "and past it nothing is sent"
+assert s.listen_part({"url": "https://a.example/1", "part": 0})[0] == b"mp3", "what's already kept can still be heard"
+with s.db() as c:
+    c.execute("DELETE FROM meta WHERE k LIKE 'listen:%'")
+real_fetch = s.fetch
+settings.update({"DEEPGRAM_TTS_KEY": "dg-key"})
+for odd in ([1], {"tts": 5}, {"tts": [{"canonical_name": "aura-2-zeus-en", "metadata": {"tags": 5}}]}):
+    s.fetch = lambda *a, **k: odd
+    assert s.listen_voices("deepgram")["voices"], odd
+s.fetch = real_fetch
+done = []
+def race():
+    try:
+        s.spend_listen(1000)
+        done.append(1)
+    except OverflowError:
+        pass
+crowd = [s.threading.Thread(target=race) for _ in range(40)]
+with s.db() as c:
+    c.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (f"listen:{s.datetime.now(s.zone()).date()}", str(s.LISTEN_DAILY - 10000)))
+for t in crowd:
+    t.start()
+for t in crowd:
+    t.join()
+assert len(done) == 10, f"the ceiling holds however many ask at once: {len(done)}"
+with s.db() as c:
+    c.execute("DELETE FROM meta WHERE k LIKE 'listen:%'")
+assert refuses(s.listen_sample, {"provider": "livekit", "voice": ""}) and refuses(s.listen_sample, {"provider": "file", "voice": ""}), "no key, no sample"
+tts.speak, s.read_page = real_speak, real_page
+settings.update({"TTS_PROVIDER": "browser", "DEEPGRAM_TTS_KEY": None, "TTS_VOICE": ""})
+assert s.speech() is None and "listening" not in s.listen_voices("browser")
 news_now = s.load
 story = lambda t, u, n, ts=1, img=None: {"t": t, "u": u, "src": "Wire", "ts": ts, "img": img, "outlets": [{"u": u}] + [{"u": f"{u}/{i}"} for i in range(n - 1)]}
 s.load = lambda name: {"data": {"stories": [story("Harbor strike talks collapse in Oslo", "a", 1), story("Oslo harbor strike enters third week", "b", 2, ts=9, img="i"), story("Oslo harbor strike ends the season", "c", 1, ts=5), story("Rain due Tuesday", "d", 9), story("Team wins final", "e", 3), story("AirPods harbor strike Oslo", "f", 7)]}}
