@@ -30,12 +30,15 @@ All are `GET`.
 | `/spaceweather` | Geomagnetic conditions and forecast | 5 min |
 | `/intel` | Analyst notes | 5 min |
 | `/theaters/{id}/history` | A theater's timeline from day one, with a source on every entry | 5 min |
+| `/theaters/{id}/accounts` | Who is reporting a theater, what only one side is saying, and each side's account | 1 min |
 
 `/events` takes `limit` (1 to 300, default 100), `min_severity` (0 to 1), `theater`, `domain` (`kinetic` or `economic`), `since` (unix seconds, rounded down to the minute) and `cursor` (from `next_cursor`).
 
 `/intel` takes `scope` (`theater`, `thread` or `global`), `scope_id`, which needs a `scope`, and `limit` (1 to 20).
 
 The parameters listed here are the only ones that do anything. Others are ignored.
+
+Every event says who is saying it. `basis` is one of `measured` (an instrument recorded it), `record` (an official document), `both` (opposing sides of the fight report it), `outside` (a voice outside the fight does), `one_side` (only one side does, among the sources WARROOM reads) or `unplaced` (a voice nobody has placed). `sides` lists the camps that spoke, such as `["RU", "UA"]`, and `voice` names who filed it. `one_side` does not mean false. `/events/{id}` adds `who`, with every voice behind the report and the count across its story.
 
 Times are unix seconds, UTC. Every answer carries `meta.generated_at` and `meta.license`. Lists look like this:
 

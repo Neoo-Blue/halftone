@@ -2508,7 +2508,7 @@ def d_event(eid):
         if story["body"]:
             break
     near = war(f"/events/{eid}/nearby").get("items", [])
-    return {"kind": "event", "title": clean_title(e.get("title_en") or e.get("title")), "summary": e.get("summary_en") or e.get("summary"), "ts": e.get("ts"), "domain": e.get("domain"), "category": e.get("category"),
+    return {"kind": "event", "who": d.get("who"), "title": clean_title(e.get("title_en") or e.get("title")), "summary": e.get("summary_en") or e.get("summary"), "ts": e.get("ts"), "domain": e.get("domain"), "category": e.get("category"),
             "severity": e.get("severity"), "confidence": e.get("confidence"), "place": e.get("place"), "admin1": e.get("admin1"), "country": e.get("country"), "lat": e.get("lat"), "lon": e.get("lon"), "actors": [a for a in (e.get("actor_a"), e.get("actor_b")) if a],
             "fatalities": e.get("fatalities"), "theater": e.get("theater"), "thread": {"id": d["thread"].get("id"), "title": clean_title(d["thread"].get("title"))} if d.get("thread") else None, "sources": sources[:6],
             "story": story if story and story["body"] else None, "note": intel_notes([d["intel_note"]])[0] if d.get("intel_note") else None, "nearby": curated(near, 8), **beside(e.get("source_url"), clean_title(e.get("title_en") or e.get("title")))}
@@ -2538,11 +2538,20 @@ def theater_history(tid):
         return None
 
 
+def theater_who(tid):
+    """Who is reporting a conflict, and what only one side is saying. An older WARROOM has none of it."""
+    try:
+        found = war(f"/theaters/{tid}/accounts", timeout=10)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, http.client.HTTPException):
+        return None
+    return found if isinstance(found, dict) and isinstance(found.get("tally"), dict) else None
+
+
 def d_theater(tid):
     t = next((x for x in (load("world")["data"] or {}).get("all_theaters", []) if x["id"] == tid), None)
     if not t:
         raise LookupError(tid)
-    return {"kind": "theater", **t, "intel": intel_notes(war(f"/intel?scope=theater&scope_id={tid}&limit=3").get("items", [])), "events": curated(war(f"/events?theater={tid}&limit=120&min_severity=0.2").get("items", []), 30, notices=True), "history": theater_history(tid)}
+    return {"kind": "theater", **t, "intel": intel_notes(war(f"/intel?scope=theater&scope_id={tid}&limit=3").get("items", [])), "events": curated(war(f"/events?theater={tid}&limit=120&min_severity=0.2").get("items", []), 30, notices=True), "history": theater_history(tid), "who": theater_who(tid)}
 
 
 def d_thread(tid):
