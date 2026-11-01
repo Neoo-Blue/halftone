@@ -195,7 +195,7 @@ wide = {"outlets": [1, 2, 3, 4], "ts": NOW - 7200}
 assert s.heat(wide, NOW) > s.heat({"outlets": [1], "ts": NOW}, NOW), "six outlets beat one fresh post"
 assert s.heat({"outlets": [1], "ts": NOW}, NOW) > s.heat({"outlets": [1], "ts": NOW - 86400}, NOW)
 view = s.news_view({"lead": None, "tops": [], "stories": [{"u": "x", "t": "T", "ts": 1, "src": "A", "outlets": [{}, {}], "desks": ["ai"], "sum": "long"}], "feeds": 1})
-assert view["wire"] == [{"u": "x", "t": "T", "ts": 1, "src": "A", "n": 2, "desks": ["ai"]}] and "stories" not in view
+assert view["wire"] == [{"u": "x", "t": "T", "ts": 1, "src": "A", "n": 2, "desks": ["ai"], "l": None}] and "stories" not in view
 
 for kind, ident in (("mail", "../x"), ("nope", "1"), ("event", "../../etc"), ("plex", "1/../2"), ("theater", "A B"), ("product", "st ripe"), ("container", "1; rm")):
     try:

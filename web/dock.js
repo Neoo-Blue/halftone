@@ -44,6 +44,10 @@ tries.addEventListener('click', (e) => {
 visualViewport?.addEventListener('resize', () => dock.style.setProperty('--kb', `${Math.max(0, innerHeight - visualViewport.height - visualViewport.offsetTop)}px`));  // keeps the box above a phone's keyboard
 
 export const openDock = () => open(true);
+export const askDock = (question) => {
+  open(true);
+  if (!go.disabled) ask(question);
+};
 
 function offer(list) {
   tries.replaceChildren(...list.map((text) => {

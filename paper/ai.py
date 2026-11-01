@@ -92,16 +92,23 @@ def _anthropic(system, text, max_tokens, cheap, schema):
     return next(b.text for b in reply.content if b.type == "text")
 
 
-def _compatible(system, text):
-    """No token limit is sent: providers disagree on what the field is called, and refuse the wrong one."""
+def _compatible(system, text, max_tokens=1500):
+    """Providers disagree on what the token limit is called and refuse the wrong one, so each name is tried. Without a limit, a story asking for length could run up the bill."""
     url = f"{base()}/chat/completions"  # the address before the key, so a save between the two can't pair a saved key with a new host
     body = {"model": model(), "messages": [{"role": "system", "content": system}, {"role": "user", "content": text}]}
     headers = {"Content-Type": "application/json", "User-Agent": "MorningPaper/1.0"}
     token = key()
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    with OPENER.open(urllib.request.Request(url, json.dumps(body).encode(), headers), timeout=120) as r:
-        answer = json.loads(read_all(r, 4_000_000, 120))
+    for limit in ("max_tokens", "max_completion_tokens", None):
+        sent = {**body, limit: max_tokens} if limit else body
+        try:
+            with OPENER.open(urllib.request.Request(url, json.dumps(sent).encode(), headers), timeout=120) as r:
+                answer = json.loads(read_all(r, 4_000_000, 120))
+            break
+        except urllib.error.HTTPError as e:
+            if e.code != 400 or not limit:
+                raise
     used = answer.get("usage") if isinstance(answer, dict) else None
     if isinstance(used, dict):
         on_use(body["model"], used.get("prompt_tokens") or 0, used.get("completion_tokens") or 0)
@@ -112,4 +119,4 @@ def ask(system, text, max_tokens=1500, cheap=False, schema=None):
     """One question, one answer as text. Raises OSError, ValueError, KeyError or HTTPError when it can't get one."""
     if provider() == "anthropic":
         return _anthropic(system, text, max_tokens, cheap, schema)
-    return _compatible(system, text)
+    return _compatible(system, text, max_tokens)

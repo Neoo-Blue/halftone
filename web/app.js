@@ -1,6 +1,6 @@
 import { makeGlobe } from '/globe.js';
-import { $, $$, esc, usd, whole, dollars, pct, plural, ago, span, bytes, dayName, dayKey, when, ICON, lineChart, dayBars, look, lookPicker, tight } from '/lib.js';
-import { showDock, openDock } from '/dock.js';
+import { $, $$, esc, usd, whole, dollars, pct, plural, ago, span, bytes, dayName, dayKey, when, ICON, lineChart, dayBars, look, lookPicker, tight, sideBar, sideWord } from '/lib.js';
+import { showDock, openDock, askDock } from '/dock.js';
 import { start, go, reading, picture, eventHref, isFront } from '/detail.js';
 import { startPhone, onPhone, phoneCheck } from '/phone.js';
 
@@ -36,6 +36,7 @@ function front(p) {
   $('#dateline').textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   $('#edition').innerHTML = `<span class="not-phone">Vol. I, No. ${esc(p.edition)}${p.news.as_of ? '. ' : ''}</span>${p.news.as_of ? `News updated ${esc(ago(p.news.as_of))}` : ''}`;
   $('#note').textContent = p.note || 'The first edition is still on the press.';
+  $('#play-paper').hidden = !p.news.data?.lead;
   $('#colophon-time').textContent = `Updated ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
 
   const m = p.money, w = p.world.data, pr = (p.probes.data || []).filter((x) => !x.gated), med = p.media.data;
@@ -81,7 +82,7 @@ function front(p) {
       <h1 class="headline"><a href="${story}">${tight(L.t)}</a></h1>
       ${L.sum ? `<p class="deck">${esc(L.sum)}</p>` : ''}
       ${L.text ? `<div class="lead-body">${L.text}</div>` : ''}
-      <p class="byline">${esc(covered(L))}. Updated ${esc(ago(L.ts))}.${L.via && L.via.u !== L.u ? ` Text from ${esc(L.via.src)}.` : ''} <a href="${story}">Read the story</a></p>
+      ${takeLine(L.u, p)}<p class="byline">${esc(covered(L))}. Updated ${esc(ago(L.ts))}.${L.via && L.via.u !== L.u ? ` Text from ${esc(L.via.src)}.` : ''} ${sideBar(L.lean)} <a href="${story}">Read the story</a></p>
       ${also.length ? `<h2 class="also-head">Also in the news</h2><ul class="also">${also.map((n) => `<li><a href="${reading(n.u)}">${esc(n.t)}</a><span>${esc(n.n > 1 ? `${n.src} and ${n.n - 1} more` : n.src)}, ${esc(ago(n.ts))}</span></li>`).join('')}</ul>` : ''}`;
   }
 }
@@ -96,6 +97,12 @@ function fitAlso() {
 }
 
 // "BBC, New York Times and 4 more": who carried it, which is also why it ranks where it does.
+// Where the paper has already weighed up a story: a dispute shows who is for and who against.
+function takeLine(u, p) {
+  const t = p.takes?.[u];
+  return t && t.f + t.a ? `<p class="takeline"><b>On ${esc(t.s)}:</b> ${t.f} for, ${t.a} against, ${t.n} neutral <small>Written by AI</small></p>` : '';
+}
+
 function covered(s) {
   const names = (s.outlets || [{ src: s.src }]).map((o) => o.src), n = s.n ?? names.length;
   if (n <= 1) return names[0];
@@ -184,18 +191,29 @@ function wireList(p, name) {
   const W = WIRES[name], el = $(W.el), read = new Set(p.shelf.read);
   if (!el) return;
   const desks = { world: NEWS, tech: TECH, sports: ['sports'] }[name];
-  const heads = (p.news.data?.wire || []).filter((n) => n.desks.some((d) => desks.includes(d))).map((n) => ({ t: n.t, href: reading(n.u), u: n.u, by: n.n > 1 ? `${n.src} and ${n.n - 1} more` : n.src, ts: n.ts, tabs: n.desks, wide: n.n >= 3 }));
+  const heads = (p.news.data?.wire || []).filter((n) => n.desks.some((d) => desks.includes(d))).map((n) => ({ t: n.t, href: reading(n.u), u: n.u, by: n.n > 1 ? `${n.src} and ${n.n - 1} more` : n.src, ts: n.ts, tabs: n.desks, wide: n.n >= 3, lean: n.l }));
   const reports = name === 'world' ? (p.world.data?.stories || []).map((s) => ({ t: s.t, href: eventHref(s), by: s.src, ts: s.ts, tabs: s.s >= 0.55 ? [s.k, 'all'] : [s.k] })) : [];
   const rows = [...heads, ...reports].filter((r) => (W.tab === 'all' ? heads.includes(r) || r.tabs.includes('all') : r.tabs.includes(W.tab))).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   el.innerHTML = `<div class="wire-top"><h3 class="sub-head">The wire</h3><div class="seg" role="group" aria-label="Filter the wire"${W.tabs.length > 1 ? '' : ' hidden'}>${W.tabs.map(([k, t]) => `<button type="button" data-wire="${name}:${k}" aria-pressed="${k === W.tab}">${t}</button>`).join('')}</div></div>
-    <ul class="wire-list two">${rows.slice(0, W.more).map((r) => `<li class="${r.wide ? 'wide-story' : ''}${read.has(r.u) ? ' read' : ''}"><a href="${esc(r.href)}">${esc(r.t)}</a><span>${esc(r.by)}, ${esc(ago(r.ts))}</span></li>`).join('') || '<li>Nothing on this line yet.</li>'}</ul>
+    <ul class="wire-list two">${rows.slice(0, W.more).map((r) => `<li class="${r.wide ? 'wide-story' : ''}${read.has(r.u) ? ' read' : ''}"><a href="${esc(r.href)}">${esc(r.t)}</a><span>${esc(r.by)}, ${esc(ago(r.ts))} ${sideBar(r.lean)}</span></li>`).join('') || '<li>Nothing on this line yet.</li>'}</ul>
     ${rows.length > W.more ? `<button type="button" class="ghost text" data-more="${name}">Show ${Math.min(20, rows.length - W.more)} more</button>` : ''}`;
 }
 
 function tops(p) {
   const n = p.news.data?.tops || [];
   if (n.length < 3) return;
-  $('#tops').innerHTML = n.slice(0, 4).map((s) => `<a class="top" href="${reading(s.u)}"><span class="photo"><img src="${picture(s.img)}" alt="" loading="lazy"></span><b>${esc(s.t)}</b><span>${esc(covered(s))}, ${esc(ago(s.ts))}</span></a>`).join('');
+  $('#tops').innerHTML = n.slice(0, 4).map((s) => `<a class="top" href="${reading(s.u)}"><span class="photo"><img src="${picture(s.img)}" alt="" loading="lazy"></span><b>${esc(s.t)}</b><span>${esc(covered(s))}, ${esc(ago(s.ts))}</span>${sideBar(s.lean)}</a>`).join('');
+}
+
+// Stories one side is carrying and the other isn't, and how your own reading sits on the same scale.
+function sidesDesk(p) {
+  const blind = p.news.data?.blind || { l: [], r: [] }, row = (s) => `<li><a href="${reading(s.u)}">${esc(s.t)}</a><span>${esc(s.names.join(', '))}${s.n > s.names.length ? ` and ${s.n - s.names.length} more` : ''}, ${esc(ago(s.ts))}</span></li>`;
+  const list = (title, rows, none) => `<section><h3>${title}</h3>${rows.length ? `<ul class="wire-list">${rows.map(row).join('')}</ul>` : `<p class="empty">${none}</p>`}</section>`;
+  const b = p.balance || [0, 0, 0], read = b[0] + b[1] + b[2];
+  const lean = read < 10 ? '' : b[0] > (b[1] + b[2]) * 2 ? 'the right' : b[2] > (b[0] + b[1]) * 2 ? 'the left' : '';
+  $('#sidesbody').innerHTML = `<div class="page-cols">${list('Only the left is covering', blind.l, 'Nothing right now. Everything the left is carrying has reached the right too.')}${list('Only the right is covering', blind.r, 'Nothing right now. Everything the right is carrying has reached the left too.')}</div>
+    <div class="balance"><h3>Your reading</h3>${read ? `<p>${sideBar(b, true)}</p><p class="small">Over the last 30 days you opened ${whole(b[0])} from the left, ${whole(b[1])} from the center and ${whole(b[2])} from the right.${lean ? ` Most of what you read comes from one side, so the list above is worth a look for what ${lean} is saying.` : ''}</p>` : '<p class="small">Open a few stories and this shows which way your reading leans.</p>'}</div>`;
+  $('#asof-sides').innerHTML = 'A story counts here once it has had three hours to reach the other side and nothing there matches it. <a href="/sides">How outlets are rated</a>';
 }
 
 // ---------------------------------------------------------------- sports
@@ -582,7 +600,7 @@ function sinceLast(p) {
   const added = (p.media.data?.added || []).filter((a) => a.at > lastVisit).length;
   const parts = [stories && plural(stories, 'new story', 'new stories'), alerts && plural(alerts, 'new alert'), added && `${whole(added)} added to Plex`].filter(Boolean);
   el.hidden = !parts.length;
-  el.textContent = `Since you were here ${ago(lastVisit)}: ${new Intl.ListFormat('en').format(parts)}.`;
+  el.innerHTML = `Since you were here ${esc(ago(lastVisit))}: ${esc(new Intl.ListFormat('en').format(parts))}.${p.on.ai ? ` <button type="button" class="ghost text" data-catchup="${esc(span(Math.round(away)))}">Catch me up</button>` : ''}`;
 }
 
 function following(p) {
@@ -604,7 +622,7 @@ function render() {
     $(`.desks a[href="/#${id}"]`).parentNode.hidden = !p.on[key];
   }
   const desk = (draw) => { try { draw(p); } catch (e) { console.error(e); } };  // one desk's odd data leaves the others standing
-  [front, tops, world, tech, tape].forEach(desk);
+  [front, tops, world, sidesDesk, tech, tape].forEach(desk);
   desk(p.on.sports ? sports : (x) => wireList(x, 'sports'));
   if (p.on.mail) desk(mail);
   if (p.on.money) desk(business);
@@ -676,6 +694,7 @@ document.addEventListener('click', (e) => {
   const t = e.target.closest('button');
   if (!t) return;
   if (t.dataset.themePick) setTheme(t.dataset.themePick, e);
+  else if (t.dataset.catchup) askDock(`Catch me up on the last ${t.dataset.catchup}: the few things that matter most, in short points.`);
   else if (t.dataset.text) {
     document.documentElement.style.setProperty('--text', t.dataset.text);
     try { localStorage.setItem('paper-text', t.dataset.text); } catch { /* it just won't stick */ }

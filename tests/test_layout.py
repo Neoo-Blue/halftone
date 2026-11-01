@@ -268,6 +268,91 @@ assert refuses(s.listen_sample, {"provider": "livekit", "voice": ""}) and refuse
 tts.speak, s.read_page = real_speak, real_page
 settings.update({"TTS_PROVIDER": "browser", "DEEPGRAM_TTS_KEY": None, "TTS_VOICE": ""})
 assert s.speech() is None and "listening" not in s.listen_voices("browser")
+# ---------------------------------------------------------------- both sides
+import sides  # noqa: E402
+assert sides.count([{"src": "Fox News"}, {"src": "New York Times"}, {"src": "The Nation"}, {"src": "BBC"}, {"src": "Wired"}]) == [2, 1, 1], "an outlet with no rating isn't on the scale"
+assert sides.rated("Fox News", {"Fox News": "center"}) == "center" and sides.count([{"src": "Mine"}], {"Mine": "right"}) == [0, 0, 1], "your own rating wins, and rates what the paper doesn't know"
+assert all(v in sides.SCALE for v in sides.RATED.values()) and {n for _, n, _ in s.FEEDS} >= {"Fox News", "New York Post", "National Review", "Mother Jones", "The Nation", "Axios"}, "both ends are on the wire"
+both = sides.facing([{"src": "BBC", "u": "b", "t": "Mid"}, {"src": "Fox News", "u": "f", "t": "Radical judge blocks border plan"}, {"src": "The Nation", "u": "n", "t": "Migrants win a rare court victory"}, {"src": "NPR", "u": "p", "t": "Lean"}], s.words)
+assert both["left"]["u"] == "n" and both["right"]["u"] == "f", "the two headlines furthest apart"
+assert sides.facing([{"src": "BBC", "u": "b", "t": "x"}, {"src": "NPR", "u": "p", "t": "y"}], s.words) is None, "no comparison without both sides"
+assert sides.facing([{"src": "Time", "u": "a", "t": "Virginia and DC sue over the arch plan"}, {"src": "Fox News", "u": "b", "t": "DC, Virginia sue over the arch plan"}], s.words) is None, "wire copy against itself shows nothing"
+HOUR = 3600
+out = lambda names, t: [{"src": n, "u": f"{n}/{t}", "t": t} for n in names]
+LEFTS = ["The Nation", "Slate", "Vox", "Salon"]
+tale = lambda names, t, age=6: {"t": t, "u": f"{names[0]}/{t}", "ts": 1000000 - age * HOUR, "first": 1000000 - age * HOUR, "outlets": out(names, t)}
+crowd = [tale(["BBC"], f"Filler story number {i} about the weather and common things") for i in range(30)]
+lone = tale(LEFTS, "Senate quietly drops Zarnowski pension oversight rider")
+assert [c["u"] for c in s.sides.blind([lone, *crowd], 1000000, s.words)["l"]] == [lone["u"]], "four on the left and nothing on the right is a blind spot"
+same = tale(["Fox News"], "GOP senators kill pension rider from Zarnowski oversight plan")
+assert not s.sides.blind([lone, same, *crowd], 1000000, s.words)["l"], "a different headline on the other side is still the same story: a blind spot has to hold up"
+assert not s.sides.blind([tale(LEFTS, "Senate quietly drops Zarnowski pension oversight rider", age=1), *crowd], 1000000, s.words)["l"], "and the other side gets time to reach it"
+assert not s.sides.blind([tale(LEFTS[:3], "Senate quietly drops Zarnowski pension oversight rider"), *crowd], 1000000, s.words)["l"], "three of the left's many outlets isn't enough to claim it"
+right = tale(["Fox News", "Breitbart", "Daily Wire"], "Border county sheriff Mallory resigns over grant audit")
+again = tale(["National Review", "The Blaze", "The Federalist"], "Sheriff Mallory quits as county grant audit widens")
+assert len(s.sides.blind([right, again, *crowd], 1000000, s.words)["r"]) == 1, "one event is listed once, however many headlines it has"
+assert [c["u"] for c in s.sides.blind([right, *crowd], 1000000, s.words)["r"]] == [right["u"]]
+assert not s.sides.blind([tale(["Fox News", "BBC", "The Nation", "Vox", "Salon"], "Both ends carry this one"), *crowd], 1000000, s.words)["l"]
+told_two = [tale(["The Nation", "Vox"], "Judge tosses Trump Harmsworth defamation suit"), tale(["Fox News"], "Trump loses Harmsworth lawsuit as defamation claim thrown out"), tale(["BBC"], "A new bridge opens in Cardiff"), *crowd]
+assert s.sides.reach(told_two, s.words)[0] == [2, 0, 1] and s.sides.reach(told_two, s.words)[2] == [0, 1, 0], "the same event in two stories counts as one, and an unrelated story stays apart"
+fake = json.dumps({"contested": True, "subject": "The <b>arch</b> plan", "case_for": "Good " * 80, "case_against": "Bad.", "agreed": "It was announced.", "stances": [{"i": 0, "stance": "for"}, {"i": 1, "stance": "against"}, {"i": 9, "stance": "for"}, {"i": 1.5, "stance": "for"}, {"i": 0, "stance": "love"}, "junk"]})
+guests = [{"src": "A"}, {"src": "B"}]
+told = s.clean_takes(f"Here you go: {fake}", guests)
+assert told["stances"] == {"A": "for", "B": "against"} and told["subject"] == "The arch plan" and len(told["for"]) < 270, "only what fits the shape survives, and no markup"
+quiet = s.clean_takes(json.dumps({"contested": False, "subject": "x", "case_for": "y", "case_against": "z", "agreed": "An earthquake struck.", "stances": [{"i": 0, "stance": "for"}]}), guests)
+assert quiet["agreed"] and not quiet["for"] and not quiet["stances"], "no dispute, no sides invented"
+for bad in ("no json", "[1]", json.dumps({"contested": "yes"})):
+    try:
+        s.clean_takes(bad, guests)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(bad)
+assert s.story_takes({"url": "https://nobody.example/x"}) == {} and refuses(s.story_takes, {"url": 5}), "a story the paper doesn't know gets no cases"
+real_ask, real_read, real_spend = s.ai.ask, s.read_page, s.spend_ai
+asked = []
+s.ai.ask, s.read_page, s.spend_ai = (lambda *a, **k: asked.append(1) or fake), (lambda u: {"body": "words"}), (lambda: None)
+big = {"t": "Arch", "outlets": [{"src": "A", "u": "https://a.example/1", "ts": 1}, {"src": "B", "u": "https://b.example/1", "ts": 2}, {"src": "C", "u": "https://c.example/1", "ts": 3}]}
+assert s.judge_story(big)["contested"] and s.judge_story(big)["contested"] and len(asked) == 1, "one question a story"
+assert s.judge_story({**big, "outlets": [*big["outlets"][:2], {"src": "C", "u": "https://c.example/rotated", "ts": 3}]})["contested"] and len(asked) == 1, "and a feed that changes its links doesn't make it a new one"
+s.judge_story({**big, "outlets": [*big["outlets"], {"src": "D", "u": "https://d.example/1", "ts": 4}]})
+assert len(asked) == 2, "a new outlet does"
+
+
+def raises(kind, fn, *args):
+    try:
+        fn(*args)
+    except kind:
+        return True
+    return False
+
+
+def boom(*a, **k):
+    asked.append(1)
+    raise OSError("down")
+
+
+s.ai.ask = boom
+broken = {**big, "t": "Bridge", "outlets": [{**o, "u": o["u"] + "b"} for o in big["outlets"]]}
+assert raises(OSError, s.judge_story, broken) and s.judge_story(broken) == {} and len(asked) == 3, "a failing provider is tried once an hour, not on every open"
+with s.db() as c:
+    c.execute("UPDATE takes SET ts = ts - 3700 WHERE json = '{}'")
+assert raises(OSError, s.judge_story, broken) and len(asked) == 4, "and then tried again"
+with s.db() as c:
+    c.executemany("INSERT INTO takes VALUES (?, 'null', ?)", [(f"full{i}", int(time.time())) for i in range(s.TAKES_DAILY)])
+s.ai.ask = lambda *a, **k: asked.append(1) or fake
+assert raises(OverflowError, s.judge_story, {**big, "t": "Tower", "outlets": [{**o, "u": o["u"] + "t"} for o in big["outlets"]]}) and len(asked) == 4, "the two cases can't spend what Ask needs"
+with s.db() as c:
+    c.execute("DELETE FROM takes WHERE id LIKE 'full%'")
+s.ai.ask, s.read_page, s.spend_ai = real_ask, real_read, real_spend
+real_c = s.C
+for odd in (5, "x", [1], [{"name": 2}], [{"name": "A", "lean": "sideways"}]):
+    s.C = lambda k, odd=odd: odd if k == "OUTLET_LEANS" else real_c(k)
+    assert s.own_leans() == {}, odd
+s.C = real_c
+moved = lambda to: s.PublicRedirects().redirect_request(s.urllib.request.Request("https://news.example/rss"), None, 302, "", {}, to)
+assert raises(ValueError, moved, "http://127.0.0.1:8096/api/paper") and raises(ValueError, moved, "http://10.0.0.1/admin"), "a feed can't send the paper onto the LAN"
+assert moved("https://1.1.1.1/rss"), "and one moving house still works"
 news_now = s.load
 story = lambda t, u, n, ts=1, img=None: {"t": t, "u": u, "src": "Wire", "ts": ts, "img": img, "outlets": [{"u": u}] + [{"u": f"{u}/{i}"} for i in range(n - 1)]}
 s.load = lambda name: {"data": {"stories": [story("Harbor strike talks collapse in Oslo", "a", 1), story("Oslo harbor strike enters third week", "b", 2, ts=9, img="i"), story("Oslo harbor strike ends the season", "c", 1, ts=5), story("Rain due Tuesday", "d", 9), story("Team wins final", "e", 3), story("AirPods harbor strike Oslo", "f", 7)]}}

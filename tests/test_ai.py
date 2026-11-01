@@ -6,11 +6,19 @@ said = []
 answers = []
 
 
+refused = set()
+
+
 class FakeProvider(_hs.BaseHTTPRequestHandler):
     """Speaks the OpenAI-compatible chat API, as OpenRouter, Ollama and the rest do."""
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         said.append({"path": self.path, "auth": self.headers.get("Authorization"), "body": body})
+        if refused & set(body):
+            self.send_response(400)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         out = json.dumps({"choices": [{"message": {"content": answers.pop(0) if answers else "ok"}}]}).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(out)))
@@ -45,7 +53,15 @@ assert settings.update({"AI_URL": "http://attacker.example/v1"}) == ["AI_KEY"]
 settings.update({"AI_URL": FAKE, "AI_KEY": "the-ai-key"})
 assert "the-ai-key" not in json.dumps(s.settings_page())
 assert s.check("ai")["ok"] and said[-1]["auth"] == "Bearer the-ai-key" and said[-1]["path"] == "/v1/chat/completions"
-assert "max_tokens" not in said[-1]["body"], "providers disagree on this field, and refuse the wrong one"
+assert said[-1]["body"]["max_tokens"] == 20, "a story asking for length can't run up the bill"
+refused.add("max_tokens")
+said.clear()
+assert ai._compatible("s", "t", 700) == "ok" and [sorted(set(x["body"]) & {"max_tokens", "max_completion_tokens"}) for x in said] == [["max_tokens"], ["max_completion_tokens"]], "providers disagree on the name, and refuse the wrong one"
+refused.add("max_completion_tokens")
+said.clear()
+assert ai._compatible("s", "t", 700) == "ok" and len(said) == 3 and "max_tokens" not in said[-1]["body"], "and one that refuses both still answers"
+refused.clear()
+said.clear()
 
 assert ai.json_in('Sure!\n```json\n{"a": 1}\n```') == {"a": 1}
 try:

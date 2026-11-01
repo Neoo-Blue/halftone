@@ -41,6 +41,20 @@ export function when(u) {
 }
 export const dayName = (iso) => new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
+// Who is carrying a story, always said in words as well as drawn. Unrated outlets aren't on the scale, and one rated outlet says nothing about sides.
+export function sideWord([left, center, right]) {
+  if (left && right) return 'Both sides';
+  if (left) return center ? 'Left and center' : 'Left only';
+  if (right) return center ? 'Right and center' : 'Right only';
+  return center ? 'Center only' : '';
+}
+export function sideBar(l, big = false) {
+  const n = l ? l[0] + l[1] + l[2] : 0;
+  if (n < 2) return '';
+  const tip = `${l[0]} left, ${l[1]} center, ${l[2]} right`;
+  return `<span class="sides${big ? ' big' : ''}" title="${tip}">${big ? '' : `<em>${sideWord(l)}</em>`}<span class="side-bar" role="img" aria-label="${big ? tip : `${sideWord(l)}: ${tip}`}">${[['l', l[0]], ['c', l[1]], ['r', l[2]]].filter(([, x]) => x).map(([k, x]) => `<i class="s-${k}" style="flex:${x}"></i>`).join('')}</span></span>`;
+}
+
 export const ICON = {
   good: '<svg class="st st-good" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/></svg>',
   warn: '<svg class="st st-warn" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2 14.5 13.5h-13z"/></svg>',

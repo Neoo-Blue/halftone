@@ -61,6 +61,9 @@ SECTIONS = [
     {"id": "news", "title": "News", "about": "More than 60 outlets are already on the wire. Add your own here.", "needs": (), "fields": [
         F("FOLLOW", "Follow", hint="Names or subjects, separated by commas. Stories about them get their own place on the front page."),
         F("MUTE", "Mute", hint="Names or subjects, separated by commas. Stories about them leave the paper."),
+        F("SIDES_AI", "Compare each side's case with AI", "bool", True, hint="On a story several outlets carry, sets out the case for and against. About one cheap question a story."),
+        F("OUTLET_LEANS", "Outlet ratings", "rows", [], "Change where the paper places an outlet, or rate one you added, by its name on the wire. The paper's own ratings are a starting point, and they're yours to overrule.", columns=[
+            COL("name", "Outlet", placeholder="Fox News"), COL("lean", "Where it sits", "select", options=["left", "lean left", "center", "lean right", "right"])]),
         F("EXTRA_FEEDS", "Your feeds", "rows", [], "Any RSS or Atom address.", columns=[
             COL("desk", "Desk", "select", options=DESKS), COL("name", "Outlet", placeholder="Local Times"), COL("url", "Feed address", "url", placeholder="https://example.com/rss.xml")]),
     ]},

@@ -27,6 +27,8 @@ Please use [a private security advisory](../../security/advisories/new) rather t
 
 ## Known limits
 
+- With an AI provider on, the headlines and part of the text of a story several outlets carry go to it to compare the coverage. That happens every hour for the biggest stories and the first time you open any other, so the provider can see which stories get opened. Settings has a switch. What your reading leans toward stays on your server and goes to no AI.
+
 - With a voice service on, the headline and text of a story you press Listen on go to that service. Nothing else does: no mail, no money, nothing about you. Your device's own voice sends nothing.
 
 - A browser that has signed in keeps the last edition for offline reading, including mail subjects and money. It goes when the session ends, and it stops being offered after three days, but anyone with that browser profile could read it until then.

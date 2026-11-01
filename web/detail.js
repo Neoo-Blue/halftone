@@ -1,9 +1,9 @@
 // Every tap opens here. Each detail is a real address on this paper, so reload, back and open-in-new-tab all work,
 // and stories are read inside the paper. The only way off the site is the small "Original" link under a story.
-import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight } from '/lib.js';
+import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight, sideBar } from '/lib.js';
 import { makeGlobe } from '/globe.js';
-import { dockStory } from '/dock.js';
-import { phoneTab, phonePage } from '/phone.js';
+import { dockStory, askDock } from '/dock.js';
+import { phoneTab, phonePage, onPhone } from '/phone.js';
 import { mountScene } from '/scene.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -27,6 +27,7 @@ const ROUTES = [
   [/^\/usage()$/, 'usage', null],
   [/^\/investments()$/, 'investments', null],
   [/^\/saved()$/, 'saved', null],
+  [/^\/sides()$/, 'sides', null],
   [/^\/archive\/?([0-9-]*)$/, 'archive', null],
   [/^\/systems\/container\/(\d+)$/, 'container', 'Systems'],
 ];
@@ -221,7 +222,7 @@ function spread(outlets) {
   if (!outlets || outlets.length < 2) return '';
   const [from, to] = coverageSpan(outlets), width = (to - from) || 1;
   return `<section class="spread"><h3>How it spread</h3><p class="small">${outlets.length} outlets over ${esc(span(to - from) || 'moments')}.</p>
-    <ol>${outlets.map((o, i) => `<li style="--x:${(((o.ts - from) / width) * 100).toFixed(1)};--i:${i}"><a href="${reading(o.u)}"><i></i><b>${esc(o.src)}</b><span>${esc(o.t || '')}</span><time>${esc(ago(o.ts))}</time></a></li>`).join('')}</ol></section>`;
+    <ol>${outlets.map((o, i) => `<li style="--x:${(((o.ts - from) / width) * 100).toFixed(1)};--i:${i}"><a href="${reading(o.u)}"><i class="${o.side ? `s-${o.side}` : ''}"></i><b>${esc(o.src)}</b><span>${esc(o.t || '')}</span><time>${esc(ago(o.ts))}</time></a></li>`).join('')}</ol></section>`;
 }
 
 function facts(rows) {
@@ -241,14 +242,41 @@ const notes = (list) => (list || []).map((n) => `<section class="intel"><h3>${es
 const stories = (rows) => `<ul class="wire-list">${rows.map((s) => `<li><a href="${eventHref(s)}">${esc(s.t)}</a><span>${esc([s.src, s.place, ago(s.ts)].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>`;
 const onGlobe = (lat, lon) => (lat != null ? `<button type="button" class="ghost text" data-globe="${esc(lat)},${esc(lon)}">Show on the globe</button>` : '');
 
+// Who is reporting a story, and how each end of the scale tells it. The two cases fill in afterwards, because they take a question to an AI.
+function coverageBlock(d) {
+  const l = d.lean, n = l ? l[0] + l[1] + l[2] : 0;
+  if (n < 2) return '';
+  const word = l[0] && l[2] ? 'Both sides are covering this' : l[0] ? `So far only the left${l[1] ? ' and center are' : ' is'} covering this` : l[2] ? `So far only the right${l[1] ? ' and center are' : ' is'} covering this` : 'Only center outlets are covering this';
+  const end = (k, name) => `<a href="${esc(reading(d.facing[k].u))}"><small class="s-${k[0]}-text">${esc(name)}, ${esc(d.facing[k].src)}</small><b>${esc(d.facing[k].t)}</b></a>`;
+  return `<details class="coverage"${onPhone() ? '' : ' open'}><summary><h3>${word}</h3>${sideBar(l, true)}</summary><p class="small">${l[0]} on the left, ${l[1]} in the center, ${l[2]} on the right. <a href="/sides">How outlets are rated</a></p>
+    ${d.facing ? `<div class="facing">${end('left', 'The left')}${end('right', 'The right')}</div>` : ''}<div class="takes" id="takes"></div></details>`;
+}
+
+async function fillTakes(url) {
+  const box = $('#takes', sheet());
+  if (!box) return;
+  const t = await fetch('/api/takes', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ url }) }).then((r) => r.json()).catch(() => ({}));
+  if (!box.isConnected || (!t.agreed && !t.contested)) return;
+  const said = Object.values(t.stances || {}), n = (k) => said.filter((x) => x === k).length;
+  box.innerHTML = `${t.contested ? `<h4>On ${esc(t.subject)}</h4>
+      ${n('for') + n('against') ? `<p class="stance-line"><span class="stance-bar" role="img" aria-label="${n('for')} for, ${n('against')} against, ${n('neutral')} neutral">${[['f', n('for')], ['n', n('neutral')], ['a', n('against')]].filter(([, x]) => x).map(([k, x]) => `<i class="st-${k}" style="flex:${x}"></i>`).join('')}</span>${n('for')} for, ${n('against')} against, ${n('neutral')} neutral</p>` : '<p class="stance-line">Every outlet here reports it straight, without taking a side.</p>'}
+      <div class="cases">${t.for ? `<div><b>The case for</b><p>${esc(t.for)}</p></div>` : ''}${t.against ? `<div><b>The case against</b><p>${esc(t.against)}</p></div>` : ''}</div>` : ''}
+    ${t.agreed ? `<p class="agreed"><b>Every report agrees:</b> ${esc(t.agreed)}</p>` : ''}<small>Written by AI from ${t.n} outlets. It can be wrong.</small>`;
+  for (const [src, stance] of Object.entries(t.stances || {})) {
+    const row = $$('.spread li', sheet()).find((li) => $('b', li)?.textContent === src);
+    if (row && stance !== 'neutral') $('b', row).insertAdjacentHTML('afterend', `<em class="st-${stance[0]}-text">${stance}</em>`);
+  }
+}
+
 const rail = (title, rows) => (rows?.length ? `<h3>${title}</h3><ul class="rail-list">${rows.map((s) => `<li><a href="${esc(reading(s.u))}"><b>${esc(s.t)}</b><span>${esc(s.n > 1 ? `${s.src} and ${s.n - 1} more` : s.src)}, ${esc(ago(s.ts))}</span>${s.img ? `<i class="thumb ink"><img src="${esc(picture(s.img))}" alt="" loading="lazy"></i>` : ''}</a></li>`).join('')}</ul>` : '');
 
 // A wide page sets the story in newspaper columns, in blocks short enough that the eye never scrolls back up to find the next column. The first block sits beside the photograph.
 let reading_ = null;
 const stopReading = () => { window.speechSynthesis?.cancel(); reading_?.(); reading_ = null; };
 
-function readOnDevice(button) {
-  const talk = new SpeechSynthesisUtterance($('.page-body', sheet()).textContent), done = () => { button.setAttribute('aria-pressed', 'false'); button.textContent = 'Listen'; };
+async function readOnDevice(button) {
+  const words = button.dataset.today ? (await fetch('/api/listen/today', { credentials: 'same-origin' }).then((r) => r.json()).catch(() => ({}))).text : $('.page-body', sheet()).textContent;
+  const talk = new SpeechSynthesisUtterance(words || ''), done = () => { button.setAttribute('aria-pressed', 'false'); button.textContent = 'Listen'; };
   talk.voice = speechSynthesis.getVoices().find((v) => v.name === button.dataset.voice) || null;
   talk.onend = done;
   reading_ = done;
@@ -258,6 +286,27 @@ function readOnDevice(button) {
 }
 
 // One piece at a time, the next fetched while this one plays, so the voice starts quickly and a long story never waits on all of itself.
+// Select a word in a story and the paper will explain it: a currency, an acronym, a name you don't know.
+const explain = Object.assign(document.createElement('button'), { type: 'button', className: 'explain', textContent: 'Explain', hidden: true });
+let chosen = '';
+document.body.append(explain);
+const coarse = matchMedia('(pointer: coarse)');
+document.addEventListener('selectionchange', () => {
+  const sel = getSelection(), text = sel.toString().trim();
+  const inside = sel.rangeCount && $('.page-body', sheet())?.contains(sel.anchorNode) && !$('#dock').hidden;
+  explain.hidden = !inside || text.length < 2 || text.length > 120;
+  if (explain.hidden) return;
+  chosen = text;
+  const box = sel.getRangeAt(0).getBoundingClientRect();
+  explain.style.left = `${Math.min(innerWidth - 96, Math.max(12, box.left + box.width / 2 - 42))}px`;
+  explain.style.top = `${coarse.matches ? box.bottom + 14 : Math.max(60, box.top - 46)}px`;  // a phone puts its own menu above a selection
+});
+explain.addEventListener('pointerdown', (e) => e.preventDefault());  // or the tap clears the selection first
+explain.addEventListener('click', () => {
+  explain.hidden = true;
+  askDock(`In this story, what does "${chosen}" mean? Explain it simply. If it's a price or a measure, give it in US terms too.`);
+});
+
 async function readWithService(button) {
   const audio = new Audio();
   let off = false, skip = () => {};
@@ -268,7 +317,7 @@ async function readWithService(button) {
   audio.src = URL.createObjectURL(new Blob([Uint8Array.from(atob('UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='), (c) => c.charCodeAt(0))], { type: 'audio/wav' }));
   audio.play().catch(() => {});  // while the tap still counts, so a phone lets the real audio play
   const piece = async (part) => {
-    const r = await fetch('/api/listen', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ url: button.dataset.url, part }) });
+    const r = await fetch('/api/listen', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify(button.dataset.today ? { today: true, part } : { url: button.dataset.url, part }) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'no audio');
     return { blob: await r.blob(), parts: Number(r.headers.get('x-parts')) };
   };
@@ -470,6 +519,15 @@ const VIEWS = {
     return { head: 'Back issues', deck: d.days.length ? `${whole(d.days.length)} editions kept.` : 'Each day is kept here from today on.', body: `<ul class="wire-list">${d.days.map((x) => `<li><a href="/archive/${esc(x.day)}">${esc(longDate(x.day))}</a><span>${esc(x.top || '')}</span></li>`).join('')}</ul>` };
   },
 
+  sides(d) {
+    const b = d.balance, read = b[0] + b[1] + b[2];
+    return {
+      head: 'How outlets are rated', deck: 'A rating is about an outlet\'s overall slant, not any one story. These are the paper\'s starting point, from where the public bias charts broadly agree. Change any of them under Settings, News.',
+      body: `${d.groups.map((g) => `<h3>${esc(title(g.lean))}</h3><p>${esc(g.outlets.join(', ')) || 'None.'}</p>`).join('')}${d.unrated.length ? `<h3>Not rated</h3><p class="small">Outlets abroad and the trade press, because an American left and right doesn't describe them: ${esc(d.unrated.join(', '))}.</p>` : ''}`,
+      side: `<h3>Your reading</h3>${read ? `${sideBar(b, true)}<p class="small">${b[0]} left, ${b[1]} center, ${b[2]} right over the last 30 days.</p>` : '<p class="small">Open a few stories and this fills in.</p>'}`,
+    };
+  },
+
   saved(d) {
     return {
       head: 'Saved stories', deck: d.saved.length ? `${whole(d.saved.length)} to read, on every device.` : 'Stories you save show here, on every device.',
@@ -488,9 +546,9 @@ const VIEWS = {
   read(d) {
     const none = d.why === 'not a public page' ? 'The paper only opens public web pages.' : d.why ? 'That site did not answer.' : `${d.site} would not share the full story with the paper.`;
     return {
-      head: d.title || d.site, deck: d.deck, meta: [d.site, d.author, d.published ? stamp(d.published) : ''].filter(Boolean).join(', '),
+      head: d.title || d.site, deck: d.deck, meta: [d.site, d.author, d.published ? stamp(d.published) : '', d.words ? `${Math.max(1, Math.round(d.words / 230))} min read` : ''].filter(Boolean).join(', '),
       side: `${d.homes?.length ? `<p class="small">Carried in ${esc(d.homes.map(([home, n]) => `${home} ${n}`).join(', '))}.${d.homes.length === 1 && d.homes[0][1] > 2 ? ` So far only ${esc(d.homes[0][0])} outlets.` : ''}</p>` : ''}${spread(d.spread)}${rail('On the same subject', d.related)}${rail('Top stories', d.top)}`,
-      body: d.body ? `<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${d.listen !== 'browser' || 'speechSynthesis' in window ? `<button type="button" class="ghost text" data-listen="${esc(d.listen)}" data-voice="${esc(d.voice || '')}" data-url="${esc(d.url)}" aria-pressed="false">Listen</button>` : ''}</div>${storyBody(d, photograph(d.image))}` : `${photograph(d.image)}<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
+      body: d.body ? `<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${d.listen !== 'browser' || 'speechSynthesis' in window ? `<button type="button" class="ghost text" data-listen="${esc(d.listen)}" data-voice="${esc(d.voice || '')}" data-url="${esc(d.url)}" aria-pressed="false">Listen</button>` : ''}</div>${coverageBlock(d)}${storyBody(d, photograph(d.image))}` : `${photograph(d.image)}<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
     };
   },
 
@@ -672,6 +730,7 @@ export async function route() {
   mountArc();
   dockStory(m.kind === 'read' && body.body ? body.url : null);
   phonePage(m.kind);
+  if (m.kind === 'read' && body.lean && body.spread?.length >= 3) fillTakes(body.url);
   document.title = `${v.head} | ${NAME}`;
   $('.page-head', sheet())?.focus({ preventScroll: true });
   sideGrew.disconnect();

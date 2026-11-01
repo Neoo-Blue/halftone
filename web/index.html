@@ -31,6 +31,7 @@
   <ul class="desks">
     <li class="only-phone"><a href="/" data-today>Today</a></li>
     <li><a href="/#world">World</a></li>
+    <li><a href="/#sides">Both sides</a></li>
     <li><a href="/#tech">Tech</a></li>
     <li><a href="/#sports">Sports</a></li>
     <li><a href="/#mail">Mail<b class="count" id="mail-count" hidden></b></a></li>
@@ -106,6 +107,7 @@
   <section class="front sheet" id="front" aria-label="Front page">
     <div class="note-col">
       <p class="note" id="note">Going to press.</p>
+      <button type="button" class="ghost text play-paper" id="play-paper" data-listen="today" data-today="1" aria-pressed="false" hidden>Play today's paper</button>
       <p class="since" id="since" hidden></p>
       <nav class="following" id="following" aria-label="Stories you follow" hidden></nav>
       <div class="editor" id="editor" hidden></div>
@@ -147,6 +149,12 @@
     <h2 class="desk-name" id="h-world">World</h2>
     <div class="world" id="worldbody"></div>
     <footer class="asof" id="asof-world"></footer>
+  </section>
+
+  <section class="desk sheet" id="sides" aria-labelledby="h-sides">
+    <h2 class="desk-name" id="h-sides">Both sides</h2>
+    <div id="sidesbody"></div>
+    <footer class="asof" id="asof-sides"></footer>
   </section>
 
   <section class="desk sheet" id="tech" aria-labelledby="h-tech">
