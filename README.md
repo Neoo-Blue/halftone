@@ -1,6 +1,6 @@
 # Halftone
 
-A private morning newspaper you run yourself. It opens with real news from 57 outlets and a live globe of the world's conflicts, with no keys and no accounts. Connect your mail, money, media and servers and they join the same page.
+A private morning newspaper you run yourself. It opens with real news from more than 60 outlets, live scores, weather and a live globe of the world's conflicts, with no keys and no accounts. Connect your mail, money, media and servers and they join the same page.
 
 ![The front page, in the Morning theme](docs/img/front-morning.png)
 
@@ -41,20 +41,29 @@ Leave anything blank and it stays off the page.
 
 | Desk | Connect | What you get |
 |---|---|---|
-| News | Nothing | 57 outlets, grouped by story and ranked by how many carry it. Add your own feeds |
+| News | Nothing | More than 60 outlets, grouped by story and ranked by how many carry it, with search and what's trending today. Add your own feeds |
+| Sports | Nothing | Live scores and results for the leagues you choose, and the sports wire |
+| Weather | A place name | Now, the next 48 hours and the week ahead |
 | World | Nothing | The [WARROOM public API](docs/warroom-api.md): globe, conflict desk, forecasts, hazards, space weather |
 | Mail | Microsoft 365 app, optional Anthropic key | Read-only triage across your mailboxes. Money, customer, security and legal mail rises to the top |
 | Business | Any address returning [the money report](docs/money-feed.md) | Are you making money? Sales minus costs, by product |
+| AI use | An AI provider, or [any of these](docs/ai-use.md) | What your AI used each day, what it was worth at list price, and what was really charged |
 | Arts | Plex, optional Sonarr, Radarr and Seerr | What landed, what's playing, what's coming |
-| Systems | Proxmox, SSH, or plain addresses | Service checks, machines, containers, storage and backups, and a list of what needs you |
+| Systems | Proxmox, SSH, or plain addresses | Service checks, containers, storage and backups, 30 days of history for every machine, and a list of what needs you |
 
 ![Settings](docs/img/settings.png)
 
 Name the paper and choose its title face, from blackletter like a real masthead to the theme's own. Each connection has a Test button that tells you in plain words what went wrong. Saved keys can never be read back, not even by you. Any setting can come from the environment instead: see `.env.example`.
 
+## Watching your machines
+
+Every machine gets its own page: CPU, disk wait, memory, disk, network, disk activity, load and temperature, over the last hour, day, week or month, with its volumes and what's using it most right now. The paper warns you before a disk fills, and when a machine stays busy for an hour, not only when something has already gone wrong.
+
+Proxmox connects with a read-only token. For any other Linux box, a NAS or a cloud server, copy `agent/stats.sh` to it and lock an SSH key to that one script: the first lines of the file show how. Older copies of the script keep working, but network, disk activity and top processes need the current one.
+
 ## AI
 
-Add any provider in Settings: Anthropic, OpenAI, Google Gemini, xAI Grok, OpenRouter, Groq, Mistral, DeepSeek, Together, Ollama, LM Studio, or anything OpenAI-compatible. You can then ask the paper questions, have your mail sorted, and set it up by describing what you want.
+Add any provider in Settings: Anthropic, OpenAI, Google Gemini, xAI Grok, OpenRouter, Groq, Mistral, DeepSeek, Together, Ollama, LM Studio, or anything OpenAI-compatible. You can then ask the paper questions, have your mail sorted, set it up by describing what you want, and read a note it writes itself every few hours.
 
 Any AI can also read the paper, over MCP or plain HTTP, with a token you control. Only news and world are shared until you tick more. [docs/ai.md](docs/ai.md) has the setup for Claude, Cursor and the rest, and explains why the AI that reads strangers' words can never change a setting.
 

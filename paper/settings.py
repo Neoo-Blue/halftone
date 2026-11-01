@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-DESKS = ("world", "us", "business", "tech", "ai", "security", "science")
+DESKS = ("world", "us", "business", "tech", "ai", "security", "science", "sports")
 MASTHEADS = (("blackletter", "Blackletter"), ("fraktur", "Fraktur"), ("fatface", "Fat face"), ("serif", "Classic serif"), ("theme", "Follows the theme"))
 PROVIDERS = (  # value, label, OpenAI-compatible base address
     ("anthropic", "Anthropic", ""), ("openai", "OpenAI", "https://api.openai.com/v1"), ("gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai"),
@@ -44,9 +44,16 @@ SECTIONS = [
     {"id": "world", "title": "World", "about": "The globe, the conflict desk and the odds. Works from the first minute.", "needs": ("WARROOM_URL",), "fields": [
         F("WARROOM_URL", "WARROOM address", "url", "https://war.wakxi.com/api/v1", "The free public API. Change it only if you run your own WARROOM."),
     ]},
-    {"id": "news", "title": "News", "about": "57 outlets are already on the wire. Add your own here.", "needs": (), "fields": [
+    {"id": "news", "title": "News", "about": "More than 60 outlets are already on the wire. Add your own here.", "needs": (), "fields": [
         F("EXTRA_FEEDS", "Your feeds", "rows", [], "Any RSS or Atom address.", columns=[
             COL("desk", "Desk", "select", options=DESKS), COL("name", "Outlet", placeholder="Local Times"), COL("url", "Feed address", "url", placeholder="https://example.com/rss.xml")]),
+    ]},
+    {"id": "weather", "title": "Weather", "about": "Now, the next two days and the week ahead, from Open-Meteo. No key needed.", "needs": ("WEATHER_PLACE",), "fields": [
+        F("WEATHER_PLACE", "Place", placeholder="Oakland"),
+        F("WEATHER_UNITS", "Units", "select", "celsius", options=(("celsius", "Celsius, km/h"), ("fahrenheit", "Fahrenheit, mph"))),
+    ]},
+    {"id": "sports", "title": "Sports", "about": "Live scores and results. No key needed. Sports news is on the wire either way.", "needs": ("SPORTS_LEAGUES",), "fields": [
+        F("SPORTS_LEAGUES", "Leagues", default="nfl,nba,mlb,nhl,epl,ucl", hint="Any of nfl, nba, wnba, mlb, nhl, mls, epl, ucl, laliga, bundesliga, seriea, ligue1. Blank turns scores off."),
     ]},
     {"id": "plex", "title": "Plex", "about": "What landed in your library, and what is playing.", "needs": ("PLEX_URL", "PLEX_TOKEN"), "fields": [
         F("PLEX_URL", "Address", "url", placeholder="http://192.168.1.10:32400"),
@@ -94,6 +101,20 @@ SECTIONS = [
             COL("key", "Key", pattern=SLUG, placeholder="shop"), COL("name", "Name", placeholder="My Shop"), COL("host", "Web address", placeholder="shop.example.com")]),
         F("EARLIER", "Income from before the report", "rows", [], "Counted in all-time income only.", columns=[
             COL("label", "Label", placeholder="First invoice"), COL("day", "Date", "date"), COL("amount", "Amount", "money", placeholder="100.00")]),
+    ]},
+    {"id": "ledger", "title": "AI ledger", "about": "Every agent's tokens by day, from a Commons hub, worth counted at list price even when a plan covers them. The paper counts its own AI calls either way.", "needs": ("COMMONS_URL",), "fields": [
+        F("COMMONS_URL", "Commons dashboard address", "url", placeholder="http://192.168.1.10:8771"),
+        F("COMMONS_TOKEN", "Dashboard token", "secret", hint="Only if your dashboard asks for one. A viewer token is enough."),
+    ]},
+    {"id": "bill", "title": "Anthropic bill", "about": "What Anthropic really charged by day and model, in place of the paper's estimates. It takes an Admin key, and an ordinary key can't read this.", "needs": ("ANTHROPIC_ADMIN_KEY",), "fields": [
+        F("ANTHROPIC_ADMIN_KEY", "Admin API key", "secret", hint="Console, Settings, Admin keys. It can manage your organization, so keep it here and nowhere else."),
+    ]},
+    {"id": "openrouter", "title": "OpenRouter", "about": "What your OpenRouter account spends each day, counted from the day you add it. It has a running total and no history, so a day is how far the total moved.", "needs": ("OPENROUTER_KEY",), "fields": [
+        F("OPENROUTER_KEY", "API key", "secret", hint="Any key on the account. The paper only reads the total."),
+    ]},
+    {"id": "livekit", "title": "LiveKit", "about": "Call minutes and data by day, and what they would cost with nothing included. Needs the Scale plan or higher.", "needs": ("LIVEKIT_PROJECT", "LIVEKIT_TOKEN"), "fields": [
+        F("LIVEKIT_PROJECT", "Project ID", placeholder="p_abc123", hint="The part of your LiveKit dashboard address that starts with p_.", guards=True),
+        F("LIVEKIT_TOKEN", "List-only token", "secret", hint="Run: lk token create --list --valid-for 8760h. It can list sessions and nothing else, so your API secret stays where it is."),
     ]},
     {"id": "ai", "title": "AI provider", "about": "Add one and you can ask the paper questions, set it up by describing what you want, and have your mail sorted.", "needs": (), "fields": [
         F("AI_PROVIDER", "Provider", "select", "anthropic", options=tuple((v, label) for v, label, _ in PROVIDERS), guards=True),

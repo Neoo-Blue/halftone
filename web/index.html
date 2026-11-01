@@ -29,8 +29,10 @@
   <ul class="desks">
     <li><a href="/#world">World</a></li>
     <li><a href="/#tech">Tech</a></li>
+    <li><a href="/#sports">Sports</a></li>
     <li><a href="/#mail">Mail<b class="count" id="mail-count" hidden></b></a></li>
     <li><a href="/#business">Business</a></li>
+    <li><a href="/#usage">AI use</a></li>
     <li><a href="/#arts">Arts</a></li>
     <li><a href="/#systems">Systems</a></li>
     <li id="ask-link" hidden><a href="/ask">Ask</a></li>
@@ -52,6 +54,7 @@
   <section class="front sheet" id="front" aria-label="Front page">
     <div class="note-col">
       <p class="note" id="note">Going to press.</p>
+      <div class="editor" id="editor" hidden></div>
       <dl class="glance" id="glance"></dl>
       <nav class="inside" id="inside" aria-label="Inside today"></nav>
     </div>
@@ -79,6 +82,11 @@
 
   <section class="tops sheet" id="tops" aria-label="Top stories"></section>
 
+  <section class="trend sheet" id="trend" aria-label="Trending and search">
+    <div class="trend-tags" id="trend-tags"></div>
+    <form class="find" id="find" role="search"><input type="search" id="find-q" placeholder="Search the paper" aria-label="Search the paper" maxlength="80" autocomplete="off"></form>
+  </section>
+
   <section class="desk sheet" id="world" aria-labelledby="h-world">
     <h2 class="desk-name" id="h-world">World</h2>
     <div class="world" id="worldbody"></div>
@@ -91,6 +99,13 @@
     <footer class="asof" id="asof-tech"></footer>
   </section>
 
+  <section class="desk sheet" id="sports" aria-labelledby="h-sports">
+    <h2 class="desk-name" id="h-sports">Sports</h2>
+    <div id="sportsbody"></div>
+    <div class="wire" id="sportswire"></div>
+    <footer class="asof" id="asof-sports"></footer>
+  </section>
+
   <section class="desk sheet" id="mail" aria-labelledby="h-mail">
     <h2 class="desk-name" id="h-mail">Mail</h2>
     <div id="mailbody"></div>
@@ -101,6 +116,12 @@
     <h2 class="desk-name" id="h-biz">Business</h2>
     <div id="bizbody"></div>
     <footer class="asof" id="asof-biz"></footer>
+  </section>
+
+  <section class="desk sheet" id="usage" aria-labelledby="h-use">
+    <h2 class="desk-name" id="h-use">AI use</h2>
+    <div id="usebody"></div>
+    <footer class="asof" id="asof-use"></footer>
   </section>
 
   <section class="desk sheet" id="arts" aria-labelledby="h-arts">

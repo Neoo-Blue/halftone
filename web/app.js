@@ -1,16 +1,18 @@
 import { makeGlobe } from '/globe.js';
-import { $, $$, esc, usd, whole, pct, plural, ago, span, bytes, dayName, dayKey, when, ICON, lineChart, tight } from '/lib.js';
+import { $, $$, esc, usd, whole, dollars, pct, plural, ago, span, bytes, dayName, dayKey, when, ICON, lineChart, dayBars, tight } from '/lib.js';
 import { start, go, reading, picture, eventHref } from '/detail.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const THEMES = ['morning', 'night', 'cobalt', 'glass'];
-const DESKS = [['mail', 'mail'], ['business', 'money'], ['arts', 'media'], ['systems', 'systems']];
+const DESKS = [['sports', 'sports'], ['mail', 'mail'], ['business', 'money'], ['usage', 'usage'], ['arts', 'media'], ['systems', 'systems']];
 const KIND = { k: 'Conflict', e: 'Economy', h: 'Hazard' };
 const NEWS = ['world', 'us', 'business'], TECH = ['tech', 'ai', 'security', 'science'];
 const WIRES = {
   world: { el: '#wire', tab: 'all', more: 14, tabs: [['all', 'Latest'], ['world', 'World'], ['us', 'US'], ['business', 'Business'], ['k', 'Conflict']] },
   tech: { el: '#techwire', tab: 'all', more: 14, tabs: [['all', 'Latest'], ['ai', 'AI'], ['tech', 'Tech'], ['security', 'Security'], ['science', 'Science']] },
+  sports: { el: '#sportswire', tab: 'all', more: 10, tabs: [['all', 'Latest']] },
 };
+let league = 'all';
 
 let saving = 0, saves = Promise.resolve();
 let paper = null, days = 30, problems = false, drawn = false, globe = null, dotsKey = '', labelsKey = '';
@@ -37,9 +39,12 @@ function front(p) {
   const m = p.money, w = p.world.data, pr = (p.probes.data || []).filter((x) => !x.gated), med = p.media.data;
   const bad = p.worries.filter((x) => x.level).length;
   const fresh = (med?.added || []).filter((a) => (a.at || 0) >= p.now - 86400).length;
+  const wx = p.weather.data;
   const rows = [
+    wx && ['Weather', '/weather', `${wx.now.temp}\u00b0 ${wx.now.sky}`, ''],
     p.on.systems && ['Systems', '/#systems', pr.length ? (bad ? plural(bad, 'issue') : `${pr.length} of ${pr.length} up`) : 'Checking', bad ? 'bad' : 'good'],
     p.on.money && [`${m ? m.days : 30}-day result`, '/#business', m ? `${m.result > 0 && m.missing.length ? 'At most ' : ''}${usd(m.result)}` : 'Counting', m && m.result < 0 ? 'neg' : ''],
+    p.on.usage && p.usage.last && ['AI, last day', '/usage', dollars(p.usage.last.worth), ''],
     p.on.mail && ['Mail', '/#mail', (p.mail?.need || []).length ? `${p.mail.need.length} need you` : p.mail_status?.as_of ? 'Nothing urgent' : 'Checking', (p.mail?.need || []).length ? 'bad' : ''],
     p.on.media && ['Plex today', '/#arts', med ? (fresh ? `${fresh} new` : 'Nothing new') : 'Checking', ''],
     p.on.world && ['World index', '/#world', w ? Math.round(w.index?.value ?? w.index ?? 0) : 'Waiting', ''],
@@ -58,6 +63,11 @@ function front(p) {
     !p.on.mail && !p.on.money && !p.on.media && !p.on.systems && ['/settings', 'Add your mail, money, media and servers in Settings'],
   ].filter(Boolean);
   $('#inside').innerHTML = inside.length ? `<h2>Inside</h2><ul>${inside.map(([h, t]) => `<li><a href="${esc(h)}">${esc(t)}</a></li>`).join('')}</ul>` : '';
+
+  const ed = $('#editor');
+  ed.hidden = !p.editor.data?.text;
+  if (p.editor.data?.text) ed.innerHTML = `<p>${esc(p.editor.data.text)}</p><small>Written by AI from today's wire, ${esc(ago(p.editor.data.at || p.editor.as_of))}. It can be wrong.</small>`;
+  $('#trend-tags').innerHTML = (p.news.data?.trending || []).length ? `<h2>Trending</h2>${p.news.data.trending.map((t) => `<a href="/topic/${encodeURIComponent(t.name)}">${esc(t.name)}<b>${t.n}</b></a>`).join('')}` : '';
 
   const L = p.news.data?.lead;
   if (L) {
@@ -170,7 +180,7 @@ function world(p) {
 function wireList(p, name) {
   const W = WIRES[name], el = $(W.el);
   if (!el) return;
-  const desks = name === 'world' ? NEWS : TECH;
+  const desks = { world: NEWS, tech: TECH, sports: ['sports'] }[name];
   const heads = (p.news.data?.wire || []).filter((n) => n.desks.some((d) => desks.includes(d))).map((n) => ({ t: n.t, href: reading(n.u), by: n.n > 1 ? `${n.src} and ${n.n - 1} more` : n.src, ts: n.ts, tabs: n.desks, wide: n.n >= 3 }));
   const reports = name === 'world' ? (p.world.data?.stories || []).map((s) => ({ t: s.t, href: eventHref(s), by: s.src, ts: s.ts, tabs: s.s >= 0.55 ? [s.k, 'all'] : [s.k] })) : [];
   const rows = [...heads, ...reports].filter((r) => (W.tab === 'all' ? heads.includes(r) || r.tabs.includes('all') : r.tabs.includes(W.tab))).sort((a, b) => (b.ts || 0) - (a.ts || 0));
@@ -183,6 +193,28 @@ function tops(p) {
   const n = p.news.data?.tops || [];
   if (n.length < 3) return;
   $('#tops').innerHTML = n.slice(0, 4).map((s) => `<a class="top" href="${reading(s.u)}"><span class="photo"><img src="${picture(s.img)}" alt="" loading="lazy"></span><b>${esc(s.t)}</b><span>${esc(covered(s))}, ${esc(ago(s.ts))}</span></a>`).join('');
+}
+
+// ---------------------------------------------------------------- sports
+
+function gameCard(g) {
+  const side = (t) => `<span class="${g.state === 'post' && t.won ? 'won' : ''}"><b>${esc(t.name)}</b>${t.record ? `<small>${esc(t.record)}</small>` : ''}<em>${g.state === 'pre' ? '' : esc(t.score)}</em></span>`;
+  const clock = g.state === 'pre' ? new Date(g.at * 1000).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : g.status;
+  return `<li class="game ${g.state === 'in' ? 'live' : ''}"><a href="/topic/${encodeURIComponent(String(g.home.name).toWellFormed())}"><p class="game-time">${g.state === 'in' ? '<i></i>' : ''}${esc(clock)}</p>${side(g.away)}${side(g.home)}${g.note ? `<p class="game-note">${esc(g.note)}</p>` : ''}</a></li>`;
+}
+
+function sports(p) {
+  const all = p.sports.data || [], el = $('#sportsbody');
+  asof($('#asof-sports'), 'Scores', p.sports);
+  if (league !== 'all' && !all.some((l) => l.key === league)) league = 'all';
+  const shown = all.filter((l) => league === 'all' || l.key === league);
+  const live = all.reduce((n, l) => n + l.games.filter((g) => g.state === 'in').length, 0);
+  const tabs = [['all', 'All'], ...all.filter((l) => l.games.length).map((l) => [l.key, l.name])];
+  el.innerHTML = !all.length ? '<p class="empty">The first scores are on their way.</p>' : `
+    <div class="wire-top"><h3 class="sub-head">${live ? `${plural(live, 'game')} on now` : 'Scores'}</h3>
+      <div class="seg" role="group" aria-label="Filter by league">${tabs.map(([k, t]) => `<button type="button" data-league="${esc(k)}" aria-pressed="${k === league}">${esc(t)}</button>`).join('')}</div></div>
+    ${shown.filter((l) => l.games.length).map((l) => `<h4>${esc(l.name)}</h4><ul class="games">${l.games.slice(0, league === 'all' ? 6 : 20).map(gameCard).join('')}</ul>`).join('') || '<p class="empty">No games today.</p>'}`;
+  wireList(p, 'sports');
 }
 
 // ---------------------------------------------------------------- mail
@@ -408,11 +440,13 @@ function guestsTable(guests) {
   </tbody></table>`;
 }
 
+const machineHref = (h) => `/systems/machine/${encodeURIComponent(h.name)}`;
+
 function hostRow(h, m) {
   const isOpen = open.has(h.name);
   if (!h.ok) return `<tr class="host down"><th scope="row">${ICON.bad}${esc(h.name)}<small>${esc(h.role)}</small></th><td colspan="5">Not answering</td></tr>`;
-  const extra = h.name === 'Proxmox' ? `<tr class="more"><td colspan="6">${lineChart(m.history)}${guestsTable(m.guests)}</td></tr>`
-    : `<tr class="more"><td colspan="6"><p class="small">${esc(h.cores)} cores${h.temp ? `, ${esc(h.temp)} C` : ''}. Largest volume ${esc(h.disk_mount)}: ${bytes(h.disk_used)} of ${bytes(h.disk_total)}.${h.failed_units?.length ? ` Failed: ${esc(h.failed_units.join(', '))}.` : ''}</p></td></tr>`;
+  const extra = h.name === 'Proxmox' ? `<tr class="more"><td colspan="6"><p class="small"><a href="${machineHref(h)}">History, volumes and backups</a></p>${lineChart(m.history)}${guestsTable(m.guests)}</td></tr>`
+    : `<tr class="more"><td colspan="6"><p class="small"><a href="${machineHref(h)}">History, processes and volumes</a>. ${esc(h.cores)} cores${h.temp ? `, ${esc(h.temp)} C` : ''}. Largest volume ${esc(h.disk_mount)}: ${bytes(h.disk_used)} of ${bytes(h.disk_total)}.${h.failed_units?.length ? ` Failed: ${esc(h.failed_units.join(', '))}.` : ''}</p></td></tr>`;
   return `<tr class="host"><th scope="row"><button type="button" class="expander" data-host="${esc(h.name)}" aria-expanded="${isOpen}">${ICON.good}${esc(h.name)}<small>${esc(h.role)}</small></button></th>
     <td data-label="CPU">${meter(h.cpu)}</td><td data-label="Memory">${meter(pct(h.mem_used, h.mem_total), 85)}</td><td data-label="Disk">${meter(pct(h.disk_used, h.disk_total), 85, 93)}</td><td class="r" data-label="Load">${h.load[0].toFixed(2)}</td><td class="r" data-label="Up">${span(h.uptime)}</td></tr>${isOpen ? extra : ''}`;
 }
@@ -451,6 +485,27 @@ function systems(p) {
     <div class="store"><h4>Storage and backups</h4><ul class="plain">${bk}${pools}${disks}${tasks}</ul></div>`;
 }
 
+// ---------------------------------------------------------------- AI use
+
+function aiUse(p) {
+  const u = p.usage, el = $('#usebody'), key = JSON.stringify(u.days);
+  asof($('#asof-use'), 'The count', u);
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
+  if (!u.days.length) {
+    el.innerHTML = '<p class="empty">Nothing counted yet. The paper counts its own AI calls, and Settings can add the rest.</p>';
+    return;
+  }
+  const last = u.last || u.days[u.days.length - 1], most = u.who[0]?.[1] || 1;
+  el.innerHTML = `<div class="use-grid">
+      <div><a class="use-big" href="/usage">${dollars(last.worth)}</a>
+        <p>of AI on ${esc(dayName(`${last.day}T12:00:00`))}, at list price. ${dollars(last.charged)} of it was really charged.</p>
+        <p class="small">${dollars(u.month)} worth in ${plural(u.days.length, 'day')}, ${dollars(u.charged)} charged.</p></div>
+      <div>${dayBars(u.days, 'worth', { href: (d) => `/usage#${d.day}`, label: ' of AI' })}</div>
+      <ul class="use-who">${u.who.map(([who, v]) => `<li style="--w:${((100 * v) / most).toFixed(1)}%"><span>${esc(who)}</span><b>${dollars(v)}</b></li>`).join('')}</ul>
+    </div>${u.missing.length ? `<p class="small">${esc(u.missing.join(' and '))} did not answer this time, so their days may be behind.</p>` : ''}`;
+}
+
 // ---------------------------------------------------------------- loading
 
 function render() {
@@ -460,14 +515,14 @@ function render() {
     $(`#${id}`).hidden = !p.on[key];
     $(`.desks a[href="/#${id}"]`).parentNode.hidden = !p.on[key];
   }
-  front(p);
-  tops(p);
-  world(p);
-  tech(p);
-  if (p.on.mail) mail(p);
-  if (p.on.money) business(p);
-  if (p.on.media) arts(p);
-  if (p.on.systems) systems(p);
+  const desk = (draw) => { try { draw(p); } catch (e) { console.error(e); } };  // one desk's odd data leaves the others standing
+  [front, tops, world, tech].forEach(desk);
+  desk(p.on.sports ? sports : (x) => wireList(x, 'sports'));
+  if (p.on.mail) desk(mail);
+  if (p.on.money) desk(business);
+  if (p.on.usage) desk(aiUse);
+  if (p.on.media) desk(arts);
+  if (p.on.systems) desk(systems);
   fitAlso();
   if (!drawn) {
     drawn = true;
@@ -539,6 +594,9 @@ document.addEventListener('click', (e) => {
   } else if (t.dataset.more) {
     WIRES[t.dataset.more].more += 20;
     wireList(paper, t.dataset.more);
+  } else if (t.dataset.league) {
+    league = t.dataset.league;
+    sports(paper);
   } else if (t.dataset.days) {
     days = Number(t.dataset.days);
     load();
@@ -588,6 +646,12 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 't' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.target.closest('input,select,textarea')) {
     setTheme(THEMES[(THEMES.indexOf(document.documentElement.dataset.theme) + 1) % THEMES.length]);
   }
+});
+
+$('#find').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const q = $('#find-q').value.trim();
+  if (q) go(`/topic/${encodeURIComponent(q)}`);
 });
 
 $('#tape').addEventListener('pointerup', (e) => {

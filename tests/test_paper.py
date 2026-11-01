@@ -254,4 +254,6 @@ for hostile in ("gdacs:TC:1/../../x", "gdacs:T C:1", "eonet:../../x", "other:1")
 assert s.number("") == 0.0 and s.number(None) == 0.0 and s.number("2.5") == 2.5
 exec(open(Path(__file__).with_name("test_settings.py")).read())
 exec(open(Path(__file__).with_name("test_ai.py")).read())
+exec(open(Path(__file__).with_name("test_desks.py")).read())
+exec(open(Path(__file__).with_name("test_usage.py")).read())
 print("all good")

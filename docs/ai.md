@@ -9,6 +9,7 @@ Add a provider under **AI provider** in Settings. That turns on three things:
 - **Ask**: a page in the paper for questions about today's edition and everything you've connected.
 - **Set it up by asking**: describe what you want at the top of Settings and it proposes the changes. Nothing changes until you press Apply.
 - **Mail sorting**: whatever the rules can't decide, up to 400 messages a day.
+- **The editor's note**: a few sentences at the top of the front page, written every three hours from the wire and marked as written by AI.
 
 | Provider | Key | Model |
 |---|---|---|
@@ -52,6 +53,8 @@ curl -H "Authorization: Bearer paper_..." 'https://your-paper.example/api/ai/new
 |---|---|---|
 | `news` (`query`, `desk`, `limit`) | `/api/ai/news` | Yes |
 | `world` | `/api/ai/world` | Yes |
+| `weather` | `/api/ai/weather` | Yes |
+| `sports` | `/api/ai/sports` | Yes |
 | `money` | `/api/ai/money` | No |
 | `media` | `/api/ai/media` | No |
 | `systems` | `/api/ai/systems` | No, and it never includes addresses |

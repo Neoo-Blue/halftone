@@ -7,6 +7,8 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 
 export const usd = (c) => `${c < 0 ? '-' : ''}$${(Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export const whole = (n) => Number(n || 0).toLocaleString('en-US');
+export const dollars = (v) => (v == null ? 'No price' : v >= 100 ? `$${whole(Math.round(v))}` : `$${v.toFixed(2)}`);
+export const compact = (n) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 export const pct = (a, b) => (b ? (100 * a) / b : 0);
 export const plural = (n, one, many = `${one}s`) => `${whole(n)} ${n === 1 ? one : many}`;
 export function ago(ts) {
@@ -64,6 +66,17 @@ export function dotPlot(rows, series, { fmt = (v) => String(v), lo, hi, caption 
     <div class="plot-box"><div class="plot-y" aria-hidden="true"><span>${esc(fmt(top))}</span><span>${esc(fmt((top + low) / 2))}</span><span>${esc(fmt(low))}</span></div>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(aria)}"><path class="grid" d="M0 ${y(top)}H${W}M0 ${y((top + low) / 2)}H${W}M0 ${y(low)}H${W}"/>${dots}${hits}</svg></div>
     <div class="plot-x" aria-hidden="true"><span>${esc(at(rows[0].t))}</span><span>${esc(at(rows[n - 1].t))}</span></div></figure>`;
+}
+
+// One column a day. With href each opens that day; without it each is a button the page listens for.
+export function dayBars(days, key, { href, picked, label = '' } = {}) {
+  const top = Math.max(...days.map((d) => d[key]), 0), short = (d) => dayName(`${d.day}T12:00:00`).replace(/^\w+, /, '');
+  const bar = (d, i) => {
+    const tip = esc(`${dayName(`${d.day}T12:00:00`)}: ${dollars(d[key])}${label}`), fill = `<i style="--h:${top ? Math.max(d[key] ? 2 : 0, (d[key] / top) * 100).toFixed(1) : 0}%;--i:${i}"></i>`;
+    return `<li>${href ? `<a href="${esc(href(d))}" data-tip="${tip}" aria-label="${tip}">${fill}</a>` : `<button type="button" data-usage-day="${esc(d.day)}" aria-pressed="${d.day === picked}" data-tip="${tip}" aria-label="${tip}">${fill}</button>`}</li>`;
+  };
+  return `<p class="chart-note">Highest ${dollars(top)}. Each column is one day.</p><ol class="daybars" style="--n:${days.length}">${days.map(bar).join('')}</ol>
+    <div class="plot-x" aria-hidden="true"><span>${esc(short(days[0]))}</span><span>${esc(short(days[days.length - 1]))}</span></div>`;
 }
 
 export function lineChart(hist, title = 'Proxmox') {

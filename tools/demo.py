@@ -112,7 +112,18 @@ def media():
 
 def machine(name, role, cpu, mem, disk):
     gb = 2 ** 30
-    return {"name": name, "role": role, "ok": True, "cpu": cpu, "mem_used": mem * 32 * gb // 100, "mem_total": 32 * gb, "disk_used": disk * 2000 * gb // 100, "disk_total": 2000 * gb, "disk_mount": "/", "load": [cpu / 25, 1.1, .9], "cores": 8, "uptime": 19 * DAY, "temp": None, "raid_degraded": 0, "failed_units": []}
+    return {"name": name, "role": role, "ok": True, "cpu": cpu, "mem_used": mem * 32 * gb // 100, "mem_total": 32 * gb, "disk_used": disk * 2000 * gb // 100, "disk_total": 2000 * gb, "disk_mount": "/", "load": [cpu / 25, 1.1, .9], "cores": 8, "uptime": 19 * DAY, "temp": 41.0, "raid_degraded": 0, "failed_units": [],
+            "volumes": [{"mount": "/", "used": 60 * gb, "total": 240 * gb}, {"mount": "/volume1", "used": disk * 2000 * gb // 100, "total": 2000 * gb}], "top": [{"name": "photos-indexer", "cpu": 31.2, "mem": 6.1}, {"name": "postgres", "cpu": 8.4, "mem": 12.3}, {"name": "backupd", "cpu": 2.1, "mem": 1.8}]}
+
+
+def history(name, cpu, disk, grows):
+    """Thirty days of readings with a working day in them, a few a day for the old ones and every minute for the last hour."""
+    rows = []
+    for t in [NOW - i * 3600 for i in range(1, 30 * 24)] + [NOW - i * 60 for i in range(60)]:
+        hour = math.sin((t % DAY) / DAY * 2 * math.pi)
+        rows.append((name, t, max(1, cpu + 9 * hour + random.gauss(0, 3)), 60 + 4 * hour + random.gauss(0, 1), disk - (NOW - t) / DAY * grows, cpu / 20 + hour / 3, max(0, 2 + random.gauss(0, 1)), 2e6 + 1.5e6 * hour + random.uniform(0, 8e5), 6e5 + 3e5 * hour, 1e6 * random.random(), 2e6 * random.random(), 41 + 3 * hour))
+    with s.db() as c:
+        c.executemany("INSERT INTO metric VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
 
 def feed():
@@ -135,7 +146,7 @@ def main():
     s.check = lambda section: {"ok": True, "text": "This is the demo, so nothing was really tested."}
     settings.update({"PAPER_TZ": "America/New_York", "PAPER_SINCE": str((datetime.now(timezone.utc) - timedelta(days=211)).date()), "PLEX_URL": "http://demo.invalid", "PLEX_TOKEN": "demo", "PVE_URL": "http://demo.invalid", "PVE_TOKEN": "demo",
                      "PROBES": [{"group": "Sites", "name": n, "url": "http://demo.invalid/"} for n in ("My Shop", "The Club")] + [{"group": "At home", "name": n, "url": "http://demo.invalid/"} for n in ("Router", "Photos", "Backups")],
-                     "MAIL_TENANT": "demo", "MAIL_CLIENT_ID": "demo", "MAIL_CLIENT_SECRET": "demo", "MAILBOXES": [{"address": "you@shop.example", "label": "Shop"}], "MONEY_URL": "http://demo.invalid",
+                     "MAIL_TENANT": "demo", "MAIL_CLIENT_ID": "demo", "MAIL_CLIENT_SECRET": "demo", "MAILBOXES": [{"address": "you@shop.example", "label": "Shop"}], "MONEY_URL": "http://demo.invalid", "COMMONS_URL": "http://demo.invalid", "WEATHER_PLACE": "Harbor City",
                      "PRODUCTS": [{"key": "shop", "name": "My Shop", "host": "shop.example"}, {"key": "club", "name": "The Club", "host": "club.example"}]})
     s.save("news", news())
     s.save("world", world())
@@ -145,6 +156,19 @@ def main():
     s.save("machines", {"hosts": [machine("Proxmox", "Containers", 14, 62, 48), machine("NAS", "Backups", 6, 31, 71)], "guests": [{"id": 101 + i, "type": "lxc", "name": n, "status": "running", "cpu": 3, "cores": 2, "mem": 2 ** 30, "maxmem": 2 ** 32, "disk": 0, "maxdisk": 2 ** 34, "uptime": 19 * DAY} for i, n in enumerate(("media", "photos", "paper"))],
                         "history": [{"t": NOW - i * 900, "cpu": 12 + 6 * math.sin(i / 9), "mem": 60, "io": 1} for i in range(96, 0, -1)]})
     s.save("storage", {"pools": [{"name": "tank", "size": 4 * 10 ** 12, "alloc": 2 * 10 ** 12, "health": "ONLINE", "frag": 8}], "disks": [], "backups": [{"at": NOW - 6 * HOUR, "ok": True, "status": "OK"}], "failed_tasks": [], "autostart": []})
+    history("Proxmox", 14, 48, 0.02)
+    history("NAS", 6, 71, 1.0)
+    teams = [("Harbor", "Rangers", "101", "96"), ("Summit", "Comets", "88", "93"), ("Bay", "Pilots", "24", "17")]
+    s.save("sports", [{"key": "nba", "name": "City League", "games": [{"state": "in" if i == 0 else "post", "status": "Q3 4:12" if i == 0 else "Final", "at": NOW, "home": {"name": h, "abbr": h[:3], "score": a, "record": "4-1", "won": True}, "away": {"name": v, "abbr": v[:3], "score": b, "record": "2-3", "won": False}, "note": "A made-up game.", "venue": None} for i, (h, v, a, b) in enumerate(teams)]}])
+    s.save("weather", {"place": "Harbor City", "region": "Made Up", "country": "Nowhere", "lat": 40.7, "lon": -74, "tz": "UTC", "units": "F", "speed": "mph", "now": {"temp": 58, "feels": 55, "sky": "Partly cloudy", "wind": 9, "humidity": 62}, "rain_at": NOW + 9 * HOUR,
+                       "hours": [{"t": NOW + i * HOUR, "temp": round(56 + 7 * math.sin(i / 24 * 6.28), 1), "rain": max(0, min(100, (i - 6) * 9 if i < 16 else 90 - (i - 16) * 8)), "sky": "Partly cloudy"} for i in range(48)],
+                       "days": [{"t": NOW + i * DAY, "hi": 62 + i, "lo": 49 + i // 2, "sky": ("Partly cloudy", "Rain", "Overcast")[i % 3], "rain": (20, 70, 30)[i % 3], "rise": NOW, "set": NOW + 11 * HOUR} for i in range(7)]})
+    spent = []
+    for i in range(60):
+        wave, day = 1 + .6 * math.sin(i / 3), (datetime.now(timezone.utc) - timedelta(days=i)).date().isoformat()
+        spent += [{"day": day, "who": "Coding plan", "model": "claude-sonnet-5-5", "qty": 9e7 * wave, "unit": "tokens", "worth": 41 * wave, "charged": 0}, {"day": day, "who": "Research agent", "model": "claude-opus-5-5", "qty": 2e7 * wave, "unit": "tokens", "worth": 12 * wave, "charged": 0},
+                  {"day": day, "who": "This paper", "model": "claude-haiku-5-5", "qty": 3e5, "unit": "tokens", "worth": .11, "charged": .11}, {"day": day, "who": "LiveKit", "model": "calls", "qty": 240 * wave, "unit": "minutes", "worth": 2.4 * wave, "charged": 0}]
+    s.save("usage", {**s.usage.report([{**r, "source": "ledger"} for r in spent], s.utc_day()), "missing": []})
     s.save("feed", feed())
     s.save("mail", {"read": 1, "failed": [], "triage_error": None})
     mail()

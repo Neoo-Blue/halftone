@@ -69,6 +69,10 @@ def json_in(text):
     return json.loads(text[start:end + 1])
 
 
+def on_use(model, tokens_in, tokens_out, cache_read=0, cache_write=0):
+    """Every call that came back, as its provider reported it. The server replaces this to keep the count."""
+
+
 def _anthropic(system, text, max_tokens, cheap, schema):
     import anthropic  # only AI work needs it, and it costs tens of megabytes
     config = {"effort": "low"} if cheap else {}
@@ -81,6 +85,8 @@ def _anthropic(system, text, max_tokens, cheap, schema):
         raise urllib.error.HTTPError("https://api.anthropic.com", e.status_code, "refused", {}, None) from None
     except anthropic.APIError:
         raise OSError("no answer") from None
+    used = reply.usage
+    on_use(reply.model, used.input_tokens, used.output_tokens, used.cache_read_input_tokens or 0, used.cache_creation_input_tokens or 0)  # a cut-off answer was still paid for
     if reply.stop_reason != "end_turn":
         raise ValueError(f"stopped: {reply.stop_reason}")
     return next(b.text for b in reply.content if b.type == "text")
@@ -95,7 +101,11 @@ def _compatible(system, text):
     if token:
         headers["Authorization"] = f"Bearer {token}"
     with OPENER.open(urllib.request.Request(url, json.dumps(body).encode(), headers), timeout=120) as r:
-        return json.loads(read_all(r, 4_000_000, 120))["choices"][0]["message"]["content"]
+        answer = json.loads(read_all(r, 4_000_000, 120))
+    used = answer.get("usage") if isinstance(answer, dict) else None
+    if isinstance(used, dict):
+        on_use(body["model"], used.get("prompt_tokens") or 0, used.get("completion_tokens") or 0)
+    return answer["choices"][0]["message"]["content"]
 
 
 def ask(system, text, max_tokens=1500, cheap=False, schema=None):

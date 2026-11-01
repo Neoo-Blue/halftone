@@ -1,6 +1,6 @@
 // Every tap opens here. Each detail is a real address on this paper, so reload, back and open-in-new-tab all work,
 // and stories are read inside the paper. The only way off the site is the small "Original" link under a story.
-import { $, esc, usd, whole, ago, span, bytes, dayName, dotPlot, lineChart, tight } from '/lib.js';
+import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, tight } from '/lib.js';
 import { makeGlobe } from '/globe.js';
 import { mountScene } from '/scene.js';
 
@@ -19,6 +19,10 @@ const ROUTES = [
   [/^\/arts\/movie\/(\d+)$/, 'movie', 'Arts'],
   [/^\/business\/([a-z]+)$/, 'product', 'Business'],
   [/^\/systems\/service\/(.+)$/, 'service', 'Systems'],
+  [/^\/systems\/machine\/(.+)$/, 'machine', 'Systems'],
+  [/^\/topic\/(.+)$/, 'topic', null],
+  [/^\/weather()$/, 'weather', null],
+  [/^\/usage()$/, 'usage', null],
   [/^\/systems\/container\/(\d+)$/, 'container', 'Systems'],
 ];
 const DESK = { Mail: '/#mail', Tech: '/#tech', World: '/#world', Arts: '/#arts', Business: '/#business', Systems: '/#systems' };
@@ -61,6 +65,43 @@ function reportScene(rows, pin, alt) {
 }
 
 const uniqueReports = (rows) => [...new Map(rows.map((r) => [r.i || r.t, r])).values()];
+let machine = null;
+
+function machineCharts(d, range) {
+  const r = d.series[range] || [], percent = (v) => `${Math.round(v)}%`, rate = (v) => `${bytes(v)}/s`;
+  if (r.length < 2) return '<p class="empty">Readings build up from the moment a machine is connected. Check back in a few minutes.</p>';
+  const plot = (title, keys, o) => (r.some((x) => keys.some((k) => x[k.key] != null)) ? `<h3>${title}</h3>${dotPlot(r, keys, { caption: '', aria: `${title} for ${d.name}, ${range}`, ...o })}` : '');
+  return plot('CPU', [{ key: 'cpu', name: 'CPU', cls: 'k1' }, { key: 'io', name: 'Disk wait', cls: 'k3' }], { fmt: percent, lo: 0 })
+    + plot('Memory', [{ key: 'mem', name: 'Memory', cls: 'k2' }], { fmt: percent, lo: 0, hi: 100 })
+    + plot('Disk used', [{ key: 'disk', name: 'Disk', cls: 'k3' }], { fmt: (v) => `${v.toFixed(1)}%` })
+    + plot('Network', [{ key: 'rx', name: 'In', cls: 'k1' }, { key: 'tx', name: 'Out', cls: 'k2' }], { fmt: rate, lo: 0 })
+    + plot('Disk activity', [{ key: 'rd', name: 'Read', cls: 'k1' }, { key: 'wr', name: 'Written', cls: 'k2' }], { fmt: rate, lo: 0 })
+    + plot('Load', [{ key: 'load', name: 'Load', cls: 'k1' }], { fmt: (v) => v.toFixed(2), lo: 0 })
+    + plot('Temperature', [{ key: 'temp', name: 'Temperature', cls: 'k3' }], { fmt: (v) => `${Math.round(v)} C` });
+}
+
+let spent = null, spentDays = 30, spentDay = null;
+
+function usageBody() {
+  const d = spent, days = d.days.slice(-spentDays), row = d.days.find((x) => x.day === spentDay) || days[days.length - 1], by = Object.create(null);
+  days.forEach((x) => x.rows.forEach((r) => {
+    by[r.who] ||= { who: r.who, worth: 0, charged: 0 };
+    by[r.who].worth += r.worth || 0;
+    by[r.who].charged += r.charged || 0;
+  }));
+  const used = (r) => (r.unit === 'minutes' ? `${whole(Math.round(r.qty))} min` : r.qty ? compact(r.qty) : '');
+  const head = (first) => `<thead><tr><th scope="col">${first}</th>${first === 'Used by' ? '<th scope="col" class="r">Used</th>' : ''}<th scope="col" class="r">Worth</th><th scope="col" class="r">Charged</th></tr></thead>`;
+  const rows = row.rows.map((r) => `<tr><th scope="row">${esc(r.who)}<small>${esc(r.model)}</small></th><td class="r">${esc(used(r))}</td><td class="r">${dollars(r.worth)}</td><td class="r">${dollars(r.charged)}</td></tr>`).join('');
+  const who = Object.values(by).sort((a, b) => b.worth - a.worth).map((w) => `<tr><th scope="row">${esc(w.who)}</th><td class="r">${dollars(w.worth)}</td><td class="r">${dollars(w.charged)}</td></tr>`).join('');
+  const at = d.days.indexOf(row);
+  return `<h3>Worth at list price</h3>${dayBars(days, 'worth', { picked: row.day })}
+    <h3>Really charged</h3>${dayBars(days, 'charged', { picked: row.day, label: ' charged' })}
+    <div class="use-day"><h3>${esc(dayName(`${row.day}T12:00:00`))}</h3><span>${dollars(row.worth)} worth, ${dollars(row.charged)} charged</span>
+      <button type="button" class="ghost text" data-usage-step="-1" ${at ? '' : 'disabled'}>Earlier</button><button type="button" class="ghost text" data-usage-step="1" ${at < d.days.length - 1 ? '' : 'disabled'}>Later</button></div>
+    <table class="num-table">${head('Used by')}<tbody>${rows}</tbody></table>
+    <h3>Last ${days.length} days, by who used it</h3><table class="num-table">${head('Source')}<tbody>${who}</tbody></table>`;
+}
+
 const around = (lat, lon, deg = 12) => getDots().filter((x) => Math.abs(x.la - lat) < deg && Math.abs(x.lo - lon) < deg * 1.4);
 
 const coverageSpan = (o) => { const ts = o.map((x) => x.ts).filter(Boolean); return [Math.min(...ts), Math.max(...ts)]; };
@@ -150,6 +191,70 @@ const VIEWS = {
       head: d.title, deck: d.text, meta: [title(d.hkind), (d.countries?.length ? d.countries.join(', ') : d.country)].filter(Boolean).join(', '), scene,
       body: `<div class="page-body"><p>${esc(hazardStory(d, t))}</p></div>${impactList(d)}${d.about && d.about !== d.text ? `<div class="page-body"><p>${esc(d.about)}</p></div>` : ''}${advisories(t, d.unit)}${relatedNews(d.related)}`,
       side: `${facts([['Alert', title(d.alert)], ['From', stamp(d.from)], ['Until', stamp(d.to)], ['Reported by', d.source]])}${d.report ? `<p class="source"><a href="${esc(d.report)}" target="_blank" rel="noopener noreferrer">Full report</a></p>` : ''}${onGlobe(d.lat, d.lon)}`,
+    };
+  },
+
+  topic(d) {
+    const list = d.stories.map((s) => `<li class="${s.n >= 3 ? 'wide-story' : ''}"><a href="${reading(s.u)}">${esc(s.t)}</a><span>${esc(s.n > 1 ? `${s.src} and ${s.n - 1} more` : s.src)}, ${esc(ago(s.ts))}</span></li>`).join('');
+    const reports = d.reports.filter((r) => r.la != null);
+    return {
+      head: d.q, deck: d.stories.length || d.reports.length ? `${d.stories.length} ${d.stories.length === 1 ? 'story' : 'stories'} in the paper and ${d.reports.length} on the world desk.` : 'Nothing in the paper on that right now.',
+      scene: reports.length ? reportScene(reports, null, `Where ${d.q} is being reported`) : null,
+      body: list ? `<ul class="wire-list">${list}</ul>` : '<p class="empty">Try a shorter word, or a name.</p>',
+      side: d.outlets.length ? `<h3>Who is covering it</h3>${facts(d.outlets)}` : '',
+    };
+  },
+
+  weather(d) {
+    const clock = (t, o) => new Date(t * 1000).toLocaleString('en-US', { timeZone: d.tz, ...o });
+    const hour = { hour: 'numeric' }, deg = (v) => `${Math.round(v)}\u00b0`;
+    const rain = d.rain_at ? ` Rain likely by ${clock(d.rain_at, hour)}.` : ' No rain likely in the next two days.';
+    const lo = Math.min(...d.days.map((x) => x.lo)), hi = Math.max(...d.days.map((x) => x.hi)), range = (hi - lo) || 1;
+    const days = d.days.map((x, i) => `<li style="--i:${i};--a:${((x.lo - lo) / range) * 100}%;--b:${((hi - x.hi) / range) * 100}%"><b>${esc(i ? clock(x.t + 43200, { weekday: 'short' }) : 'Today')}</b><span>${esc(x.sky)}${x.rain >= 30 ? `, ${esc(x.rain)}% rain` : ''}</span><em>${deg(x.lo)}</em><i></i><em>${deg(x.hi)}</em></li>`).join('');
+    const rows = d.hours.map((h) => ({ t: h.t, temp: h.temp, rain: h.rain }));
+    return {
+      head: d.place, deck: `${d.now.temp}\u00b0${d.units}, ${d.now.sky.toLowerCase()}. Feels like ${d.now.feels}\u00b0.${rain}`, meta: [d.region, d.country].filter(Boolean).join(', '),
+      scene: { pin: [d.lat, d.lon], span: 5, alt: `Map of ${d.place}` },
+      body: `<h3>The week</h3><ol class="days">${days}</ol><h3>Temperature, next 48 hours</h3>${dotPlot(rows, [{ key: 'temp', name: 'Temperature', cls: 'k2' }], { fmt: deg, caption: `Degrees ${d.units}`, aria: `Temperature for the next 48 hours in ${d.place}` })}<h3>Chance of rain</h3>${dotPlot(rows, [{ key: 'rain', name: 'Rain', cls: 'k1' }], { fmt: (v) => `${Math.round(v)}%`, lo: 0, hi: 100, caption: 'Next 48 hours', aria: `Chance of rain for the next 48 hours in ${d.place}` })}`,
+      side: facts([['Wind', `${d.now.wind} ${d.speed}`], ['Humidity', `${d.now.humidity}%`], ['Sunrise', clock(d.days[0].rise, { hour: 'numeric', minute: '2-digit' })], ['Sunset', clock(d.days[0].set, { hour: 'numeric', minute: '2-digit' })]]),
+    };
+  },
+
+  machine(d) {
+    machine = d;
+    if (!d.ok) return { head: d.name, deck: 'Not answering right now.', meta: d.role };
+    const load = `${d.load[0].toFixed(2)} on ${d.cores} cores`;
+    const fills = d.full_in == null ? 'Not filling up' : `In about ${whole(Math.round(d.full_in))} days`;
+    const volumes = (d.volumes || []).map((v) => { const share = (100 * v.used) / (v.total || 1); return `<tr><th scope="row">${esc(v.mount)}</th><td><span class="meter ${share >= 93 ? 'bad' : share >= 85 ? 'warn' : ''}" style="--v:${share.toFixed(1)}"><i></i></span> <b>${Math.round(share)}%</b></td><td class="r">${bytes(v.used)} of ${bytes(v.total)}</td></tr>`; }).join('');
+    const top = (d.top || []).map((t) => `<tr><th scope="row">${esc(t.name)}</th><td class="r">${t.cpu.toFixed(1)}%</td><td class="r">${t.mem.toFixed(1)}%</td></tr>`).join('');
+    const pools = (d.storage?.pools || []).map((z) => `<li>${esc(z.name)}: ${bytes(z.alloc)} of ${bytes(z.size)}, ${esc(z.health.toLowerCase())}</li>`).join('');
+    const guests = (d.guests || []).map((g) => `<li><a href="/systems/container/${g.id}">${esc(g.id)} ${esc(g.name)}</a> <span class="small">${esc(g.status)}, ${g.cpu ?? 0}% CPU</span></li>`).join('');
+    return {
+      head: d.name, deck: `CPU ${Math.round(d.cpu)}%, memory ${Math.round((100 * d.mem_used) / (d.mem_total || 1))}%, disk ${Math.round((100 * d.disk_used) / (d.disk_total || 1))}%.`, meta: `${d.role}, up ${span(d.uptime)}`,
+      body: `<div class="seg ranges" role="group" aria-label="Time range">${['1h', '24h', '7d', '30d'].map((r) => `<button type="button" data-range="${r}" aria-pressed="${r === '24h'}">${r}</button>`).join('')}</div>
+        <div id="machine-charts">${machineCharts(d, '24h')}</div>
+        ${volumes ? `<h3>Volumes</h3><table class="num-table"><tbody>${volumes}</tbody></table>` : ''}
+        ${pools ? `<h3>Storage pools</h3><ul class="plain">${pools}</ul>` : ''}
+        ${top ? `<h3>Using the most right now</h3><table class="num-table"><thead><tr><th scope="col">Process</th><th scope="col" class="r">CPU</th><th scope="col" class="r">Memory</th></tr></thead><tbody>${top}</tbody></table>` : ''}
+        ${guests ? `<h3>Containers</h3><ul class="plain">${guests}</ul>` : ''}`,
+      side: facts([['Load', load], ['Memory', `${bytes(d.mem_used)} of ${bytes(d.mem_total)}`], ['Disk fills', fills], ['Temperature', d.temp ? `${d.temp} C` : ''], ['Kernel', d.kernel]]),
+    };
+  },
+
+  usage(d) {
+    if (!d.days.length) return { head: 'AI use', deck: 'Nothing counted yet.', body: '<p class="empty">The paper counts its own AI calls from the moment you add a provider. Settings can add the rest.</p>' };
+    spent = d;
+    spentDays = 30;
+    const done = d.days.filter((x) => x.day < d.today), last = done[done.length - 1] || d.days[d.days.length - 1], month = d.days.slice(-30);
+    spentDay = d.days.some((x) => x.day === location.hash.slice(1)) ? location.hash.slice(1) : last.day;
+    const sum = (key) => month.reduce((n, x) => n + x[key], 0);
+    return {
+      head: 'AI use', deck: `${dollars(last.worth)} of AI on ${dayName(`${last.day}T12:00:00`)}, at list price. ${dollars(last.charged)} of it was really charged.`, meta: `Counted ${ago(d.as_of)}`,
+      body: `${d.error ? '<p class="small">The last count failed, so these are the last good numbers.</p>' : ''}${d.missing.length ? `<p class="small">${esc(d.missing.join(' and '))} did not answer this time, so their days may be behind.</p>` : ''}
+        <div class="seg ranges" role="group" aria-label="Period">${[7, 30, 90].map((n) => `<button type="button" data-usage-days="${n}" aria-pressed="${n === 30}">${n} days</button>`).join('')}</div>
+        <div id="usage-body">${usageBody()}</div>
+        <p class="small">Worth is what the same use would cost at public list prices, so a plan or credit still shows what it saved. Charged is what left your account: the Anthropic bill when it is connected, otherwise the paper's estimate of its own and Commons' API calls. Days run midnight to midnight UTC.${d.unpriced.length ? ` No list price here for ${esc(d.unpriced.join('; '))}, so those count as tokens only.` : ''}</p>`,
+      side: facts([['Last 30 days', dollars(sum('worth'))], ['Really charged', dollars(sum('charged'))], ['Tokens', compact(sum('tokens'))]]),
     };
   },
 
@@ -349,6 +454,25 @@ export function start(fly, dots) {
   addEventListener('popstate', route);
   document.addEventListener('error', (e) => { if (e.target.matches?.('.hero img, .page-poster img')) e.target.parentNode.remove(); }, true);  // a dead picture leaves no hole
   document.addEventListener('click', (e) => {
+    const range = e.target.closest('[data-range]');
+    if (range && machine) {
+      $$('[data-range]', sheet()).forEach((b) => b.setAttribute('aria-pressed', String(b === range)));
+      $('#machine-charts').innerHTML = machineCharts(machine, range.dataset.range);
+      return undefined;
+    }
+    const usePick = e.target.closest('[data-usage-days], [data-usage-day], [data-usage-step]');
+    if (usePick && spent) {
+      if (usePick.dataset.usageDays) {
+        spentDays = Number(usePick.dataset.usageDays);
+        $$('[data-usage-days]', sheet()).forEach((b) => b.setAttribute('aria-pressed', String(b === usePick)));
+      }
+      if (usePick.dataset.usageDay) spentDay = usePick.dataset.usageDay;
+      if (usePick.dataset.usageStep) spentDay = spent.days[spent.days.findIndex((x) => x.day === spentDay) + Number(usePick.dataset.usageStep)]?.day ?? spentDay;
+      const box = $('#usage-body');
+      box.classList.add('still');
+      box.innerHTML = usageBody();
+      return undefined;
+    }
     const retry = e.target.closest('[data-retry]'), globeBtn = e.target.closest('[data-globe]'), reveal = e.target.closest('[data-reveal]');
     if (retry) return route();
     const done = e.target.closest('[data-mail-done]');
