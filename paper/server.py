@@ -2109,7 +2109,12 @@ def d_mail(mid):
     if not m:
         raise LookupError(mid)
     m = dict(m)
-    full = graph(f"/users/{urllib.parse.quote(m['box'])}/messages/{urllib.parse.quote(m['gid'], safe='')}?$select=toRecipients,body,hasAttachments,webLink", Prefer='outlook.body-content-type="text"')  # plain text: no images to load, no tracking pixels
+    try:
+        full = graph(f"/users/{urllib.parse.quote(m['box'])}/messages/{urllib.parse.quote(m['gid'], safe='')}?$select=toRecipients,body,hasAttachments,webLink", Prefer='outlook.body-content-type="text"')  # plain text: no images to load, no tracking pixels
+    except urllib.error.HTTPError as e:
+        if e.code not in (400, 404):
+            raise
+        return {"kind": "mail", **mail_view(m), "text": "", "to": [], "gone": True}  # a rule moved it, which changes its id, or it was deleted: what the paper kept still reads
     text = re.sub(r"\n{3,}", "\n\n", ((full.get("body") or {}).get("content") or "")).strip()[:30000]
     return {"kind": "mail", **mail_view(m), "text": text, "to": [((r.get("emailAddress") or {}).get("address")) for r in (full.get("toRecipients") or [])][:8], "attachments": bool(full.get("hasAttachments")), "open": full.get("webLink")}
 
@@ -2531,9 +2536,13 @@ Use only what the note says. Add no fact, name or number of your own, and don't 
 NOTE_PARTS = {"HEAD": "head", "WHAT": "what", "WHY": "why", "WATCH": "watch"}
 
 
+def note_said(n):
+    return "\n".join([n["headline"] or "", n["body"] or "", *[b if isinstance(b, str) else b.get("text", "") for b in n["bullets"]]])
+
+
 def note_reading(n):
     """The note as an editor would tell it, once for each note. No reading, no harm: the analyst's words stand."""
-    said = "\n".join([n["headline"] or "", n["body"] or "", *[b if isinstance(b, str) else b.get("text", "") for b in n["bullets"]]])
+    said = note_said(n)
     held = find_kept("note", said)
     if held or not ai.ready():
         return held
@@ -2543,11 +2552,32 @@ def note_reading(n):
     return find_keep("note", said, got) if len(got) == len(NOTE_PARTS) else None
 
 
+READERS, TELLING = ThreadPoolExecutor(2), {}  # notes being told, by a key only a page that holds one can name
+
+
 def with_reading(notes):
-    """The first note on a page, in an editor's words. A slow answer leaves the page as it was, and the thread finishes for the next reader."""
-    if notes:
-        notes[0]["reading"] = waited({"read": lambda: note_reading(notes[0])}).get("read")
+    """The first note on a page, in an editor's words. One already told comes with the page, and a new one follows it, so a page never waits on a model."""
+    if not notes:
+        return notes
+    n, held = notes[0], find_kept("note", note_said(notes[0]))
+    if held:
+        n["reading"] = held
+    elif ai.ready():
+        key = hashlib.sha256(note_said(n).encode()).hexdigest()[:24]
+        if len(TELLING) > 64:
+            TELLING.clear()
+        TELLING.setdefault(key, READERS.submit(quiet, lambda: note_reading(n)))
+        n["telling"] = key
     return notes
+
+
+def d_reading(key):
+    if key not in TELLING:
+        raise LookupError(key)
+    try:
+        return {"kind": "reading", "reading": TELLING[key].result(timeout=40)}
+    except TimeoutError:
+        return {"kind": "reading", "reading": None}
 
 
 def d_event(eid):
@@ -2740,7 +2770,10 @@ def d_market(key):
     if not m:
         raise LookupError(key)
     bars = war("/markets", 45).get("items", {}).get(key, [])
-    return {"kind": "market", **m, "series": [{"t": b["ts"], "v": b["close"]} for b in bars[-180:]]}
+    words = [w for w in re.findall(r"[a-z0-9&]+", m["label"].lower()) if len(w) > 2 and w not in ("index", "the", "price", "futures")]
+    told = [c for c in (live("news")["data"] or {}).get("stories", []) if about(c["t"], words)][:6]
+    others = [{k: x.get(k) for k in ("key", "label", "pct")} for x in (load("world")["data"] or {}).get("markets", []) if x["key"] != key][:12]
+    return {"kind": "market", **m, "series": [{"t": b["ts"], "v": b["close"]} for b in bars[-3000:]], "stories": [{"t": c["t"], "u": c["u"], "src": c["src"], "ts": c["ts"], "n": len(c["outlets"])} for c in told], "others": others, "ai": bool(ai.ready() and C("FIND_AI")), "q": plain(f"Why is {m['label']} moving this week", 110)}
 
 
 def d_plex(key):
@@ -3372,7 +3405,7 @@ DETAILS = {
     "machine": (r"[^/]{1,80}", d_machine), "topic": (r"[^/]{1,80}", d_topic), "weather": (r"", d_weather), "usage": (r"", d_usage), "investments": (r"", d_investments), "saved": (r"", d_saved), "archive": (r"(\d{4}-\d{2}-\d{2})?", d_archive),
     "event": (r"[0-9a-f]{16,64}", d_event), "theater": (r"[a-z0-9_]{2,40}", d_theater), "thread": (r"thr:[0-9a-f]{8,64}", d_thread), "hazard": (r"[\w:.-]{3,80}", d_hazard), "market": (r"[a-z0-9_]{2,40}", d_market),
     "mail": (r"[0-9a-f]{24}", d_mail), "plex": (r"\d{1,9}", d_plex), "show": (r"\d{1,9}", d_show), "movie": (r"\d{1,9}", d_movie), "issue": (r"[a-z0-9-]{3,80}", d_issue), "container": (r"\d{3,4}", d_container),
-    "product": (r"[a-z]{1,40}", d_product), "service": (r"[^/]{1,120}", d_service), "sides": (r"", d_sides), "elections": (r"", d_elections), "count": (elect.RACE.pattern, d_count), "race": (elect.RACE.pattern, d_race), "ballot": (elect.ELECTION.pattern, d_ballot), "following": (r"", d_following),
+    "product": (r"[a-z]{1,40}", d_product), "service": (r"[^/]{1,120}", d_service), "sides": (r"", d_sides), "elections": (r"", d_elections), "reading": (r"[0-9a-f]{24}", d_reading), "count": (elect.RACE.pattern, d_count), "race": (elect.RACE.pattern, d_race), "ballot": (elect.ELECTION.pattern, d_ballot), "following": (r"", d_following),
 }
 HOT, HOT_TTL = {}, 120  # ponytail: a plain dict, cleared when full, because one reader tapping around needs nothing cleverer
 
@@ -3383,7 +3416,7 @@ def detail(kind, ident):
     if not re.fullmatch(pattern, ident):
         raise KeyError(ident)
     hit = HOT.get((kind, ident))
-    if hit and time.time() - hit[0] < HOT_TTL and kind not in ("investments", "saved", "following", "elections", "count"):
+    if hit and time.time() - hit[0] < HOT_TTL and kind not in ("investments", "saved", "following", "elections", "count", "reading"):
         return {**hit[1], **(d_count(ident) if kind == "race" else {}), "look": C("CHART_STYLE")}  # what's outside can wait two minutes, the count can't
     data = fn(ident)
     if len(HOT) > 300:

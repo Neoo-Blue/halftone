@@ -1,7 +1,7 @@
 // Every tap opens here. Each detail is a real address on this paper, so reload, back and open-in-new-tab all work,
 // and stories are read inside the paper. The only way off the site is the small "Original" link under a story.
 import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight, sideBar, reading, picture } from '/lib.js';
-import { fillFind, followingPage } from '/find.js';
+import { fillFind, followingPage, answerInto } from '/find.js';
 import { electionsView, fillElections, raceView, ballotView, fillRace } from '/elections.js';
 import { makeGlobe } from '/globe.js';
 import { dockStory, askDock } from '/dock.js';
@@ -246,7 +246,50 @@ const LABELS = { OBSERVED: '', ASSESSED: 'Judgement: ', UNVERIFIED: 'Not confirm
 const bullet = (b) => (typeof b === 'string' ? b : b.text || '').replace(/^(OBSERVED|ASSESSED|UNVERIFIED):\s*/, (_, k) => LABELS[k]).replace(/^\[(high|medium|low)\]\s*/i, '').replace(/\s*\((up|down|flat)[^)]*confidence[^)]*\)/gi, '');  // the analyst's working, not the reader's
 const worked = (n) => `<h3>${esc(n.headline)}</h3>${n.body ? `<p>${cited(n.body)}</p>` : ''}${n.bullets?.length ? `<ul>${n.bullets.map((b) => `<li>${cited(bullet(b))}</li>`).join('')}</ul>` : ''}`;
 const told = (r) => `<h3>${esc(r.head)}</h3><p class="intel-lead">${esc(r.what)}</p><p><b>Why it matters.</b> ${esc(r.why)}</p><p><b>What to watch.</b> ${esc(r.watch)}</p><small>Written by AI from the analyst's note below. It can be wrong.</small>`;
-const notes = (list) => (list || []).map((n) => `<section class="intel">${n.reading ? `${told(n.reading)}<details class="intel-more"><summary>The analyst's note and its evidence</summary>${worked(n)}</details>` : worked(n)}<time>${esc(ago(n.ts))}</time></section>`).join('');
+const evidence = (html) => `<details class="intel-more"><summary>The analyst's note and its evidence</summary>${html}</details>`;
+const notes = (list) => (list || []).map((n) => `<section class="intel"${n.telling ? ` data-telling="${esc(n.telling)}"` : ''}>${n.reading ? `${told(n.reading)}${evidence(worked(n))}` : `<div class="intel-body">${worked(n)}</div>`}${n.telling ? '<p class="intel-wait">The editor is reading this.</p>' : ''}<time>${esc(ago(n.ts))}</time></section>`).join('');
+
+const marketNum = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const RANGES = [[1, 'Day'], [7, 'Week'], [30, 'Month'], [0, 'All']];
+
+// What a price has done, said in words, for whichever stretch is showing.
+function marketSaid(d, rows) {
+  if (rows.length < 2) return '';
+  const vals = rows.map((r) => r.v), hi = Math.max(...vals), lo = Math.min(...vals), now = vals[vals.length - 1], from = vals[0], top = rows[vals.indexOf(hi)], low = rows[vals.indexOf(lo)];
+  const day = (t) => new Date(t * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), move = ((now - from) / from) * 100, off = ((hi - now) / hi) * 100, up = ((now - lo) / lo) * 100;
+  const start = `${Math.abs(move) < .05 ? 'Flat' : `${move > 0 ? 'Up' : 'Down'} ${Math.abs(move).toFixed(1)}%`} since ${day(rows[0].t)}.`;
+  return `${start} ${off < .3 ? 'It is at the high of this stretch.' : `That is ${off.toFixed(1)}% below the high of ${marketNum(hi)} on ${day(top.t)}`}${off < .3 ? '' : `, and ${up.toFixed(1)}% above the low of ${marketNum(lo)} on ${day(low.t)}.`}`;
+}
+
+function fillMarket(d) {
+  const root = sheet(), show = (days) => {
+    const last = d.series[d.series.length - 1]?.t || 0, rows = days ? d.series.filter((r) => r.t >= last - days * 86400) : d.series;
+    const every = Math.ceil(rows.length / 180), drawn = rows.filter((_, i) => i % every === 0 || i === rows.length - 1);
+    $('#mk-chart', root).innerHTML = dotPlot(drawn, [{ key: 'v', name: d.label, cls: 'k1' }], { fmt: marketNum, caption: `${rows.length} readings`, aria: `${d.label} price history` });
+    $('#mk-said', root).textContent = marketSaid(d, rows);
+  };
+  show(0);
+  $('.mk-span', root).onclick = (e) => {
+    const b = e.target.closest('[data-mk]');
+    if (!b) return;
+    $$('[data-mk]', root).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    show(+b.dataset.mk);
+  };
+  const box = $('#mk-answer', root);
+  if (box) answerInto(box, d.q);
+}
+
+// A note nobody has told yet follows the page: the analyst's words stand until the editor's arrive.
+function fillNotes(kind) {
+  $$('[data-telling]', sheet()).forEach(async (box) => {
+    const r = await fetch(`/api/detail/reading/${box.dataset.telling}`, { credentials: 'same-origin' }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+    $('.intel-wait', box)?.remove();
+    if (!r?.reading || !box.isConnected) return;
+    const body = $('.intel-body', box);
+    body.outerHTML = `<div class="intel-told">${told(r.reading)}</div>${evidence(body.innerHTML)}`;
+    if (kind === 'event') $('.page-head', sheet()).textContent = r.reading.head;
+  });
+}
 const stories = (rows) => `<ul class="wire-list">${rows.map((s) => `<li><a href="${eventHref(s)}">${esc(s.t)}</a><span>${esc([s.src, s.place, ago(s.ts)].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>`;
 const onGlobe = (lat, lon) => (lat != null ? `<button type="button" class="ghost text" data-globe="${esc(lat)},${esc(lon)}">Show on the globe</button>` : '');
 
@@ -398,7 +441,7 @@ const photograph = (url) => (url ? `<button type="button" class="hero ink" data-
 const VIEWS = {
   mail: (d) => ({
     head: d.subject, deck: d.why, meta: `${d.sender}, ${stamp(d.at)}`,
-    body: `<div class="page-body mailtext">${esc(d.text) || 'This message has no text.'}</div>`,
+    body: d.gone ? `<p class="empty">This message has moved or been deleted since the paper read it. This is what the paper kept.</p><div class="page-body mailtext">${esc(d.preview)}</div>` : `<div class="page-body mailtext">${esc(d.text) || 'This message has no text.'}</div>`,
     side: `${facts([['From', d.addr], ['To', d.to.join(', ')], ['Mailbox', d.box], ['Folder', d.junk ? 'Spam' : ''], ['Attachments', d.attachments ? 'Yes, open it in Outlook' : '']])}
       <button type="button" class="ghost text" data-mail-done="${esc(d.id)}" data-state="${d.done ? 'open' : 'done'}">${d.done ? 'Mark as not done' : 'Mark as done'}</button>
       <p class="small">Links and images are off here, so nothing in this mail can track you or run. Marking done changes the paper only.</p>
@@ -563,10 +606,12 @@ const VIEWS = {
   },
 
   market(d) {
-    const num = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const stories = (d.stories || []).length ? `<h3>In the news</h3><ul class="wire-list">${d.stories.map((n) => `<li><a href="${esc(reading(n.u))}">${esc(n.t)}</a><span>${esc(n.src)}, ${esc(ago(n.ts))}</span></li>`).join('')}</ul>` : '';
     return {
-      head: d.label, deck: d.why, meta: `${num(d.last)} ${d.unit || ''}, ${(d.pct || 0) >= 0 ? 'up' : 'down'} ${Math.abs(d.pct || 0).toFixed(1)}%`,
-      body: dotPlot(d.series, [{ key: 'v', name: d.label, cls: 'k1' }], { fmt: num, caption: `${d.series.length} readings`, aria: `${d.label} price history` }),
+      head: d.label, deck: d.why, meta: `${marketNum(d.last)} ${d.unit || ''}, ${(d.pct || 0) >= 0 ? 'up' : 'down'} ${Math.abs(d.pct || 0).toFixed(1)}%`,
+      body: `<p class="el-verdict" id="mk-said"></p><div class="seg mk-span" role="group" aria-label="How far back">${RANGES.map(([k, label], i) => `<button type="button" data-mk="${k}" aria-pressed="${i === RANGES.length - 1}">${label}</button>`).join('')}</div><div id="mk-chart"></div>
+        ${d.ai ? '<section class="el-part"><h3>Why it\'s moving</h3><div id="mk-answer"></div></section>' : ''}${stories}<p class="el-all"><a href="/topic/${encodeURIComponent(d.label)}">Everything on ${esc(d.label)}</a></p>`,
+      side: `${(d.others || []).length ? `<h3>Elsewhere today</h3><ul class="plain mk-others">${d.others.map((x) => `<li><a href="/world/market/${esc(x.key)}">${esc(x.label)}</a><b class="${(x.pct || 0) >= 0 ? 'pos' : 'neg'}">${(x.pct || 0) >= 0 ? '+' : ''}${(x.pct || 0).toFixed(1)}%</b></li>`).join('')}</ul>` : ''}`,
     };
   },
 
@@ -761,6 +806,8 @@ export async function route() {
   phonePage(m.kind);
   if (m.kind === 'read' && body.lean && body.spread?.length >= 3) fillTakes(body.url);
   if (m.kind === 'topic') fillFind(body);
+  fillNotes(m.kind);
+  if (m.kind === 'market') fillMarket(body);
   if (m.kind === 'elections') fillElections(body);
   if (m.kind === 'race' || m.kind === 'ballot') fillRace(body);
   document.title = `${v.head} | ${NAME}`;

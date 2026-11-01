@@ -222,8 +222,18 @@ assert s.note_reading(_note) == _read and len(_asks) == 1, "each note is told on
 s.ai.ask = lambda system, text, **k: "Sorry, I can't."
 assert s.note_reading({**_note, "headline": "Another"}) is None, "a reply that isn't the shape leaves the analyst's words"
 _with = s.with_reading([{**_note}, {**_note, "headline": "Older"}])
-assert _with[0]["reading"] == _read and "reading" not in _with[1], "the first note on a page is the one told"
+assert _with[0]["reading"] == _read and "reading" not in _with[1] and "telling" not in _with[0], "one already told comes with the page, and only the first note on a page is told"
 assert s.with_reading([]) == []
+s.ai.ask = lambda system, text, **k: _asks.append(1) or "HEAD: H\nWHAT: W\nWHY: Y\nWATCH: T"
+_late = s.with_reading([{**_note, "headline": "A new one"}])[0]
+assert "reading" not in _late and _late["telling"], "a new one follows the page, which never waits on a model"
+assert s.detail("reading", _late["telling"])["reading"]["head"] == "H", "and the page can ask for it"
+for _odd in ("0" * 24, "not-a-key"):
+    try:
+        s.detail("reading", _odd)
+        raise AssertionError("only a key a page was given")
+    except (LookupError, KeyError):
+        pass
 s.ai.ready = lambda: False
 assert s.note_reading({**_note, "headline": "Third"}) is None, "no AI, and the page stands"
 s.ai.ask, s.ai.ready = _real_ask, _real_ready
