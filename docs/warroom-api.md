@@ -29,6 +29,7 @@ All are `GET`.
 | `/hazards/{id}` | One hazard | 5 min |
 | `/spaceweather` | Geomagnetic conditions and forecast | 5 min |
 | `/intel` | Analyst notes | 5 min |
+| `/theaters/{id}/history` | A theater's timeline from day one, with a source on every entry | 5 min |
 
 `/events` takes `limit` (1 to 300, default 100), `min_severity` (0 to 1), `theater`, `domain` (`kinetic` or `economic`), `since` (unix seconds, rounded down to the minute) and `cursor` (from `next_cursor`).
 

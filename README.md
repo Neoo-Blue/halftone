@@ -47,6 +47,7 @@ Leave anything blank and it stays off the page.
 | World | Nothing | The [WARROOM public API](docs/warroom-api.md): globe, conflict desk, forecasts, hazards, space weather |
 | Mail | Microsoft 365 app, optional Anthropic key | Read-only triage across your mailboxes. Money, customer, security and legal mail rises to the top |
 | Business | Any address returning [the money report](docs/money-feed.md) | Are you making money? Sales minus costs, by product |
+| Investments | Nothing, or [a portfolio address](docs/portfolio-feed.md) | Type in what you hold and it's priced for you. Total, gain and loss on the front page, your holdings on the tape, which you can customize |
 | AI use | An AI provider, or [any of these](docs/ai-use.md) | What your AI used each day, what it was worth at list price, and what was really charged |
 | Arts | Plex, optional Sonarr, Radarr and Seerr | What landed, what's playing, what's coming |
 | Systems | Proxmox, SSH, or plain addresses | Service checks, containers, storage and backups, 30 days of history for every machine, and a list of what needs you |
@@ -54,6 +55,18 @@ Leave anything blank and it stays off the page.
 ![Settings](docs/img/settings.png)
 
 Name the paper and choose its title face, from blackletter like a real masthead to the theme's own. Each connection has a Test button that tells you in plain words what went wrong. Saved keys can never be read back, not even by you. Any setting can come from the environment instead: see `.env.example`.
+
+## Yours to arrange
+
+Press Arrange to move sections up or down. Each screen size keeps its own order, because a phone is read differently from a desk. Turn on Learn from what I read under Layout, and after every 2 hours of reading the sections you spend the most time in move up. The paper says what moved, and Undo puts it back.
+
+Press a or tap the button in the corner to ask the paper a question beside what you're reading. Press / to search and t to change the theme. Add the paper to a phone's home screen and it opens like an app.
+
+Stories you open are remembered on the server, not in a browser, so one you read on your phone isn't new on your desk. Saved stories follow you too. Add an alert address under Settings, ntfy or anything that takes a POST, and something serious reaches you without opening the paper.
+
+## Every conflict from day one
+
+Each WARROOM theater has a timeline back to where it began, with a source on every entry. A rail shows how far through it you are as you read.
 
 ## Watching your machines
 

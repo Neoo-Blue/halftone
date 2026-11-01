@@ -92,11 +92,12 @@ def world():
     for _ in range(24):
         dots.append({"la": round(random.uniform(-40, 60), 2), "lo": round(random.uniform(-150, 150), 2), "s": .7, "i": "demo", "k": "h", "t": "A made-up storm", "ts": NOW - HOUR, "w": None})
     rows = [{"id": t, "name": n, "esc": e, "lat": la, "lon": lo} for t, n, e, la, lo in theaters]
+    rows.insert(1, {"id": "trade_talks", "name": "The Tariff Dispute", "esc": 55, "lat": None, "lon": None})  # a topic, with no place on the map
     wire = [{"i": f"{i:016x}", "t": h[0], "k": "k" if i % 3 else "e", "ts": NOW - i * 900, "s": .6, "place": None, "src": OUTLETS[i % 6], "w": "north_strait", "la": None, "lo": None, "cat": None} for i, h in enumerate(HEADS)]
     return {"index": 53, "assessed": 51, "headline": "Tension holds in the Northern Strait as talks resume", "ts": NOW - HOUR, "rationale": "Reports of incidents fell for a third day while shipping stayed below its weekly average.", "most": "Everything on this page is made up for the demo.",
             "forecast": [{"statement": "Talks resume within the week.", "probability": .72, "horizon": "7d"}, {"statement": "A new incident is reported in the strait.", "probability": .41, "horizon": "24h"}, {"statement": "Shipping returns to its weekly average.", "probability": .28, "horizon": "48h"}], "movers": [],
-            "theaters": rows[:8], "all_theaters": rows, "alerts": [{"t": "The Northern Strait reached 61, up from 48. Now 58.", "ts": NOW - 5 * HOUR, "s": .7, "theater": "north_strait"}], "stories": wire, "dots": dots, "assets": {"vessels": 32000, "aircraft": 640, "satellites": 850},
-            "markets": [], "space": {"kp": 2.7, "g": "none", "forecast": "none"}, "hazards": {"red": 2, "orange": 11}}
+            "markets": [{"key": k, "label": n, "last": v, "pct": c, "unit": "", "why": ""} for k, n, v, c in (("crude", "Crude", 71.2, .4), ("gold", "Gold", 2411.0, -.6), ("copper", "Copper", 4.4, 1.1), ("wheat", "Wheat", 5.8, -.2), ("dollar", "Dollar index", 104.2, .1))], "theaters": rows[:8], "all_theaters": rows, "alerts": [{"t": "The Northern Strait reached 61, up from 48. Now 58.", "ts": NOW - 5 * HOUR, "s": .7, "theater": "north_strait"}], "stories": wire, "dots": dots, "assets": {"vessels": 32000, "aircraft": 640, "satellites": 850},
+            "space": {"kp": 2.7, "g": "none", "forecast": "none"}, "hazards": {"red": 2, "orange": 11}}
 
 
 def media():
@@ -169,6 +170,10 @@ def main():
         spent += [{"day": day, "who": "Coding plan", "model": "claude-sonnet-5-5", "qty": 9e7 * wave, "unit": "tokens", "worth": 41 * wave, "charged": 0}, {"day": day, "who": "Research agent", "model": "claude-opus-5-5", "qty": 2e7 * wave, "unit": "tokens", "worth": 12 * wave, "charged": 0},
                   {"day": day, "who": "This paper", "model": "claude-haiku-5-5", "qty": 3e5, "unit": "tokens", "worth": .11, "charged": .11}, {"day": day, "who": "LiveKit", "model": "calls", "qty": 240 * wave, "unit": "minutes", "worth": 2.4 * wave, "charged": 0}]
     s.save("costs", [{"name": "Twilio", "cents": 2140, "per": "month", "note": "From Twilio, last month"}])
+    made_up = [{"symbol": "HRBR", "shares": "40", "buy": "112.50", "tape": "yes"}, {"symbol": "SMMT", "shares": "12", "buy": "302.10", "tape": "yes"}, {"symbol": "BAY-USD", "shares": "0.4", "buy": "", "tape": "yes"}, {"symbol": "PILT", "shares": "", "buy": "", "tape": "yes"}]
+    prices = {"HRBR": ("Harbor Freight Lines", 141.2, 139.9), "SMMT": ("Summit Foods", 284.75, 288.1), "BAY-USD": ("Bay Coin", 8120.0, 8010.0), "PILT": ("Pilot Air", 54.3, 53.6)}
+    settings.update({"HOLDINGS": made_up})
+    s.save("portfolio", {**s.invest.report(s.invest.typed(made_up), {k: {"name": n, "price": p, "prev": b, "currency": "USD"} for k, (n, p, b) in prices.items()}, {"USD": 1.0}), "missing": []})
     s.save("usage", {**s.usage.report([{**r, "source": "ledger"} for r in spent], s.utc_day()), "missing": []})
     s.save("feed", feed())
     s.save("mail", {"read": 1, "failed": [], "triage_error": None})

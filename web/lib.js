@@ -52,14 +52,30 @@ export const ICON = {
 
 
 // The paper's one chart: a run of dots, on a scale fitted to the data, labelled in plain numbers. Hover or tap reads a point.
-export function dotPlot(rows, series, { fmt = (v) => String(v), lo, hi, caption = '', aria = '' } = {}) {
+export const look = { style: 'dots' };  // how home server charts are drawn, from the layout settings
+export const lookPicker = () => `<div class="seg looks" role="group" aria-label="Chart style">${[['dots', 'Dots'], ['line', 'Lines'], ['area', 'Areas'], ['bars', 'Columns']].map(([k, name]) => `<button type="button" data-look="${k}" aria-pressed="${k === look.style}">${name}</button>`).join('')}</div>`;
+
+export function dotPlot(rows, series, { fmt = (v) => String(v), lo, hi, caption = '', aria = '', style = 'dots' } = {}) {
   const W = 720, H = 190, n = rows.length;
   const vals = rows.flatMap((r) => series.map((s) => r[s.key])).filter((v) => v != null);
   if (!vals.length) return '<p class="empty">No readings yet.</p>';
   const top = hi ?? Math.max(...vals), low = lo ?? Math.min(...vals), range = top - low || 1;
   const x = (i) => (n > 1 ? 5 + (i / (n - 1)) * (W - 10) : W / 2), y = (v) => H - 6 - ((v - low) / range) * (H - 12);
   const at = (t) => new Date(t * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' });
-  const dots = series.map((s) => `<g class="${s.cls}">${rows.map((r, i) => (r[s.key] == null ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(r[s.key]).toFixed(1)}" r="2.4"/>`)).join('')}</g>`).join('');
+  const runs = (s) => {  // a gap in the readings stays a gap in the line
+    const out = [[]];
+    rows.forEach((r, i) => { if (r[s.key] == null) out.push([]); else out[out.length - 1].push(`${x(i).toFixed(1)} ${y(r[s.key]).toFixed(1)}`); });
+    return out.filter((p) => p.length);
+  };
+  const base = y(low).toFixed(1), wide = Math.max(1.5, Math.min(12, ((W / n) * 0.72) / series.length));
+  const marks = {
+    dots: (s) => rows.map((r, i) => (r[s.key] == null ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(r[s.key]).toFixed(1)}" r="2.4"/>`)).join(''),
+    line: (s) => runs(s).map((p) => `<path class="m-line" pathLength="1" d="M${p.join('L')}"/>`).join(''),
+    area: (s) => runs(s).map((p) => `<path class="m-area" d="M${p[0].split(' ')[0]} ${base}L${p.join('L')}L${p[p.length - 1].split(' ')[0]} ${base}Z"/><path class="m-line" pathLength="1" d="M${p.join('L')}"/>`).join(''),
+    bars: (s, j) => `<path class="m-bar" stroke-width="${wide.toFixed(1)}" d="${rows.map((r, i) => (r[s.key] == null ? '' : `M${(x(i) + (j - (series.length - 1) / 2) * wide).toFixed(1)} ${base}V${y(r[s.key]).toFixed(1)}`)).join('')}"/>`,
+  };
+  const draw = marks[style] || marks.dots;
+  const dots = series.map((s, j) => `<g class="${s.cls}">${draw(s, j)}</g>`).join('');
   const hits = rows.map((r, i) => `<rect x="${(x(i) - W / n / 2).toFixed(1)}" y="0" width="${(W / n + 1).toFixed(1)}" height="${H}" data-tip="${esc(at(r.t))}: ${esc(series.map((s) => `${series.length > 1 ? `${s.name} ` : ''}${fmt(r[s.key])}`).join(', '))}"/>`).join('');
   const legend = series.length > 1 ? series.map((s) => `<i class="${s.cls}"></i>${esc(s.name)}`).join('') : '';
   return `<figure class="plot"><figcaption>${legend}${caption ? `<span>${esc(caption)}</span>` : ''}</figcaption>
@@ -79,12 +95,33 @@ export function dayBars(days, key, { href, picked, label = '' } = {}) {
     <div class="plot-x" aria-hidden="true"><span>${esc(short(days[0]))}</span><span>${esc(short(days[days.length - 1]))}</span></div>`;
 }
 
+// A question for the paper. The answer goes in as text, never as markup: the model has read strangers' words, so nothing it says may become a link or a tag.
+export async function askPaper(question, log, { last = false } = {}) {
+  const entry = document.createElement('article'), head = document.createElement('h2'), reply = document.createElement('p');
+  head.textContent = question;
+  reply.textContent = 'Reading the paper.';
+  reply.className = 'wait';
+  entry.append(head, reply);
+  if (last) log.append(entry); else log.prepend(entry);
+  log.scrollTop = last ? log.scrollHeight : 0;
+  try {
+    const r = await fetch('/api/ask', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ question }) });
+    if (r.status === 401) { location.assign('/login'); return entry; }
+    const body = await r.json();
+    reply.textContent = r.ok ? body.answer : body.error;
+  } catch {
+    reply.textContent = 'The paper did not answer. Check your connection and try again.';
+  }
+  reply.className = '';
+  return entry;
+}
+
 export function lineChart(hist, title = 'Proxmox') {
   if (!hist?.length) return '';
   const most = Math.max(...hist.flatMap((p) => [p.cpu, p.mem, p.io || 0]));
   const last = hist[hist.length - 1];
   return dotPlot(hist, [{ key: 'cpu', name: 'CPU', cls: 'k1' }, { key: 'mem', name: 'Memory', cls: 'k2' }, { key: 'io', name: 'Disk wait', cls: 'k3' }], {
-    fmt: (v) => `${Math.round(v * 10) / 10}%`, lo: 0, hi: Math.max(5, Math.ceil(most * 1.15)), caption: 'Last 24 hours',
+    fmt: (v) => `${Math.round(v * 10) / 10}%`, lo: 0, hi: Math.max(5, Math.ceil(most * 1.15)), caption: 'Last 24 hours', style: look.style,
     aria: `${title} over 24 hours. CPU is now ${last.cpu} percent, memory ${last.mem} percent.`,
   });
 }

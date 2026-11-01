@@ -15,6 +15,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 DESKS = ("world", "us", "business", "tech", "ai", "security", "science", "sports")
+CHARTS = (("dots", "Halftone dots"), ("line", "Lines"), ("area", "Filled areas"), ("bars", "Columns"))
 MASTHEADS = (("blackletter", "Blackletter"), ("fraktur", "Fraktur"), ("fatface", "Fat face"), ("serif", "Classic serif"), ("theme", "Follows the theme"))
 PROVIDERS = (  # value, label, OpenAI-compatible base address
     ("anthropic", "Anthropic", ""), ("openai", "OpenAI", "https://api.openai.com/v1"), ("gemini", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai"),
@@ -40,6 +41,19 @@ SECTIONS = [
         F("PAPER_FONT", "Title font", "choice", "blackletter", options=MASTHEADS),
         F("PAPER_TZ", "Time zone", "tz", "UTC", "A name like America/New_York. It sets the date on the masthead and the days in the money report."),
         F("PAPER_SINCE", "First edition", "date", hint="Each day's number counts from here. Blank counts from the day you started the paper."),
+    ]},
+    {"id": "layout", "title": "Layout", "about": "How the front page arranges itself, and how your machines are charted. Use Arrange in the menu to move sections by hand.", "needs": (), "fields": [
+        F("LEARN_LAYOUT", "Learn from what I read", "bool", False, "After every 2 hours of reading, the sections you spend the most time in move up. Phone and desktop learn separately, and you can undo each change."),
+        F("CHART_STYLE", "Home server charts", "select", "dots", options=CHARTS),
+    ]},
+    {"id": "invest", "title": "Investments", "about": "What you hold, priced from Yahoo Finance, on the front page and the tape. Easiest to edit on the Investments page. None of it is shared with an AI.", "needs": (), "fields": [
+        F("HOLDINGS", "What you hold", "rows", [], "A symbol with no shares is only watched. Use BTC-USD for crypto.", columns=[
+            COL("symbol", "Symbol", pattern=r"[A-Za-z0-9^][A-Za-z0-9.=^-]{0,14}", placeholder="AAPL"), COL("shares", "Shares", "qty", placeholder="10"), COL("buy", "Buy price", "qty", placeholder="150.25"), COL("tape", "On the tape", "select", options=("yes", "no"))]),
+        F("SHOW_GAIN", "Show gain and loss", "bool", True, "Worked out from the buy prices you add. Turn it off to show only the total."),
+        F("TAPE_OFF", "Hide from the tape", hint="Market names, separated by commas. The Investments page has a switch for each."),
+        F("TAPE_SYMBOLS", "Tape symbols", default="^GSPC,^IXIC,^DJI,^VIX,GC=F,CL=F,BTC-USD,EURUSD=X", hint="Shown when WARROOM sends no markets. Yahoo Finance symbols, separated by commas."),
+        F("PORTFOLIO_URL", "Broker or portfolio address", "url", hint="docs/portfolio-feed.md shows the JSON to return."),
+        F("PORTFOLIO_TOKEN", "Bearer token", "secret"),
     ]},
     {"id": "world", "title": "World", "about": "The globe, the conflict desk and the odds. Works from the first minute.", "needs": ("WARROOM_URL",), "fields": [
         F("WARROOM_URL", "WARROOM address", "url", "https://war.wakxi.com/api/v1", "The free public API. Change it only if you run your own WARROOM."),
@@ -115,6 +129,10 @@ SECTIONS = [
     {"id": "livekit", "title": "LiveKit", "about": "Call minutes and data by day, and what they would cost with nothing included. Needs the Scale plan or higher.", "needs": ("LIVEKIT_PROJECT", "LIVEKIT_TOKEN"), "fields": [
         F("LIVEKIT_PROJECT", "Project ID", placeholder="p_abc123", hint="The part of your LiveKit dashboard address that starts with p_.", guards=True),
         F("LIVEKIT_TOKEN", "List-only token", "secret", hint="Run: lk token create --list --valid-for 8760h. It can list sessions and nothing else, so your API secret stays where it is."),
+    ]},
+    {"id": "notify", "title": "Alerts", "about": "When something serious goes wrong, this sends you one message, and stays quiet until something new does. Works with ntfy or any address that takes a POST.", "needs": ("NOTIFY_URL",), "fields": [
+        F("NOTIFY_URL", "Alert address", "url", placeholder="https://ntfy.sh/your-private-topic"),
+        F("NOTIFY_TOKEN", "Bearer token", "secret", hint="Only if your address asks for one."),
     ]},
     {"id": "twilio", "title": "Twilio", "about": "Fills in last month's Twilio bill on the Business desk.", "needs": ("TWILIO_ACCOUNT", "TWILIO_KEY", "TWILIO_SECRET"), "fields": [
         F("TWILIO_ACCOUNT", "Account SID", placeholder="AC...", guards=True),
@@ -220,6 +238,8 @@ def clean_cell(column, value):
         return clean_date(label, value)
     if column["kind"] == "money" and value and not re.fullmatch(r"\d{1,9}(\.\d{1,2})?", value):
         raise ValueError(f"{label} needs an amount like 12.50.")
+    if column["kind"] == "qty" and value and not re.fullmatch(r"\d{1,12}(\.\d{1,8})?", value):
+        raise ValueError(f"{label} needs a number like 12.5.")
     if column["options"] and value not in column["options"]:
         raise ValueError(f"{label} needs to be one of the choices.")
     if column["pattern"] and value and not re.fullmatch(column["pattern"], value):
@@ -240,7 +260,7 @@ def clean(field, value):
         rows = [{c["key"]: clean_cell(c, r.get(c["key"], "")) for c in field["columns"]} for r in value]
         rows = [r for r in rows if any(r.values())]
         for r in rows:
-            missing = [c["label"] for c in field["columns"] if c["kind"] != "select" and not r[c["key"]] and c["key"] not in ("role", "label", "host")]
+            missing = [c["label"] for c in field["columns"] if c["kind"] != "select" and not r[c["key"]] and c["key"] not in ("role", "label", "host", "shares", "buy")]
             if missing:
                 raise ValueError(f"{label}: a row is missing {missing[0].lower()}.")
         return rows

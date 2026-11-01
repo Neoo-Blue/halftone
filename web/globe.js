@@ -286,7 +286,7 @@ export function makeGlobe(canvas, { onPick, onOpen, still = null }) {
     },
     setLabels(list, host) {
       host.replaceChildren();
-      labels = list.map((l) => {
+      labels = list.filter((l) => l.lat != null && l.lon != null).map((l) => {  // a blank position is no place, not 0, 0 off West Africa
         const el = document.createElement('span');
         el.className = 'glabel';
         el.textContent = l.name;

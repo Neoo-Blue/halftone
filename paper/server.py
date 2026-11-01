@@ -14,6 +14,7 @@ import http.client
 import http.cookies
 import ipaddress
 import json
+import math
 import os
 import re
 import socket
@@ -36,6 +37,7 @@ from zoneinfo import ZoneInfo
 import ai
 from ai import read_all
 import auth
+import invest
 import settings
 import usage
 
@@ -123,6 +125,8 @@ def init_db():
                                              triaged INTEGER DEFAULT 0, cat TEXT, important INTEGER DEFAULT 0, why TEXT, done INTEGER DEFAULT 0);
             CREATE INDEX IF NOT EXISTS mail_r ON mail(received);
             CREATE TABLE IF NOT EXISTS session (hash TEXT PRIMARY KEY, expires INTEGER);
+            CREATE TABLE IF NOT EXISTS shelf (url TEXT PRIMARY KEY, title TEXT, site TEXT, saved INTEGER, opened INTEGER);
+            CREATE TABLE IF NOT EXISTS view_time (form TEXT, desk TEXT, seconds REAL, PRIMARY KEY (form, desk));
             CREATE TABLE IF NOT EXISTS usage_day (source TEXT, day TEXT, who TEXT, model TEXT, qty REAL, unit TEXT, worth REAL, charged REAL, PRIMARY KEY (source, day, who, model));
             CREATE TABLE IF NOT EXISTS livekit_session (id TEXT PRIMARY KEY, day TEXT, minutes REAL, agent_minutes REAL, bytes REAL);
             CREATE TABLE IF NOT EXISTS metric (host TEXT, ts INTEGER, cpu REAL, mem REAL, disk REAL, load REAL, io REAL, rx REAL, tx REAL, rd REAL, wr REAL, temp REAL);
@@ -168,11 +172,18 @@ CHECKED = urllib.request.build_opener(KeptRedirect)
 UNCHECKED = urllib.request.build_opener(KeptRedirect, urllib.request.HTTPSHandler(context=NO_VERIFY))
 
 
+def parsed(body):
+    try:
+        return json.loads(body)
+    except RecursionError:  # nesting deep enough to stop the parser is only a bad answer
+        raise ValueError("too deep") from None
+
+
 def fetch(url, headers=None, timeout=30, insecure=False, raw=False):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json", **(headers or {})})
     with (UNCHECKED if insecure else CHECKED).open(req, timeout=timeout) as r:
         body = read_all(r, 20_000_000, max(timeout, 30))  # whoever answers, it can't fill the memory or hold a job forever
-    return body if raw else json.loads(body)
+    return body if raw else parsed(body)
 
 
 def plex(path, **query):
@@ -329,14 +340,14 @@ def alert_line(text, score):
     return f"{hit.group(1)} reached {hit.group(2)}, up from {hit.group(3)}." + (f" Now {score}." if score is not None else "")
 
 
-def curated(events, limit=48):
-    """WARROOM's feed as news: publishers' real headlines, one line per story. Machine-made titles and US notices are for the map, not the front page."""
+def curated(events, limit=48, notices=False):
+    """WARROOM's feed as news: publishers' real headlines, one line per story. Machine-made titles and US notices are for the map, not the front page, though on a theater page a notice can be the whole story."""
     seen, out = set(), []
     for e in sorted(events, key=lambda x: (-(x.get("ts") or 0))):
         title = short_title(clean_title(e.get("title_en") or e.get("title")))
         key = " ".join(re.sub(r"[^a-z0-9 ]", "", title.lower()).split()[:5])  # two outlets rarely match past the first few words
         readable = sum(ord(c) < 128 for c in title) >= 0.8 * len(title)  # some Telegram sources arrive untranslated
-        if not title or not readable or key in seen or e.get("title_source") == "generated" or e.get("source") == "federal_register" or " vs " in title or e.get("screened_out"):
+        if not title or not readable or key in seen or e.get("title_source") == "generated" or (e.get("source") == "federal_register" and not notices) or " vs " in title or e.get("screened_out"):
             continue
         seen.add(key)
         out.append({"i": e.get("id"), "t": title, "k": "k" if e.get("domain") == "kinetic" else "e", "ts": e.get("ts"), "s": round(float(e.get("severity") or 0), 2), "place": e.get("place"), "src": outlet_of(e.get("source_url")), "w": e.get("theater"),
@@ -650,7 +661,7 @@ def fetch_public(url, limit=3_000_000, accept="text/html,*/*"):
 class Reader(HTMLParser):
     """Finds the story in a news page: the paragraphs of its article, none of the furniture around it."""
     SKIP = {"script", "style", "noscript", "svg", "nav", "header", "footer", "aside", "form", "iframe", "button", "figure", "template", "select", "dialog"}
-    JUNK = re.compile(r"(^|[-_ ])(related|share|sharing|newsletter|comments?|promo|advert|ads?|subscribe|social|sidebar|recirc|paywall|more-stories|most-read|tags?)([-_ ]|$)", re.I)
+    JUNK = re.compile(r"(^|[-_ ])(related|share|sharing|newsletter|comments?|promo|advert|ads?|subscribe|social|sidebar|recirc|paywall|more-stories|most-read|most-viewed|read-more|also-read|recommend\w*|sponsor\w*|taboola|outbrain|tags?)([-_ ]|$)", re.I)
     MID_TEXT = {"script", "style", "noscript", "svg", "button", "template", "iframe", "select"}  # these can sit inside a paragraph without ending it
     BLOCK = {"p", "h1", "h2", "h3", "h4", "li", "blockquote", "pre"}
     INLINE = {"strong": "strong", "b": "strong", "em": "em", "i": "em", "code": "code"}
@@ -761,6 +772,37 @@ def blocks_to_html(blocks):
     return "".join(out + (["</ul>"] if in_list else []))
 
 
+SECTION_HEAD = re.compile(r"^(most (viewed|read|popular)|more (on this story|from|stories|like this)|related( stories| articles| coverage)?|recommended( stories| for you)?|you (may|might) also like|read (more|next)|what to read next|popular now|trending now)\b", re.I)
+AD_LINE = re.compile(r"sponsored content|taboola|outbrain|list \d+ of \d+|^advertisement|sign up for|subscribe to our|follow us on", re.I)
+
+
+def link_only(block):
+    """A line that is nothing but one link is a teaser for another story, not this one."""
+    text = block["html"].strip()
+    return text.startswith("<a ") and text.endswith("</a>") and text.count("<a ") == 1
+
+
+def story_blocks(pool, deck):
+    """What's left once the site's own furniture is out: its reading lists, its adverts, and the summary it repeats as a first line."""
+    keep, seen, listing = [], set(), False
+    for b in pool:
+        text = re.sub(r"\s+", " ", b["text"]).strip()
+        if b["tag"] != "p" and SECTION_HEAD.match(text):
+            listing = True
+            continue
+        if AD_LINE.search(text) and len(text) < 160:
+            continue
+        if link_only(b) or (listing and b["tag"] in ("li", "h2", "h3", "h4")):
+            continue
+        listing = False
+        if text not in seen and (len(text) >= 25 or b["tag"] in ("li", "h2", "h3", "h4")) and b["tag"] != "h1":
+            seen.add(text)
+            keep.append(b)
+    if keep and deck and re.sub(r"\s+", " ", keep[0]["text"]).strip()[:80] == re.sub(r"\s+", " ", deck).strip()[:80]:
+        keep = keep[1:]
+    return keep
+
+
 def bare_title(title, site):
     """' | TechCrunch' belongs to the browser tab, not to a headline."""
     for sep in (" | ", " - ", " \u2013 ", " \u2014 "):
@@ -779,12 +821,8 @@ def extract(page, url):
     inner = [b for b in parser.blocks if b["in"]]
     pool = inner if sum(map(long_p, inner)) >= 2 else parser.blocks
     first = next((i for i, b in enumerate(pool) if long_p(b)), None)
-    seen, keep = set(), []
-    for b in pool[first:] if first is not None else []:
-        text = re.sub(r"\s+", " ", b["text"]).strip()
-        if text not in seen and (len(text) >= 25 or b["tag"] in ("li", "h2", "h3", "h4")) and not b["tag"] == "h1":
-            seen.add(text)
-            keep.append(b)
+    deck = html.unescape(m.get("og:description") or m.get("description") or "").strip()
+    keep = story_blocks(pool[first:] if first is not None else [], deck)
     body = blocks_to_html(keep[:140])
     words = sum(len(b["text"].split()) for b in keep)
     if words < 60:
@@ -794,8 +832,9 @@ def extract(page, url):
             body, words = "".join(f"<p>{html.escape(x, quote=False)}</p>" for x in parts), len(text.split())
     title = m.get("og:title") or m.get("twitter:title") or (parser.title[0] if isinstance(parser.title, tuple) else "")
     site = m.get("og:site_name") or urllib.parse.urlsplit(url).hostname.removeprefix("www.")
-    return {"url": url, "site": site, "title": bare_title(html.unescape(title).strip(), site), "deck": html.unescape(m.get("og:description") or m.get("description") or "").strip(),
-            "image": urllib.parse.urljoin(url, m["og:image"]) if m.get("og:image") else None, "author": next((a for a in (m.get("author"), m.get("article:author")) if a and "://" not in a), None),
+    author = next((a for a in (m.get("author"), m.get("article:author")) if a and "://" not in a and a.lower() != site.lower()), None)
+    return {"url": url, "site": site, "title": bare_title(html.unescape(title).strip(), site), "deck": deck,
+            "image": urllib.parse.urljoin(url, m["og:image"]) if m.get("og:image") else None, "author": author,
             "published": when_stamp(m.get("article:published_time") or m.get("date")), "body": body if words >= 60 else "", "words": words}
 
 
@@ -827,6 +866,39 @@ def known_item(url):
     return None
 
 
+def shelf_view():
+    with db() as c:
+        saved_rows = [dict(r) for r in c.execute("SELECT url, title, site, saved FROM shelf WHERE saved IS NOT NULL ORDER BY saved DESC LIMIT 200")]
+        opened = [r["url"] for r in c.execute("SELECT url FROM shelf WHERE opened IS NOT NULL ORDER BY opened DESC LIMIT 500")]
+    return {"saved": saved_rows, "read": opened}
+
+
+def note_read(url, title, site):
+    """What you've opened, kept here rather than in a browser, so a story read on the phone isn't new on the desk."""
+    now = int(time.time())
+    with db() as c:
+        c.execute("INSERT INTO shelf VALUES (?, ?, ?, NULL, ?) ON CONFLICT (url) DO UPDATE SET opened = excluded.opened", (url[:1000], (title or "")[:300], (site or "")[:80], now))
+        c.execute("DELETE FROM shelf WHERE saved IS NULL AND opened < ?", (now - 30 * 86400,))
+
+
+def set_saved(body):
+    """Trust boundary: the page saving or dropping a story."""
+    url, on = body.get("url") if isinstance(body, dict) else None, body.get("saved") if isinstance(body, dict) else None
+    if not isinstance(url, str) or not url.startswith(("http://", "https://")) or len(url) > 1000 or type(on) is not bool:
+        raise ValueError("That story could not be saved.")
+    title, site = plain(str(body.get("title") or ""), 300), plain(str(body.get("site") or ""), 80)
+    with db() as c:
+        if on:
+            c.execute("INSERT INTO shelf VALUES (?, ?, ?, ?, NULL) ON CONFLICT (url) DO UPDATE SET saved = excluded.saved, title = excluded.title, site = excluded.site", (url, title, site, int(time.time())))
+        else:
+            c.execute("UPDATE shelf SET saved = NULL WHERE url = ?", (url,))
+    return shelf_view()
+
+
+def d_saved(_):
+    return {"kind": "saved", **shelf_view()}
+
+
 def reader(url):
     item = known_item(url)
     try:
@@ -838,7 +910,9 @@ def reader(url):
         site = next(o["src"] for o in item["outlets"] if o["u"] == url)
         story.update({"title": story["title"] or item["t"], "deck": story["deck"] or item["sum"], "published": story["published"] or item["ts"], "site": site, "image": story["image"] or item["img"],
                       "also": [o for o in item["outlets"] if o["u"] != url], "spread": sorted(item["outlets"], key=lambda o: o.get("ts") or 0)})
-    return {"kind": "read", **story}
+    if story.get("url"):
+        note_read(story["url"], story.get("title"), story.get("site"))
+    return {"kind": "read", **story, "saved": any(r["url"] == story.get("url") for r in shelf_view()["saved"])}
 
 
 # ---------------------------------------------------------------------- Plex, Sonarr, Radarr
@@ -1187,7 +1261,7 @@ STALE_AFTER = {"usage": (10800, 1, "The AI use count"), "news": (900, 1, "The ne
 
 
 # Which settings section each job belongs to. A job with no section always runs.
-JOB_NEEDS = {"sports": "sports", "weather": "weather", "brief": "brief", "world": "world", "media": "plex", "playing": "plex", "probes": "services", "storage": "proxmox", "mail": "mail", "feed": "money"}
+JOB_NEEDS = {"notify": "notify", "certs": "services", "sports": "sports", "weather": "weather", "brief": "brief", "world": "world", "media": "plex", "playing": "plex", "probes": "services", "storage": "proxmox", "mail": "mail", "feed": "money"}
 
 
 def job_on(name):
@@ -1199,12 +1273,18 @@ def job_on(name):
         return ai.ready() or any(settings.enabled(s) for s, _, _ in USAGE_SOURCES)
     if name == "costs":
         return settings.enabled("twilio") or settings.enabled("deepgram")
+    if name == "portfolio":
+        return bool(C("HOLDINGS") or C("PORTFOLIO_URL"))
     return name not in JOB_NEEDS or settings.enabled(JOB_NEEDS[name])
+
+
+def cert_worries():
+    return [(2 if days < 4 else 1, f"{host} certificate runs out in {max(0, round(days))} days") for host, days in (live("certs")["data"] or {}).items() if days < 14]
 
 
 def all_worries(m, probes, storage, private=True):
     try:
-        return worries(m, probes, storage, private=private) + trend_worries((m or {}).get("hosts", [])) + stale_worries()
+        return worries(m, probes, storage, private=private) + trend_worries((m or {}).get("hosts", [])) + stale_worries() + cert_worries()
     except (ValueError, TypeError, KeyError, IndexError, AttributeError, OverflowError) as e:  # the list of what's wrong must not be what stops the page
         return [(2, f"The machine checks could not be read ({type(e).__name__})")]
 
@@ -1338,6 +1418,85 @@ def clean_costs(body):
             raise ValueError("cents")
         out.append((name, cents, per))
     return out
+
+
+DESK_IDS = ("world", "tech", "sports", "mail", "business", "usage", "arts", "systems")
+FORMS = ("wide", "phone")  # a phone and a desk are read differently, so each keeps its own order
+VIEW_WINDOW = 7200  # seconds of reading between one rearrangement and the next
+
+
+def saved(key, default=None):
+    with db() as c:
+        row = c.execute("SELECT v FROM meta WHERE k = ?", (key,)).fetchone()
+    return json.loads(row["v"]) if row else default
+
+
+def remember(key, value):
+    with db() as c:
+        c.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, json.dumps(value)))
+
+
+def known_order(form):
+    """A saved order, kept in step with the sections that exist now, so adding or removing one can't break the page."""
+    kept = [d for d in saved(f"layout:{form}", []) if d in DESK_IDS]
+    return kept + [d for d in DESK_IDS if d not in kept]
+
+
+def layout_view():
+    return {"order": {f: known_order(f) for f in FORMS}, "moved": {f: saved(f"moved:{f}") for f in FORMS}, "learn": C("LEARN_LAYOUT"), "chart": C("CHART_STYLE")}
+
+
+def set_layout(body):
+    """Trust boundary: the page saying how it wants to be arranged. An order you choose is the new starting point, so what was learned before it is dropped."""
+    if not isinstance(body, dict):
+        raise ValueError("That layout could not be saved.")
+    if "chart" in body:
+        settings.update({"CHART_STYLE": body["chart"]})
+    form = body.get("form")
+    if ("order" in body or "seen" in body) and form not in FORMS:
+        raise ValueError("That layout could not be saved.")
+    if "order" in body:
+        order = body["order"]
+        if not isinstance(order, list) or not all(isinstance(d, str) for d in order) or sorted(order) != sorted(DESK_IDS):
+            raise ValueError("That layout could not be saved.")
+        remember(f"layout:{form}", order)
+        with db() as c:
+            c.execute("DELETE FROM view_time WHERE form = ?", (form,))
+            c.execute("DELETE FROM meta WHERE k IN (?, ?)", (f"view_since:{form}", f"moved:{form}"))
+    if body.get("seen"):
+        with db() as c:
+            c.execute("DELETE FROM meta WHERE k = ?", (f"moved:{form}",))
+    return layout_view()
+
+
+def learn_layout(form):
+    """Sections read more move up. Time is grouped into steps a quarter apart and the sort is stable, so one only passes another on a real difference,
+    and the page doesn't shuffle on noise. Halving afterwards makes recent habits count for more. ponytail: a naive heuristic, tune the 1.25 if it feels jumpy."""
+    before = known_order(form)
+    with db() as c:
+        seen = {r["desk"]: r["seconds"] for r in c.execute("SELECT desk, seconds FROM view_time WHERE form = ?", (form,))}
+        c.execute("UPDATE view_time SET seconds = seconds / 2 WHERE form = ?", (form,))
+    after = sorted(before, key=lambda d: -math.floor(math.log(seen.get(d, 0) + 60, 1.25)))
+    remember(f"layout:{form}", after)
+    remember(f"view_since:{form}", 0)
+    if after != before:
+        remember(f"moved:{form}", {"from": before, "to": after})
+
+
+def record_views(body):
+    """Trust boundary: seconds of reading, from the page. One report can't claim more than two minutes, and nothing is kept while learning is off."""
+    form, seconds = body.get("form") if isinstance(body, dict) else None, body.get("seconds") if isinstance(body, dict) else None
+    if form not in FORMS or not isinstance(seconds, dict) or not set(seconds) <= {*DESK_IDS, "front"} or not all(type(v) is int and v >= 0 for v in seconds.values()) or sum(seconds.values()) > 120:
+        raise ValueError("views")
+    if not C("LEARN_LAYOUT") or not sum(seconds.values()):
+        return
+    with db() as c:
+        c.executemany("INSERT INTO view_time VALUES (?, ?, ?) ON CONFLICT (form, desk) DO UPDATE SET seconds = seconds + excluded.seconds", [(form, d, v) for d, v in seconds.items()])
+    since = saved(f"view_since:{form}", 0) + sum(seconds.values())
+    if since >= VIEW_WINDOW:
+        learn_layout(form)
+    else:
+        remember(f"view_since:{form}", since)
 
 
 def set_costs(rows):
@@ -1576,7 +1735,7 @@ def safe_money(feed, costs, days):
 
 def desks_on():
     return {"ai": ai.ready(), "sports": job_on("sports"), "weather": job_on("weather"), "world": settings.enabled("world"), "brief": settings.enabled("brief"), "mail": settings.enabled("mail"), "money": settings.enabled("money"), "media": settings.enabled("plex"),
-            "systems": job_on("probes") or job_on("machines"), "usage": job_on("usage")}
+            "systems": job_on("probes") or job_on("machines"), "usage": job_on("usage"), "invest": job_on("portfolio")}
 
 
 def live(name):
@@ -1593,6 +1752,11 @@ def paper(days=30):
     feed = live("feed")
     costs = get_costs()
     sections["costs"] = costs
+    sections["layout"] = layout_view()
+    sections["invest"] = invest.glance(live("portfolio")["data"] or {}, C("SHOW_GAIN"))
+    sections["tape_off"] = tape_off()
+    sections["tape_quotes"] = live("tape")["data"] or []
+    sections["shelf"] = shelf_view()
     spent = live("usage")
     sections["usage"] = {**usage.glance(spent["data"] or {}, utc_day()), "as_of": spent["as_of"], "error": spent["error"], "missing": (spent["data"] or {}).get("missing", [])}
     sections["money"] = safe_money(feed["data"], costs, days)
@@ -1829,7 +1993,7 @@ def ask_paper(question):
     return ai.ask(ASK_SYSTEM, f"<paper>{paper_text}</paper>\n\nQuestion: {question.strip()}", max_tokens=1000)
 
 
-HELD_BACK = ("PAPER_SSH_KEY", "PVE_INSECURE", "MAILBOXES", "MAIL_ABOUT")  # a path on this machine, a safety check, whose mail is read, and words in a system prompt
+HELD_BACK = ("PAPER_SSH_KEY", "PVE_INSECURE", "MAILBOXES", "MAIL_ABOUT", "HOLDINGS", "PORTFOLIO_URL")  # a path on this machine, a safety check, whose mail is read, and words in a system prompt
 
 
 def configurable():
@@ -1921,11 +2085,35 @@ def d_event(eid):
             "story": story if story and story["body"] else None, "note": intel_notes([d["intel_note"]])[0] if d.get("intel_note") else None, "nearby": curated(near, 8)}
 
 
+def clean_history(h):
+    """Trust boundary: a timeline from WARROOM. Text stays text, a date must be a date, and a source must be a plain web address."""
+    def day(v):
+        v = str(v)
+        if not re.fullmatch(r"[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?", v):
+            raise ValueError("date")
+        datetime.fromisoformat(f"{v}-01-01"[:10])
+        return v
+
+    def event(x):
+        source = str(x.get("source") or "")[:400]
+        return {"date": day(x["date"]), "title": plain(str(x["title"]), 120), "detail": plain(str(x.get("detail") or ""), 320), "source": source if source.startswith("https://") and urllib.parse.urlsplit(source).hostname else None}
+    eras = [{"name": plain(str(e["name"]), 60), "from": plain(str(e["from"]), 12), "to": plain(str(e["to"]), 12), "summary": plain(str(e.get("summary") or ""), 300), "events": [event(x) for x in e["events"][:50]]} for e in h["eras"][:8]]
+    return {"began": day(h["began"]) if h.get("began") else "", "began_note": plain(str(h.get("began_note") or ""), 300), "summary": plain(str(h.get("summary") or ""), 400), "eras": eras}
+
+
+def theater_history(tid):
+    """How a theater got here. An older WARROOM has none, and the page simply goes without."""
+    try:
+        return clean_history(war(f"/theaters/{tid}/history", timeout=10))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, http.client.HTTPException):
+        return None
+
+
 def d_theater(tid):
     t = next((x for x in (load("world")["data"] or {}).get("all_theaters", []) if x["id"] == tid), None)
     if not t:
         raise LookupError(tid)
-    return {"kind": "theater", **t, "intel": intel_notes(war(f"/intel?scope=theater&scope_id={tid}&limit=3").get("items", [])), "events": curated(war(f"/events?theater={tid}&limit=120&min_severity=0.2").get("items", []), 30)}
+    return {"kind": "theater", **t, "intel": intel_notes(war(f"/intel?scope=theater&scope_id={tid}&limit=3").get("items", [])), "events": curated(war(f"/events?theater={tid}&limit=120&min_severity=0.2").get("items", []), 30, notices=True), "history": theater_history(tid)}
 
 
 def d_thread(tid):
@@ -1943,7 +2131,7 @@ def open_json(url, *allowed):
     """Addresses that came out of another answer are checked before they're followed."""
     if not url.startswith(allowed):
         raise ValueError("not a known source")
-    return json.loads(fetch_public(url, 6_000_000, "application/json")[0])
+    return parsed(fetch_public(url, 6_000_000, "application/json")[0])
 
 
 def thin_ring(ring, keep=110):
@@ -2126,6 +2314,17 @@ def d_issue(slug):
     return {"kind": "issue", **issue}
 
 
+def tape_off():
+    return [x.strip() for x in C("TAPE_OFF").split(",") if x.strip()]
+
+
+def d_investments(_):
+    """Everything the page edits as well as shows. Never cached, so what you just added is there."""
+    held = live("portfolio")
+    markets = [{"key": m["key"], "label": m["label"]} for m in (load("world")["data"] or {}).get("markets", []) or live("tape")["data"] or []]
+    return {"kind": "investments", **(held["data"] or {}), "as_of": held["as_of"], "error": held["error"], "holdings": [{**r, "symbol": r["symbol"].upper()} for r in C("HOLDINGS")], "show_gain": C("SHOW_GAIN"), "markets": markets, "tape_off": tape_off(), "feed": bool(C("PORTFOLIO_URL"))}
+
+
 def d_usage(_):
     spent = live("usage")
     if not spent["data"]:
@@ -2166,7 +2365,7 @@ def d_machine(name):
 
 
 DETAILS = {
-    "machine": (r"[^/]{1,80}", d_machine), "topic": (r"[^/]{1,80}", d_topic), "weather": (r"", d_weather), "usage": (r"", d_usage),
+    "machine": (r"[^/]{1,80}", d_machine), "topic": (r"[^/]{1,80}", d_topic), "weather": (r"", d_weather), "usage": (r"", d_usage), "investments": (r"", d_investments), "saved": (r"", d_saved),
     "event": (r"[0-9a-f]{16,64}", d_event), "theater": (r"[a-z0-9_]{2,40}", d_theater), "thread": (r"thr:[0-9a-f]{8,64}", d_thread), "hazard": (r"[\w:.-]{3,80}", d_hazard), "market": (r"[a-z0-9_]{2,40}", d_market),
     "mail": (r"[0-9a-f]{24}", d_mail), "plex": (r"\d{1,9}", d_plex), "show": (r"\d{1,9}", d_show), "movie": (r"\d{1,9}", d_movie), "issue": (r"[a-z0-9-]{3,80}", d_issue), "container": (r"\d{3,4}", d_container),
     "product": (r"[a-z]{1,40}", d_product), "service": (r"[^/]{1,120}", d_service),
@@ -2180,13 +2379,13 @@ def detail(kind, ident):
     if not re.fullmatch(pattern, ident):
         raise KeyError(ident)
     hit = HOT.get((kind, ident))
-    if hit and time.time() - hit[0] < HOT_TTL:
-        return hit[1]
+    if hit and time.time() - hit[0] < HOT_TTL and kind not in ("investments", "saved"):
+        return {**hit[1], "look": C("CHART_STYLE")}
     data = fn(ident)
     if len(HOT) > 300:
         HOT.clear()
     HOT[(kind, ident)] = (time.time(), data)
-    return data
+    return {**data, "look": C("CHART_STYLE")}
 
 
 # ---------------------------------------------------------------------- images
@@ -2367,6 +2566,117 @@ def usage_report():
     return {**usage.report(rows, utc_day()), "missing": missing}
 
 
+QUOTES = "https://query1.finance.yahoo.com/v8/finance/chart/"
+
+
+def quote(symbol):
+    meta = open_json(f"{QUOTES}{urllib.parse.quote(symbol, safe='')}?range=1d&interval=1d", QUOTES)["chart"]["result"][0]["meta"]
+    price, prev, currency = usage.figure(meta["regularMarketPrice"]), usage.amount(meta.get("chartPreviousClose")), str(meta.get("currency") or "")
+    whole_unit = {"GBp": "GBP", "ZAc": "ZAR", "ILA": "ILS"}.get(currency)  # these markets quote in hundredths
+    if whole_unit:
+        price, prev, currency = price / 100, prev / 100, whole_unit
+    if not re.fullmatch(r"[A-Z]{3}", currency) or not price:
+        raise ValueError("not a price")
+    return {"price": price, "prev": prev if prev >= 1e-12 else 0, "currency": currency, "name": plain(str(meta.get("shortName") or ""), 60)}
+
+
+def portfolio_feed():
+    url = C("PORTFOLIO_URL")  # the address before the key, as above
+    return invest.from_feed(fetch(url, {"Authorization": f"Bearer {C('PORTFOLIO_TOKEN')}"} if C("PORTFOLIO_TOKEN") else {}))
+
+
+def portfolio():
+    """Priced every few minutes. A symbol that won't price keeps its last one and is marked, and an unknown one says so instead of counting as zero."""
+    last = load("portfolio")["data"] or {}
+    rows, fed, missing = invest.typed(C("HOLDINGS")), [], []
+    if C("PORTFOLIO_URL"):
+        try:
+            fed = portfolio_feed()
+        except Exception:  # noqa: BLE001 - a broker having a bad minute keeps the holdings it last gave, so the total doesn't fall off a cliff
+            fed = last.get("fed", [])
+            missing.append("The portfolio address")
+    rows = invest.merged(rows + fed)
+    if len(rows) > invest.MAX_HOLDINGS:
+        missing.append(f"Holdings past the first {invest.MAX_HOLDINGS}")
+        rows = rows[:invest.MAX_HOLDINGS]
+    before = {p["symbol"]: p for p in last.get("positions", []) if p.get("price") is not None}
+
+    def priced(symbol):
+        try:
+            return symbol, quote(symbol)
+        except Exception:  # noqa: BLE001 - one bad ticker costs that ticker
+            old = before.get(symbol)  # today's move is unknown now, so no previous close
+            return symbol, old and {"price": old["price"], "prev": 0, "currency": old["currency"], "name": old["name"], "stale": True}
+
+    with ThreadPoolExecutor(6) as pool:
+        quotes = dict(pool.map(priced, [r["symbol"] for r in rows]))
+    rates = {"USD": 1.0}
+    for currency in {q["currency"] for q in quotes.values() if q} - {"USD"}:
+        try:
+            rates[currency] = quote(f"{currency}USD=X")["price"]
+        except Exception:  # noqa: BLE001 - the last rate stands, and with none that currency says so rather than vanishing from the total
+            if currency in last.get("rates", {}):
+                rates[currency] = last["rates"][currency]
+            else:
+                missing.append(f"The {currency} rate")
+    return {**invest.report(rows, quotes, rates), "missing": missing, "rates": rates, "fed": fed}
+
+
+def tape_quotes():
+    """A paper with no market feed still has a tape."""
+    if (load("world")["data"] or {}).get("markets"):
+        return []
+
+    def priced(symbol):
+        try:
+            q = quote(symbol)
+            return {"key": symbol, "label": q["name"] or symbol, "pct": 100 * (q["price"] - q["prev"]) / q["prev"] if q["prev"] else None}
+        except Exception:  # noqa: BLE001 - one bad symbol costs that symbol
+            return None
+
+    symbols = [invest.clean_symbol(x) for x in C("TAPE_SYMBOLS").split(",") if x.strip()][:20]
+    with ThreadPoolExecutor(6) as pool:
+        rows = [r for r in pool.map(priced, symbols) if r and r["pct"] is not None]
+    if symbols and not rows:
+        raise ValueError("no prices")
+    return rows
+
+
+def cert_days(host):
+    """Days left on a site's certificate, or None when it can't be told. A private address with its own certificate is none of this check's business."""
+    try:
+        with socket.create_connection((host, 443), timeout=8) as raw, ssl.create_default_context().wrap_socket(raw, server_hostname=host) as tls:
+            return (ssl.cert_time_to_seconds(tls.getpeercert()["notAfter"]) - time.time()) / 86400
+    except ssl.SSLCertVerificationError as e:
+        return 0.0 if "expired" in str(e.verify_message) else None
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def cert_checks():
+    hosts = sorted({urllib.parse.urlsplit(t["url"]).hostname for t in C("PROBES") if t["url"].startswith("https://")})
+    with ThreadPoolExecutor(6) as pool:
+        return {h: d for h, d in zip(hosts, pool.map(cert_days, hosts)) if d is not None}
+
+
+def post_alert(text):
+    url = C("NOTIFY_URL")  # the address before the key, as above
+    head = {"User-Agent": UA, "Content-Type": "text/plain; charset=utf-8", "Title": re.sub(r"[^ -~]", "", C("PAPER_NAME"))[:60], **({"Authorization": f"Bearer {C('NOTIFY_TOKEN')}"} if C("NOTIFY_TOKEN") else {})}
+    with CHECKED.open(urllib.request.Request(url, text.encode(), head, method="POST"), timeout=15) as r:
+        r.read(1000)
+
+
+def notify():
+    """One message for what's newly serious, then quiet. The first run only learns what's already wrong, so turning this on isn't a flood."""
+    found = [t for lv, t in all_worries(live("machines")["data"], live("probes")["data"], live("storage")["data"]) if lv >= 2]
+    sent = saved("notified")
+    fresh = [t for t in found if sent is not None and t not in sent]
+    if fresh:
+        post_alert("\n".join(fresh[:6]))
+    remember("notified", found)
+    return {"sent": len(fresh)}
+
+
 def twilio_month():
     """Last month's whole bill, in dollars. Phone numbers, calls and messages are all in it."""
     account = urllib.parse.quote(C("TWILIO_ACCOUNT"), safe="")  # the address before the key, as above
@@ -2402,7 +2712,7 @@ def cost_rows():
     return out
 
 
-JOBS = [("usage", usage_report, 3600), ("costs", cost_rows, 3600), ("sports", sports, 120), ("weather", weather, 1800), ("editor", editor_note, 900), ("brief", brief, 1800), ("world", world, 300), ("news", news, 180), ("mail", scan_mail, 300), ("media", media, 300), ("playing", now_playing, 60), ("probes", probes, 60),
+JOBS = [("portfolio", portfolio, 300), ("tape", tape_quotes, 300), ("certs", cert_checks, 43200), ("notify", notify, 120), ("usage", usage_report, 3600), ("costs", cost_rows, 3600), ("sports", sports, 120), ("weather", weather, 1800), ("editor", editor_note, 900), ("brief", brief, 1800), ("world", world, 300), ("news", news, 180), ("mail", scan_mail, 300), ("media", media, 300), ("playing", now_playing, 60), ("probes", probes, 60),
         ("machines", machines, 60), ("storage", storage, 1800), ("feed", money_feed, 300)]
 WAKE = threading.Event()  # a saved setting shouldn't wait out a job's sleep
 
@@ -2456,6 +2766,7 @@ CHECKS = {
     "bill": lambda: f"Anthropic answered with {len(bill_rows())} rows.",
     "openrouter": lambda: f"OpenRouter answered. The account has used {openrouter_total():.2f} dollars so far.",
     "livekit": lambda: f"LiveKit answered with {len(livekit_page(0))} recent sessions.",
+    "notify": lambda: (post_alert("A test from the paper."), "Sent a test message.")[1],
     "twilio": lambda: f"Twilio answered. Last month came to {twilio_month():.2f} dollars.",
     "deepgram": lambda: f"Deepgram answered. The last 30 days came to {deepgram_month():.2f} dollars.",
     "brief": lambda: f"Found {brief()['title']}.",
@@ -2495,7 +2806,7 @@ def token_set():
 
 
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".json": "application/json"}
-CSP = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+CSP = "default-src 'none'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 
 TITLE_FONTS = {"blackletter": "manufacturing-consent", "fraktur": "unifrakturcook", "fatface": "abril-fatface"}
@@ -2605,6 +2916,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(paper(int(days) if days in ("7", "30", "90") else 30))
         if url.path == "/api/settings":
             return self.send_json(settings_page())
+        if url.path == "/manifest.json":  # puts the paper on a phone's home screen, under its own name
+            return self.send_json({"name": C("PAPER_NAME"), "short_name": C("PAPER_NAME"), "start_url": "/", "scope": "/", "display": "standalone", "background_color": "#1a100c", "theme_color": "#1a100c", "icons": [{"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"}]})
         if url.path == "/mcp":
             return self.send(405, b"", "text/plain", extra=[("Allow", "POST")])  # no event stream here: every answer comes back on its POST
         if url.path.startswith("/api/ai/"):
@@ -2637,7 +2950,7 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, ValueError, http.client.HTTPException):
                 return self.send(502, b"", "text/plain")
         # detail pages are real addresses, so a reload, a shared tab or the back button lands in the right place
-        routed = url.path == "/" or re.match(r"/(issue|world|arts|business|systems|read|mail|topic|weather|usage)(/|$)", url.path)
+        routed = url.path == "/" or re.match(r"/(issue|world|arts|business|systems|read|mail|topic|weather|usage|investments|saved)(/|$)", url.path)
         page = PAGES.get(url.path) or ("index.html" if routed else None)
         file = (WEB / (page or url.path.lstrip("/"))).resolve()
         if file.is_relative_to(WEB) and file.is_file() and file.suffix in TYPES and (page or file.suffix != ".html"):
@@ -2660,6 +2973,10 @@ class Handler(BaseHTTPRequestHandler):
                 rows = clean_costs(self.body(20000))
                 set_costs(rows + replaced_costs(rows))
                 return self.send_json(paper())
+            if path == "/api/layout":
+                return self.send_json(set_layout(self.body(4000)))
+            if path == "/api/saved":
+                return self.send_json(set_saved(self.body(4000)))
             if path == "/api/settings":
                 dropped = settings.update(self.body(200000).get("values"))
                 settings_saved()
@@ -2690,6 +3007,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(check(test.group(1)))
         if path in ("/api/ask", "/api/configure"):
             return self.do_ai(path)
+        if path == "/api/views":
+            try:
+                record_views(self.body(2000))
+            except ValueError:
+                return self.send_json({"error": "That could not be counted."}, 400)
+            return self.send_json({"ok": True})
         if path == "/api/ai-token":
             if E("PAPER_AI_TOKEN"):
                 return self.send_json({"error": "The token is set by the environment, so change it there."}, 400)

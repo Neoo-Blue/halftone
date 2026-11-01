@@ -14,6 +14,8 @@
 <link rel="stylesheet" href="/style.css">
 <script src="/theme.js"></script>
 <script type="module" src="/app.js"></script>
+<link rel="manifest" href="/manifest.json" crossorigin="use-credentials">
+<link rel="apple-touch-icon" href="/icon-512.png">
 </head>
 <body>
 <a class="skip" href="#front">Skip to the paper</a>
@@ -35,7 +37,8 @@
     <li><a href="/#usage">AI use</a></li>
     <li><a href="/#arts">Arts</a></li>
     <li><a href="/#systems">Systems</a></li>
-    <li id="ask-link" hidden><a href="/ask">Ask</a></li>
+    <li><a href="/investments">Investments</a></li>
+    <li><button type="button" class="arrange" id="arrange" aria-pressed="false">Arrange</button></li>
     <li><a href="/settings">Settings</a></li>
   </ul>
   <div class="tape" id="tape" aria-label="Markets"></div>
@@ -47,6 +50,7 @@
   </div>
 </nav>
 
+<p class="banner moved" id="moved" role="status" hidden><span id="moved-text"></span> <button type="button" id="moved-undo">Undo</button> <button type="button" id="moved-keep">Keep</button></p>
 <p class="banner" id="banner" role="alert" hidden>This copy may be out of date: the connection dropped, or your sign-in ended. <button type="button" id="reload">Reload</button></p>
 
 <main id="page" class="reader sheet" hidden></main>
@@ -54,6 +58,7 @@
   <section class="front sheet" id="front" aria-label="Front page">
     <div class="note-col">
       <p class="note" id="note">Going to press.</p>
+      <p class="since" id="since" hidden></p>
       <div class="editor" id="editor" hidden></div>
       <dl class="glance" id="glance"></dl>
       <nav class="inside" id="inside" aria-label="Inside today"></nav>
@@ -86,6 +91,8 @@
     <div class="trend-tags" id="trend-tags"></div>
     <form class="find" id="find" role="search"><input type="search" id="find-q" placeholder="Search the paper" aria-label="Search the paper" maxlength="80" autocomplete="off"></form>
   </section>
+
+  <p class="arrange-note sheet" id="arrange-note" hidden><span id="arrange-text"></span> <button type="button" class="ghost text" id="arrange-reset">Back to the usual order</button></p>
 
   <section class="desk sheet" id="world" aria-labelledby="h-world">
     <h2 class="desk-name" id="h-world">World</h2>
@@ -136,6 +143,28 @@
     <footer class="asof" id="asof-sys"></footer>
   </section>
 </main>
+
+<aside class="dock" id="dock" aria-label="Ask the paper" hidden>
+  <div class="dock-panel" id="dock-panel" inert>
+    <header class="dock-head">
+      <h2>Ask the paper</h2>
+      <button type="button" class="ghost" id="dock-close" aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg></button>
+    </header>
+    <div class="dock-body">
+      <p class="dock-lead">It has read today's edition and everything you've connected. It can answer, and it can't do anything else.</p>
+      <div class="ask-try" id="dock-try"></div>
+      <div class="ask-log" id="dock-log" aria-live="polite"></div>
+    </div>
+    <form class="dock-form" id="dock-form">
+      <textarea id="dock-q" rows="1" maxlength="1000" required aria-label="Your question" placeholder="Ask anything about today"></textarea>
+      <button type="submit" class="btn" id="dock-go">Ask</button>
+    </form>
+  </div>
+  <button type="button" class="dock-btn" id="dock-btn" aria-expanded="false" aria-controls="dock-panel">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.2c0-1 .8-1.7 1.7-1.7h9.6c1 0 1.7.8 1.7 1.7v6.6c0 1-.8 1.7-1.7 1.7H9l-3.6 3v-3h-.2c-1 0-1.7-.8-1.7-1.7z"/></svg>
+    <span>Ask the paper</span>
+  </button>
+</aside>
 
 <footer class="colophon">
   <p>Printed for one reader. Nothing here is public.</p>

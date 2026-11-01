@@ -1,6 +1,6 @@
 // Every tap opens here. Each detail is a real address on this paper, so reload, back and open-in-new-tab all work,
 // and stories are read inside the paper. The only way off the site is the small "Original" link under a story.
-import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, tight } from '/lib.js';
+import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight } from '/lib.js';
 import { makeGlobe } from '/globe.js';
 import { mountScene } from '/scene.js';
 
@@ -23,6 +23,8 @@ const ROUTES = [
   [/^\/topic\/(.+)$/, 'topic', null],
   [/^\/weather()$/, 'weather', null],
   [/^\/usage()$/, 'usage', null],
+  [/^\/investments()$/, 'investments', null],
+  [/^\/saved()$/, 'saved', null],
   [/^\/systems\/container\/(\d+)$/, 'container', 'Systems'],
 ];
 const DESK = { Mail: '/#mail', Tech: '/#tech', World: '/#world', Arts: '/#arts', Business: '/#business', Systems: '/#systems' };
@@ -65,12 +67,12 @@ function reportScene(rows, pin, alt) {
 }
 
 const uniqueReports = (rows) => [...new Map(rows.map((r) => [r.i || r.t, r])).values()];
-let machine = null;
+let machine = null, machineRange = '24h';
 
 function machineCharts(d, range) {
   const r = d.series[range] || [], percent = (v) => `${Math.round(v)}%`, rate = (v) => `${bytes(v)}/s`;
   if (r.length < 2) return '<p class="empty">Readings build up from the moment a machine is connected. Check back in a few minutes.</p>';
-  const plot = (title, keys, o) => (r.some((x) => keys.some((k) => x[k.key] != null)) ? `<h3>${title}</h3>${dotPlot(r, keys, { caption: '', aria: `${title} for ${d.name}, ${range}`, ...o })}` : '');
+  const plot = (title, keys, o) => (r.some((x) => keys.some((k) => x[k.key] != null)) ? `<h3>${title}</h3>${dotPlot(r, keys, { caption: '', aria: `${title} for ${d.name}, ${range}`, style: look.style, ...o })}` : '');
   return plot('CPU', [{ key: 'cpu', name: 'CPU', cls: 'k1' }, { key: 'io', name: 'Disk wait', cls: 'k3' }], { fmt: percent, lo: 0 })
     + plot('Memory', [{ key: 'mem', name: 'Memory', cls: 'k2' }], { fmt: percent, lo: 0, hi: 100 })
     + plot('Disk used', [{ key: 'disk', name: 'Disk', cls: 'k3' }], { fmt: (v) => `${v.toFixed(1)}%` })
@@ -78,6 +80,111 @@ function machineCharts(d, range) {
     + plot('Disk activity', [{ key: 'rd', name: 'Read', cls: 'k1' }, { key: 'wr', name: 'Written', cls: 'k2' }], { fmt: rate, lo: 0 })
     + plot('Load', [{ key: 'load', name: 'Load', cls: 'k1' }], { fmt: (v) => v.toFixed(2), lo: 0 })
     + plot('Temperature', [{ key: 'temp', name: 'Temperature', cls: 'k3' }], { fmt: (v) => `${Math.round(v)} C` });
+}
+
+const longDate = (s) => {
+  const [y, m, d] = s.split('-').map(Number);
+  if (!m) return String(y);
+  return new Date(Date.UTC(y, m - 1, d || 1)).toLocaleDateString('en-US', { timeZone: 'UTC', year: 'numeric', month: 'short', ...(d ? { day: 'numeric' } : {}) });
+};
+const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } };
+
+// The whole story from day one. The rail shows how far through it you are, and fills as you read down.
+function arc(h, d) {
+  let n = 0;
+  const steps = h.eras.map((e, i) => `<section class="arc-era" id="era-${i}">
+      <header><h4>${esc(e.name)}<small>${esc(e.from)}${e.to === 'now' ? ' to now' : e.to === e.from ? '' : ` to ${esc(e.to)}`}</small></h4>
+      ${e.summary ? `<p class="arc-sum">${esc(e.summary)}</p>` : ''}</header>
+      <ol>${e.events.map((x) => `<li class="arc-step" id="step-${n++}">
+        <time datetime="${esc(x.date)}">${esc(longDate(x.date))}</time>
+        <div><b>${esc(x.title)}</b>${x.detail ? `<p>${esc(x.detail)}</p>` : ''}${x.source ? `<a class="arc-src" href="${esc(x.source)}" target="_blank" rel="noopener noreferrer">${esc(hostOf(x.source))}</a>` : ''}</div></li>`).join('')}</ol>
+    </section>`).join('');
+  let dot = 0;
+  const rail = h.eras.map((e, i) => `<li style="flex:${Math.max(e.events.length, 3)} 1 0"><button type="button" data-era="${i}"><b>${esc(e.name)}</b><small>${esc(e.from)}</small></button>
+    <span class="arc-dots">${e.events.map((x) => `<button type="button" data-step="${dot++}" data-tip="${esc(longDate(x.date))}: ${esc(x.title)}" aria-label="${esc(longDate(x.date))}: ${esc(x.title)}"></button>`).join('')}</span></li>`).join('');
+  return `<section class="arc" aria-labelledby="arc-head">
+    <h3 id="arc-head">How we got here</h3>
+    <div class="arc-rail"><ol>${rail}</ol><div class="arc-bar" aria-hidden="true"><i></i></div><p class="arc-where" aria-live="off"></p></div>
+    ${steps}
+    <p class="arc-now"><b>Today</b> Escalation stands at ${esc(d.esc)} of 100.</p>
+  </section>`;
+}
+
+let arcWatch = null;
+function mountArc() {
+  arcWatch?.disconnect();
+  const box = $('.arc', sheet());
+  if (!box) return;
+  const steps = $$('.arc-step', box), eras = $$('.arc-era', box), bar = $('.arc-bar i', box), where = $('.arc-where', box);
+  if (!reduce) box.classList.add('live');
+  const show = (x) => x.classList.add('seen');
+  arcWatch = new IntersectionObserver((seen) => {
+    for (const x of seen) {
+      if (!x.isIntersecting) continue;
+      show(x.target);
+      const i = steps.indexOf(x.target), era = eras.indexOf(x.target.closest('.arc-era'));
+      bar.style.width = `${(100 * (i + 1)) / steps.length}%`;
+      where.textContent = `${$('time', x.target).textContent}, ${$('h4', eras[era]).firstChild.textContent}`;
+      $$('[data-era]', box).forEach((b, k) => b.classList.toggle('on', k === era));
+      $$('[data-step]', box).forEach((b, k) => b.classList.toggle('past', k <= i));
+    }
+  }, { rootMargin: '-30% 0px -55% 0px' });
+  steps.forEach((s) => arcWatch.observe(s));
+  const early = new IntersectionObserver((seen, o) => { for (const x of seen) if (x.isIntersecting) { show(x.target); o.unobserve(x.target); } }, { rootMargin: '0px 0px -8% 0px' });
+  steps.forEach((s) => early.observe(s));
+}
+
+let held = null;
+const signed = (v) => (v == null ? '' : `${v < 0 ? '-' : '+'}${dollars(Math.abs(v))}`);
+const moved = (v) => (v == null ? '' : `<span class="${v < 0 ? 'neg' : 'pos'}">${v < 0 ? 'Down' : 'Up'} ${esc(dollars(Math.abs(v)))}</span>`);
+
+function heldBody() {
+  const d = held, money = d.show_gain, price = (r) => (r.price == null ? 'No price yet' : `${r.currency === 'USD' ? '$' : `${esc(r.currency)} `}${r.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: r.price < 1 ? 6 : 2 })}`);
+  const priced = new Set((d.positions || []).map((r) => r.symbol));
+  const waiting = d.holdings.filter((h) => !priced.has(h.symbol)).map((h) => ({ symbol: h.symbol, shares: Number(h.shares) || 0, buy: null, price: null, pct: null, value: null, gain: null, source: 'typed' }));
+  const rows = [...(d.positions || []), ...waiting].map((r) => `<tr>
+    <th scope="row">${esc(r.symbol)}<small>${esc(r.name || (r.price == null ? 'Checking the price' : ''))}${r.stale ? ', last known price' : ''}</small></th>
+    <td class="r">${r.shares ? esc(r.shares.toLocaleString('en-US', { maximumFractionDigits: 8 })) : 'Watching'}</td>
+    <td class="r">${price(r)}<small class="${(r.pct || 0) < 0 ? 'neg' : 'pos'}">${r.pct == null ? '' : `${r.pct < 0 ? '-' : '+'}${Math.abs(r.pct).toFixed(2)}%`}</small></td>
+    <td class="r">${r.value == null ? '' : dollars(r.value)}</td>
+    ${money ? `<td class="r">${r.gain == null ? (r.shares ? '<span class="dim">Add a buy price</span>' : '') : moved(r.gain)}${r.buy == null ? '' : `<small>from ${r.currency === 'USD' ? '$' : `${esc(r.currency || '')} `}${r.buy.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</small>`}</td>` : ''}
+    <td>${r.source === 'typed' ? `<button type="button" class="ghost" data-held-remove="${esc(r.symbol)}" aria-label="Remove ${esc(r.symbol)}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg></button>` : ''}</td></tr>`).join('');
+  const off = new Set(d.tape_off);
+  return `${rows ? `<table class="num-table held"><thead><tr><th scope="col">Holding</th><th scope="col" class="r">Shares</th><th scope="col" class="r">Price</th><th scope="col" class="r">Value</th>${money ? '<th scope="col" class="r">Up or down</th>' : ''}<th scope="col"><span class="vh">Remove</span></th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="empty">Add what you hold, or a symbol to watch.</p>'}
+    <form class="held-add" id="held-add">
+      <label><span>Symbol</span><input name="symbol" required maxlength="15" placeholder="AAPL or BTC-USD" autocapitalize="characters" spellcheck="false"></label>
+      <label><span>Shares</span><input name="shares" inputmode="decimal" placeholder="10"></label>
+      <label><span>Buy price</span><input name="buy" inputmode="decimal" placeholder="150.25"></label>
+      <button type="submit" class="btn">Add</button>
+      <label class="held-tape"><input type="checkbox" name="tape" checked> Show on the tape</label>
+    </form>
+    <p class="small" id="held-note" role="status">${d.error ? 'The last pricing run failed, so these are the last good numbers. ' : ''}${d.feed ? 'Holdings from your portfolio address appear here too. ' : ''}${d.missing?.length ? `${esc(d.missing.join(' and '))}: not counted in full just now. ` : ''}Prices from Yahoo Finance, a little delayed. Leave shares blank to only watch a symbol.</p>
+    ${d.markets.length ? `<h3>What the tape shows</h3><ul class="tape-picks">${d.markets.map((m) => `<li><label><input type="checkbox" data-tape="${esc(m.label)}"${off.has(m.label) ? '' : ' checked'}> ${esc(m.label)}</label></li>`).join('')}</ul>` : ''}`;
+}
+
+const saveValues = (values) => fetch('/api/settings', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ values }) });
+
+async function refreshHeld() {
+  const box = $('#held-body');
+  if (!box) return;
+  const r = await fetch('/api/detail/investments/', { credentials: 'same-origin' });
+  if (!r.ok) return;
+  held = await r.json();
+  box.innerHTML = heldBody();
+  dispatchEvent(new Event('paper:reload'));
+}
+
+async function saveHoldings(next) {
+  const before = held.holdings;
+  held.holdings = next;  // at once, so a second quick change builds on this one
+  const r = await saveValues({ HOLDINGS: next });
+  if (!r.ok) {
+    held.holdings = before;
+    $('#held-note').textContent = (await r.json()).error || 'That could not be saved.';
+    return false;
+  }
+  [300, 3000, 12000].forEach((ms) => setTimeout(refreshHeld, ms));  // the price arrives a little after the holding
+  return true;
 }
 
 let spent = null, spentDays = 30, spentDay = null;
@@ -126,8 +233,9 @@ function cited(text) {
     return `<a class="ref" href="/world/event/${id}" aria-label="Source ${seen.indexOf(id) + 1}">${seen.indexOf(id) + 1}</a>`;
   });
 }
-const notes = (list) => (list || []).map((n) => `<section class="intel"><h3>${esc(n.headline)}</h3>${n.body ? `<p>${cited(n.body)}</p>` : ''}${n.bullets?.length ? `<ul>${n.bullets.map((b) => `<li>${cited(typeof b === 'string' ? b : b.text || '')}</li>`).join('')}</ul>` : ''}<time>${esc(ago(n.ts))}</time></section>`).join('');
-const stories = (rows) => `<ul class="wire-list">${rows.map((s) => `<li><a href="${eventHref(s)}">${esc(s.t)}</a><span>${esc([s.place, ago(s.ts)].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>`;
+const bullet = (b) => (typeof b === 'string' ? b : b.text || '').replace(/^\[(high|medium|low)\]\s*/i, '').replace(/\s*\((up|down|flat)[^)]*confidence[^)]*\)/gi, '');  // the analyst's working, not the reader's
+const notes = (list) => (list || []).map((n) => `<section class="intel"><h3>${esc(n.headline)}</h3>${n.body ? `<p>${cited(n.body)}</p>` : ''}${n.bullets?.length ? `<ul>${n.bullets.map((b) => `<li>${cited(bullet(b))}</li>`).join('')}</ul>` : ''}<time>${esc(ago(n.ts))}</time></section>`).join('');
+const stories = (rows) => `<ul class="wire-list">${rows.map((s) => `<li><a href="${eventHref(s)}">${esc(s.t)}</a><span>${esc([s.src, s.place, ago(s.ts)].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>`;
 const onGlobe = (lat, lon) => (lat != null ? `<button type="button" class="ghost text" data-globe="${esc(lat)},${esc(lon)}">Show on the globe</button>` : '');
 
 function storyBody(s) {
@@ -165,11 +273,14 @@ const VIEWS = {
   },
 
   theater(d) {
+    const h = d.history, turns = h ? h.eras.reduce((n, e) => n + e.events.length, 0) : 0, years = h?.began ? new Date().getFullYear() - Number(h.began.slice(0, 4)) : 0;
     return {
-      head: d.name, deck: `Escalation stands at ${d.esc} of 100.`, meta: `${d.events.length} recent stories`,
+      head: d.name, deck: h?.summary || `Escalation stands at ${d.esc} of 100.`, meta: `${whole(d.events.length)} recent ${d.events.length === 1 ? 'story' : 'stories'}`,
       scene: reportScene(uniqueReports([...d.events, ...getDots().filter((x) => x.w === d.id)]), null, `Reports in ${d.name}, over time`),
-      body: `${notes(d.intel)}<h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}`,
-      side: onGlobe(d.lat, d.lon), locate: [d.lat, d.lon],
+      wide: h ? arc(h, d) : '',
+      body: `<h3>What's happening now</h3>${notes(d.intel.slice(0, 1))}${d.intel.length > 1 ? `<details class="older"><summary>Earlier notes</summary>${notes(d.intel.slice(1))}</details>` : ''}<h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}`,
+      side: `${facts([['Escalation', `${d.esc} of 100`], ['Began', h?.began ? longDate(h.began) : ''], ['Running for', years ? `${whole(years)} years` : ''], ['Turning points', turns || '']])}${h?.began_note ? `<p class="small">${esc(h.began_note)}</p>` : ''}${d.lat == null ? '<p class="small">This one is about what two sides do, not one place, so it has no spot on the globe.</p>' : onGlobe(d.lat, d.lon)}`,
+      locate: [d.lat, d.lon],
     };
   },
 
@@ -222,6 +333,7 @@ const VIEWS = {
 
   machine(d) {
     machine = d;
+    machineRange = '24h';
     if (!d.ok) return { head: d.name, deck: 'Not answering right now.', meta: d.role };
     const load = `${d.load[0].toFixed(2)} on ${d.cores} cores`;
     const fills = d.full_in == null ? 'Not filling up' : `In about ${whole(Math.round(d.full_in))} days`;
@@ -231,7 +343,7 @@ const VIEWS = {
     const guests = (d.guests || []).map((g) => `<li><a href="/systems/container/${g.id}">${esc(g.id)} ${esc(g.name)}</a> <span class="small">${esc(g.status)}, ${g.cpu ?? 0}% CPU</span></li>`).join('');
     return {
       head: d.name, deck: `CPU ${Math.round(d.cpu)}%, memory ${Math.round((100 * d.mem_used) / (d.mem_total || 1))}%, disk ${Math.round((100 * d.disk_used) / (d.disk_total || 1))}%.`, meta: `${d.role}, up ${span(d.uptime)}`,
-      body: `<div class="seg ranges" role="group" aria-label="Time range">${['1h', '24h', '7d', '30d'].map((r) => `<button type="button" data-range="${r}" aria-pressed="${r === '24h'}">${r}</button>`).join('')}</div>
+      body: `<div class="plot-tools"><div class="seg ranges" role="group" aria-label="Time range">${['1h', '24h', '7d', '30d'].map((r) => `<button type="button" data-range="${r}" aria-pressed="${r === '24h'}">${r}</button>`).join('')}</div>${lookPicker()}</div>
         <div id="machine-charts">${machineCharts(d, '24h')}</div>
         ${volumes ? `<h3>Volumes</h3><table class="num-table"><tbody>${volumes}</tbody></table>` : ''}
         ${pools ? `<h3>Storage pools</h3><ul class="plain">${pools}</ul>` : ''}
@@ -258,6 +370,22 @@ const VIEWS = {
     };
   },
 
+  investments(d) {
+    held = d;
+    const line = d.total == null ? 'Add what you hold, or a symbol to watch, and it shows on the front page and the tape.' : `Worth ${dollars(d.total)}${d.show_gain && d.gain != null ? `, ${d.gain < 0 ? 'down' : 'up'} ${dollars(Math.abs(d.gain))} (${Math.abs(d.gain_pct || 0).toFixed(1)}%) from what you paid` : ''}.`;
+    return {
+      head: 'Investments', deck: line, meta: d.as_of ? `Priced ${ago(d.as_of)}` : '',
+      body: `${d.total == null ? '' : facts([['Total', dollars(d.total)], ['Today', signed(d.day)], ['You paid', d.show_gain && d.cost != null ? dollars(d.cost) : ''], ['Up or down', d.show_gain ? signed(d.gain) : ''], ['No buy price', d.show_gain && d.no_buy ? d.no_buy : '']])}<div id="held-body">${heldBody()}</div>`,
+    };
+  },
+
+  saved(d) {
+    return {
+      head: 'Saved stories', deck: d.saved.length ? `${whole(d.saved.length)} to read, on every device.` : 'Stories you save show here, on every device.',
+      body: d.saved.length ? `<ul class="wire-list">${d.saved.map((s) => `<li><a href="${esc(reading(s.url))}">${esc(s.title || s.url)}</a><span>${esc([s.site, ago(s.saved)].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>` : '<p class="empty">Open a story and press Save.</p>',
+    };
+  },
+
   market(d) {
     const num = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
     return {
@@ -272,7 +400,7 @@ const VIEWS = {
       head: d.title || d.site, deck: d.deck, meta: [d.site, d.author, d.published ? stamp(d.published) : ''].filter(Boolean).join(', '),
       hero: d.image ? picture(d.image) : null,
       side: spread(d.spread),
-      body: d.body ? storyBody(d) : `<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
+      body: d.body ? `<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${'speechSynthesis' in window ? '<button type="button" class="ghost text" data-listen aria-pressed="false">Listen</button>' : ''}</div>${storyBody(d)}` : `<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
     };
   },
 
@@ -367,7 +495,7 @@ function page(v, m) {
   const side = where || v.side ? `<aside class="page-side">${where}${v.side || ''}</aside>` : '';
   return `<nav class="crumb" aria-label="Back">${back}</nav>${art}
     <header class="page-top${v.poster ? ' with-poster' : ''}">${left}<h1 class="page-head" tabindex="-1">${tight(v.head)}</h1><div class="page-sub">${sub}</div></header>${hero}${stage}
-    <div class="page-grid${side ? '' : ' solo'}"><div class="page-main">${v.body || ''}</div>${side}</div>`;
+    ${v.wide || ''}<div class="page-grid${side ? '' : ' solo'}"><div class="page-main">${v.body || ''}</div>${side}</div>`;
 }
 
 let front = 0, turn = 0, still = null, stage = null, getDots = () => [];
@@ -420,7 +548,7 @@ export async function route() {
     return;
   }
   if (sheet().hidden) front = scrollY;
-  const data = fetch(m.url, { credentials: 'same-origin' }).then(async (r) => ({ ok: r.ok, body: await r.json() })).catch(() => ({ ok: false, body: {} }));
+  const data = fetch(m.url, { credentials: 'same-origin' }).then(async (r) => { const body = await r.json(); look.style = body.look || look.style; return { ok: r.ok, body }; }).catch(() => ({ ok: false, body: {} }));
   await swap(true, () => {
     sheet().innerHTML = '<p class="going">Turning the page</p>';
     scrollTo(0, 0);
@@ -440,6 +568,7 @@ export async function route() {
   sheet().innerHTML = page(v, m);
   mountLocator();
   mountStage(v);
+  mountArc();
   document.title = `${v.head} | ${NAME}`;
   $('.page-head', sheet())?.focus({ preventScroll: true });
 }
@@ -451,13 +580,64 @@ export function go(href) {
 
 export function start(fly, dots) {
   getDots = dots;
+  document.addEventListener('submit', async (e) => {
+    if (e.target.id !== 'held-add') return;
+    e.preventDefault();
+    const f = new FormData(e.target), symbol = String(f.get('symbol')).trim().toUpperCase();
+    const row = { symbol, shares: String(f.get('shares')).trim(), buy: String(f.get('buy')).trim(), tape: f.get('tape') ? 'yes' : 'no' };
+    if (await saveHoldings([...held.holdings, row])) e.target.reset();  // another lot of the same stock adds up, at the average price
+  });
+  document.addEventListener('change', (e) => {
+    if (!e.target.matches('[data-tape]')) return;
+    saveValues({ TAPE_OFF: $$('[data-tape]').filter((b) => !b.checked).map((b) => b.dataset.tape).join(',') }).then(() => dispatchEvent(new Event('paper:reload')));
+  });
   addEventListener('popstate', route);
   document.addEventListener('error', (e) => { if (e.target.matches?.('.hero img, .page-poster img')) e.target.parentNode.remove(); }, true);  // a dead picture leaves no hole
   document.addEventListener('click', (e) => {
     const range = e.target.closest('[data-range]');
     if (range && machine) {
       $$('[data-range]', sheet()).forEach((b) => b.setAttribute('aria-pressed', String(b === range)));
-      $('#machine-charts').innerHTML = machineCharts(machine, range.dataset.range);
+      machineRange = range.dataset.range;
+      $('#machine-charts').innerHTML = machineCharts(machine, machineRange);
+      return undefined;
+    }
+    const gone = e.target.closest('[data-held-remove]');
+    if (gone && held) {
+      saveHoldings(held.holdings.filter((r) => r.symbol !== gone.dataset.heldRemove));
+      return undefined;
+    }
+    const jump = e.target.closest('[data-era], [data-step]');
+    if (jump) {
+      $(jump.dataset.era ? `#era-${jump.dataset.era}` : `#step-${jump.dataset.step}`, sheet())?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: jump.dataset.era ? 'start' : 'center' });
+      return undefined;
+    }
+    const keep = e.target.closest('[data-save]');
+    if (keep) {
+      const on = keep.getAttribute('aria-pressed') !== 'true';
+      keep.setAttribute('aria-pressed', String(on));
+      keep.textContent = on ? 'Saved' : 'Save';
+      fetch('/api/saved', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ url: keep.dataset.save, title: keep.dataset.title, site: keep.dataset.site, saved: on }) }).then(() => dispatchEvent(new Event('paper:reload')));
+      return undefined;
+    }
+    const listen = e.target.closest('[data-listen]');
+    if (listen) {
+      const on = listen.getAttribute('aria-pressed') !== 'true';
+      speechSynthesis.cancel();
+      listen.setAttribute('aria-pressed', String(on));
+      listen.textContent = on ? 'Stop' : 'Listen';
+      if (on) {
+        const talk = new SpeechSynthesisUtterance($('.page-body', sheet()).textContent);
+        talk.onend = () => { listen.setAttribute('aria-pressed', 'false'); listen.textContent = 'Listen'; };
+        speechSynthesis.speak(talk);
+      }
+      return undefined;
+    }
+    const pick = e.target.closest('[data-look]');
+    if (pick) {
+      look.style = pick.dataset.look;
+      $$('[data-look]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.look === look.style)));
+      if ($('#machine-charts')) $('#machine-charts').innerHTML = machineCharts(machine, machineRange);
+      fetch('/api/layout', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ chart: look.style }) }).then(() => dispatchEvent(new Event('paper:reload')));
       return undefined;
     }
     const usePick = e.target.closest('[data-usage-days], [data-usage-day], [data-usage-step]');

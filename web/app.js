@@ -1,6 +1,7 @@
 import { makeGlobe } from '/globe.js';
-import { $, $$, esc, usd, whole, dollars, pct, plural, ago, span, bytes, dayName, dayKey, when, ICON, lineChart, dayBars, tight } from '/lib.js';
-import { start, go, reading, picture, eventHref } from '/detail.js';
+import { $, $$, esc, usd, whole, dollars, pct, plural, ago, span, bytes, dayName, dayKey, when, ICON, lineChart, dayBars, look, lookPicker, tight } from '/lib.js';
+import { showDock, openDock } from '/dock.js';
+import { start, go, reading, picture, eventHref, isFront } from '/detail.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const THEMES = ['morning', 'night', 'cobalt', 'glass'];
@@ -45,9 +46,11 @@ function front(p) {
     p.on.systems && ['Systems', '/#systems', pr.length ? (bad ? plural(bad, 'issue') : `${pr.length} of ${pr.length} up`) : 'Checking', bad ? 'bad' : 'good'],
     p.on.money && [`${m ? m.days : 30}-day result`, '/#business', m ? `${m.result > 0 && m.missing.length ? 'At most ' : ''}${usd(m.result)}` : 'Counting', m && m.result < 0 ? 'neg' : ''],
     p.on.usage && p.usage.last && ['AI, last day', '/usage', dollars(p.usage.last.worth), ''],
+    p.invest.total != null && ['Investments', '/investments', `${dollars(p.invest.total)}${p.invest.gain == null ? '' : ` ${p.invest.gain < 0 ? '-' : '+'}${dollars(Math.abs(p.invest.gain))}`}`, p.invest.gain < 0 ? 'neg' : p.invest.gain > 0 ? 'pos' : ''],
     p.on.mail && ['Mail', '/#mail', (p.mail?.need || []).length ? `${p.mail.need.length} need you` : p.mail_status?.as_of ? 'Nothing urgent' : 'Checking', (p.mail?.need || []).length ? 'bad' : ''],
     p.on.media && ['Plex today', '/#arts', med ? (fresh ? `${fresh} new` : 'Nothing new') : 'Checking', ''],
-    p.on.world && ['World index', '/#world', w ? Math.round(w.index?.value ?? w.index ?? 0) : 'Waiting', ''],
+    p.on.world && ['World tension', '/#world', w ? `${Math.round(w.index?.value ?? w.index ?? 0)} of 100` : 'Waiting', ''],
+    p.shelf.saved.length > 0 && ['Saved stories', '/saved', p.shelf.saved.length, ''],
   ].filter(Boolean);
   $('#glance').innerHTML = rows.map(([k, h, v, c]) => `<div><dt><a href="${esc(h)}">${esc(k)}</a></dt><dd class="${c}">${esc(v)}</dd></div>`).join('');
 
@@ -100,12 +103,13 @@ function covered(s) {
 function tech(p) {
   const d = p.news.data, b = p.brief.data, L = d?.tech_lead;
   const earlier = (b?.earlier || []).map((i) => `<li><a href="${issueHref(i)}"><b>${esc(i.title)}</b><span>${esc(i.meta)}</span></a></li>`).join('');
+  $('#techbody').classList.toggle('solo', !b && !earlier);
   $('#techbody').innerHTML = `
     <div class="tech-main">
       ${L ? `<a class="tech-lead" href="${reading(L.u)}"><span class="photo"><img src="${picture(L.img)}" alt="" loading="lazy"></span><span><h3 class="sub-head">${tight(L.t)}</h3>${L.sum ? `<span class="tech-sum">${esc(L.sum)}</span>` : ''}<span class="tech-by">${esc(covered(L))}, ${esc(ago(L.ts))}</span></span></a>` : ''}
       <div class="wire" id="techwire"></div>
     </div>
-    <aside class="earlier">
+    <aside class="earlier"${!b && !earlier ? ' hidden' : ''}>
       ${b ? `<h3>The daily brief</h3><a class="daily" href="${issueHref(b)}"><b>${tight(b.headline)}</b><span>${esc(b.deck)}</span><span>${esc(b.meta || b.title)}</span></a>` : ''}
       ${earlier ? `<h3>Earlier issues</h3><ul>${earlier}</ul>` : ''}
     </aside>`;
@@ -164,28 +168,25 @@ function world(p) {
     </div>` : ''}`;
   wireList(p, 'world');
 
-  const items = w.markets.slice(0, 12).map((m) => `<span class="${(m.pct || 0) < 0 ? 'neg' : 'pos'}">${esc(m.label)} ${(m.pct || 0) < 0 ? ICON.down : ICON.up} ${Math.abs(m.pct || 0).toFixed(1)}%</span>`).join('');
-  $('#tape').innerHTML = items ? `<div class="tape-run">${items}</div><div class="tape-run" aria-hidden="true">${items}</div>` : '';
-
-  $('#theaters').innerHTML = w.theaters.slice(0, 5).map((t) => `<li><a href="/world/theater/${esc(t.id)}">${esc(t.name)}</a><b>${t.esc}</b><button type="button" class="locate" data-fly="${esc(t.lat)},${esc(t.lon)}" aria-label="Show ${esc(t.name)} on the globe"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><path d="M8 1v3.2M8 11.8V15M1 8h3.2M11.8 8H15"/></svg></button></li>`).join('');
+  $('#theaters').innerHTML = w.theaters.slice(0, 5).map((t) => `<li><a href="/world/theater/${esc(t.id)}">${esc(t.name)}</a><b>${t.esc}</b>${t.lat == null ? '' : `<button type="button" class="locate" data-fly="${esc(t.lat)},${esc(t.lon)}" aria-label="Show ${esc(t.name)} on the globe"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><path d="M8 1v3.2M8 11.8V15M1 8h3.2M11.8 8H15"/></svg></button>`}</li>`).join('');
   if (globe) {
     const key = w.dots.length + (w.ts || '');
     if (key !== dotsKey) { dotsKey = key; globe.setDots(w.dots); }
-    const lk = w.theaters.slice(0, 4).map((t) => t.id).join();
-    if (lk !== labelsKey) { labelsKey = lk; globe.setLabels(w.theaters.slice(0, 4), $('#labels')); }
+    const placed = w.theaters.filter((t) => t.lat != null).slice(0, 4), lk = placed.map((t) => t.id).join();  // a trade war has no spot on the map, so the next theater takes the label
+    if (lk !== labelsKey) { labelsKey = lk; globe.setLabels(placed, $('#labels')); }
   }
 }
 
 // One running list per desk, newest first: each line is one story, however many outlets carried it.
 function wireList(p, name) {
-  const W = WIRES[name], el = $(W.el);
+  const W = WIRES[name], el = $(W.el), read = new Set(p.shelf.read);
   if (!el) return;
   const desks = { world: NEWS, tech: TECH, sports: ['sports'] }[name];
-  const heads = (p.news.data?.wire || []).filter((n) => n.desks.some((d) => desks.includes(d))).map((n) => ({ t: n.t, href: reading(n.u), by: n.n > 1 ? `${n.src} and ${n.n - 1} more` : n.src, ts: n.ts, tabs: n.desks, wide: n.n >= 3 }));
+  const heads = (p.news.data?.wire || []).filter((n) => n.desks.some((d) => desks.includes(d))).map((n) => ({ t: n.t, href: reading(n.u), u: n.u, by: n.n > 1 ? `${n.src} and ${n.n - 1} more` : n.src, ts: n.ts, tabs: n.desks, wide: n.n >= 3 }));
   const reports = name === 'world' ? (p.world.data?.stories || []).map((s) => ({ t: s.t, href: eventHref(s), by: s.src, ts: s.ts, tabs: s.s >= 0.55 ? [s.k, 'all'] : [s.k] })) : [];
   const rows = [...heads, ...reports].filter((r) => (W.tab === 'all' ? heads.includes(r) || r.tabs.includes('all') : r.tabs.includes(W.tab))).sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  el.innerHTML = `<div class="wire-top"><h3 class="sub-head">The wire</h3><div class="seg" role="group" aria-label="Filter the wire">${W.tabs.map(([k, t]) => `<button type="button" data-wire="${name}:${k}" aria-pressed="${k === W.tab}">${t}</button>`).join('')}</div></div>
-    <ul class="wire-list two">${rows.slice(0, W.more).map((r) => `<li class="${r.wide ? 'wide-story' : ''}"><a href="${esc(r.href)}">${esc(r.t)}</a><span>${esc(r.by)}, ${esc(ago(r.ts))}</span></li>`).join('') || '<li>Nothing on this line yet.</li>'}</ul>
+  el.innerHTML = `<div class="wire-top"><h3 class="sub-head">The wire</h3><div class="seg" role="group" aria-label="Filter the wire"${W.tabs.length > 1 ? '' : ' hidden'}>${W.tabs.map(([k, t]) => `<button type="button" data-wire="${name}:${k}" aria-pressed="${k === W.tab}">${t}</button>`).join('')}</div></div>
+    <ul class="wire-list two">${rows.slice(0, W.more).map((r) => `<li class="${r.wide ? 'wide-story' : ''}${read.has(r.u) ? ' read' : ''}"><a href="${esc(r.href)}">${esc(r.t)}</a><span>${esc(r.by)}, ${esc(ago(r.ts))}</span></li>`).join('') || '<li>Nothing on this line yet.</li>'}</ul>
     ${rows.length > W.more ? `<button type="button" class="ghost text" data-more="${name}">Show ${Math.min(20, rows.length - W.more)} more</button>` : ''}`;
 }
 
@@ -446,7 +447,7 @@ const machineHref = (h) => `/systems/machine/${encodeURIComponent(h.name)}`;
 function hostRow(h, m) {
   const isOpen = open.has(h.name);
   if (!h.ok) return `<tr class="host down"><th scope="row">${ICON.bad}${esc(h.name)}<small>${esc(h.role)}</small></th><td colspan="5">Not answering</td></tr>`;
-  const extra = h.name === 'Proxmox' ? `<tr class="more"><td colspan="6"><p class="small"><a href="${machineHref(h)}">History, volumes and backups</a></p>${lineChart(m.history)}${guestsTable(m.guests)}</td></tr>`
+  const extra = h.name === 'Proxmox' ? `<tr class="more"><td colspan="6">${lookPicker()}<p class="small"><a href="${machineHref(h)}">History, volumes and backups</a></p>${lineChart(m.history)}${guestsTable(m.guests)}</td></tr>`
     : `<tr class="more"><td colspan="6"><p class="small"><a href="${machineHref(h)}">History, processes and volumes</a>. ${esc(h.cores)} cores${h.temp ? `, ${esc(h.temp)} C` : ''}. Largest volume ${esc(h.disk_mount)}: ${bytes(h.disk_used)} of ${bytes(h.disk_total)}.${h.failed_units?.length ? ` Failed: ${esc(h.failed_units.join(', '))}.` : ''}</p></td></tr>`;
   return `<tr class="host"><th scope="row"><button type="button" class="expander" data-host="${esc(h.name)}" aria-expanded="${isOpen}">${ICON.good}${esc(h.name)}<small>${esc(h.role)}</small></button></th>
     <td data-label="CPU">${meter(h.cpu)}</td><td data-label="Memory">${meter(pct(h.mem_used, h.mem_total), 85)}</td><td data-label="Disk">${meter(pct(h.disk_used, h.disk_total), 85, 93)}</td><td class="r" data-label="Load">${h.load[0].toFixed(2)}</td><td class="r" data-label="Up">${span(h.uptime)}</td></tr>${isOpen ? extra : ''}`;
@@ -481,6 +482,7 @@ function systems(p) {
       ${toggle}
     </div>
     ${list ? `<ul class="worries">${list}</ul>` : ''}
+    ${(pr || []).length ? `<ul class="launch" aria-label="Open a service">${pr.map((r) => `<li><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.name)}</a></li>`).join('')}</ul>` : ''}
     <div class="svc-wrap">${groups || '<p class="empty">No problems to show.</p>'}</div>
     ${m ? `<table class="machines"><caption>Machines</caption><thead><tr><th scope="col">Machine</th><th scope="col">CPU</th><th scope="col">Memory</th><th scope="col">Disk</th><th scope="col" class="r">Load</th><th scope="col" class="r">Up</th></tr></thead><tbody>${m.hosts.map((h) => hostRow(h, m)).join('')}</tbody></table>` : ''}
     <div class="store"><h4>Storage and backups</h4><ul class="plain">${bk}${pools}${disks}${tasks}</ul></div>`;
@@ -507,23 +509,100 @@ function aiUse(p) {
     </div>${u.missing.length ? `<p class="small">${esc(u.missing.join(' and '))} did not answer this time, so their days may be behind.</p>` : ''}`;
 }
 
+// ---------------------------------------------------------------- the tape
+
+function tape(p) {
+  const markets = p.world.data?.markets?.length ? p.world.data.markets : p.tape_quotes;
+  const off = new Set(p.tape_off), run = [...p.invest.tape, ...markets.filter((m) => !off.has(m.label)).slice(0, 12)];
+  const items = run.map((m) => `<span class="${(m.pct || 0) < 0 ? 'neg' : 'pos'}">${esc(m.label)} ${(m.pct || 0) < 0 ? ICON.down : ICON.up} ${Math.abs(m.pct || 0).toFixed(1)}%</span>`).join('');
+  $('#tape').innerHTML = items ? `<div class="tape-run">${items}</div><div class="tape-run" aria-hidden="true">${items}</div>` : '';
+}
+
+// ---------------------------------------------------------------- arranging the page
+
+const USUAL = ['world', 'tech', 'sports', 'mail', 'business', 'usage', 'arts', 'systems'];
+const screenForm = () => (innerWidth < 860 ? 'phone' : 'wide');
+const saveLayout = (body) => fetch('/api/layout', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify(body) });
+let order = null, arranging = false;
+
+function place(next, animate) {
+  const put = () => {
+    const nav = $('.desks'), end = $('.desks a[href="/investments"]').parentNode;
+    let at = $('#arrange-note');
+    for (const id of next) {
+      at.after($(`#${id}`));
+      at = $(`#${id}`);
+      nav.insertBefore($(`.desks a[href="/#${id}"]`).parentNode, end);
+    }
+  };
+  order = [...next];
+  if (animate && document.startViewTransition && !reduce) return document.startViewTransition(put).updateCallbackDone;
+  return put();
+}
+
+function arrange(on) {
+  arranging = on;
+  document.documentElement.classList.toggle('arranging', on);
+  $('#arrange').textContent = on ? 'Done' : 'Arrange';
+  $('#arrange').setAttribute('aria-pressed', String(on));
+  $('#arrange-note').hidden = !on;
+  $('#arrange-text').textContent = `Move sections up or down. Each screen size keeps its own order${paper.layout.learn ? ', and learning starts again from what you choose.' : '.'}`;
+  $$('.desk').forEach((d) => { d.style.viewTransitionName = on ? `desk-${d.id}` : ''; });
+  if (on) $('#arrange-note').scrollIntoView();
+}
+
+function choose(next) {
+  paper.layout.order[screenForm()] = next;
+  saveLayout({ form: screenForm(), order: next });
+  return place(next, true);
+}
+
+function movedNote(p) {
+  const m = p.layout.moved[screenForm()], up = m ? m.to.filter((id, i) => m.from.indexOf(id) > i && !$(`#${id}`).hidden) : [];
+  $('#moved').hidden = !up.length;
+  if (up.length) $('#moved-text').textContent = `${new Intl.ListFormat('en').format(up.map((id) => $(`#${id} .desk-name`).textContent))} moved up, after 2 hours of reading.`;
+}
+
+// What's new since the last visit, worked out here and kept in this browser.
+let lastVisit = null;
+const SEEN = 'paper-last-visit', stamp = () => { try { localStorage.setItem(SEEN, String(Math.floor(Date.now() / 1000))); } catch {} };
+
+function sinceLast(p) {
+  if (lastVisit === null) {
+    try { lastVisit = Number(localStorage.getItem(SEEN)) || 0; } catch { lastVisit = 0; }
+  }
+  const el = $('#since'), away = Date.now() / 1000 - lastVisit;
+  el.hidden = !lastVisit || away < 3600;
+  if (el.hidden) return;
+  const stories = (p.news.data?.wire || []).filter((s) => s.ts > lastVisit).length, alerts = (p.world.data?.alerts || []).filter((a) => a.ts > lastVisit).length;
+  const added = (p.media.data?.added || []).filter((a) => a.at > lastVisit).length;
+  const parts = [stories && plural(stories, 'new story', 'new stories'), alerts && plural(alerts, 'new alert'), added && `${whole(added)} added to Plex`].filter(Boolean);
+  el.hidden = !parts.length;
+  el.textContent = `Since you were here ${ago(lastVisit)}: ${new Intl.ListFormat('en').format(parts)}.`;
+}
+
 // ---------------------------------------------------------------- loading
 
 function render() {
   const p = paper;
-  $('#ask-link').hidden = !p.on.ai;
+  showDock(p);
+  look.style = p.layout.chart;
+  const want = p.layout.order[screenForm()];
+  if (!arranging && String(want) !== String(order)) place(want, drawn);
   for (const [id, key] of DESKS) {
     $(`#${id}`).hidden = !p.on[key];
     $(`.desks a[href="/#${id}"]`).parentNode.hidden = !p.on[key];
   }
   const desk = (draw) => { try { draw(p); } catch (e) { console.error(e); } };  // one desk's odd data leaves the others standing
-  [front, tops, world, tech].forEach(desk);
+  [front, tops, world, tech, tape].forEach(desk);
   desk(p.on.sports ? sports : (x) => wireList(x, 'sports'));
   if (p.on.mail) desk(mail);
   if (p.on.money) desk(business);
   if (p.on.usage) desk(aiUse);
   if (p.on.media) desk(arts);
   if (p.on.systems) desk(systems);
+  desk(movedNote);
+  desk(sinceLast);
   fitAlso();
   if (!drawn) {
     drawn = true;
@@ -644,8 +723,16 @@ $('.plates').addEventListener('keydown', (e) => {
   $(`[data-theme-pick=${next}]`).focus();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 't' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.target.closest('input,select,textarea')) {
-    setTheme(THEMES[(THEMES.indexOf(document.documentElement.dataset.theme) + 1) % THEMES.length]);
+  if (e.metaKey || e.ctrlKey || e.altKey || e.target.closest('input,select,textarea')) return;
+  if (e.key === 't') setTheme(THEMES[(THEMES.indexOf(document.documentElement.dataset.theme) + 1) % THEMES.length]);
+  if (!isFront()) return;
+  if (e.key === '/') {
+    e.preventDefault();
+    $('#find-q').focus();
+  }
+  if (e.key === 'a' && paper?.on.ai) {
+    e.preventDefault();
+    openDock();
   }
 });
 
@@ -670,9 +757,58 @@ const showTip = (e) => {
 document.addEventListener('pointermove', showTip);
 document.addEventListener('pointerdown', showTip);  // a tap has no hover, so it reads the point it lands on
 
+$$('.desk').forEach((d) => {
+  const name = $('.desk-name', d);
+  name.insertAdjacentHTML('afterend', `<div class="desk-move">${[['-1', 'up', 'M8 13V3.5M3.5 8 8 3.5 12.5 8'], ['1', 'down', 'M8 3v9.5M3.5 8 8 12.5 12.5 8']].map(([step, way, path]) => `<button type="button" data-move="${step}" aria-label="Move ${esc(name.textContent)} ${way}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${path}"/></svg></button>`).join('')}</div>`);
+});
+$('#arrange').addEventListener('click', () => arrange(!arranging));
+$('#arrange-reset').addEventListener('click', () => choose(USUAL));
+$('#paper').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-move]');
+  if (!b) return;
+  const id = b.closest('.desk').id, shown = order.filter((d) => !$(`#${d}`).hidden), other = shown[shown.indexOf(id) + Number(b.dataset.move)];
+  if (!other) return;
+  const next = [...order], from = next.indexOf(id), to = next.indexOf(other);
+  [next[from], next[to]] = [next[to], next[from]];
+  Promise.resolve(choose(next)).then(() => b.focus({ preventScroll: true }));  // moving a button drops its focus, and the next press needs it
+});
+$('#moved-keep').addEventListener('click', async () => { await saveLayout({ form: screenForm(), seen: true }); load(); });
+$('#moved-undo').addEventListener('click', async () => { await saveLayout({ form: screenForm(), order: paper.layout.moved[screenForm()].from }); load(); });
+
+// Time on each section, for the layout setting. It counts only while the page is on screen and someone is there.
+let inView = null, lastInput = Date.now(), watched = {};
+['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchmove'].forEach((t) => addEventListener(t, () => { lastInput = Date.now(); }, { passive: true }));
+const watchedTotal = () => Object.values(watched).reduce((a, b) => a + b, 0);
+function sendViews() {
+  if (!watchedTotal()) return;
+  fetch('/api/views', { method: 'POST', keepalive: true, credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ form: screenForm(), seconds: watched }) }).catch(() => {});
+  watched = {};
+}
+setInterval(() => {
+  if (!paper?.layout.learn || document.hidden || Date.now() - lastInput > 60000) return;
+  const page = location.pathname.split('/')[1], where = isFront() ? (scrollY < innerHeight * 0.6 ? 'front' : inView) : USUAL.includes(page) && page;
+  if (!where) return;
+  watched[where] = (watched[where] || 0) + 1;
+  if (watchedTotal() >= 60) sendViews();
+}, 1000);
+addEventListener('pagehide', () => { sendViews(); stamp(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) stamp(); });
+
+let shrunk = false;
+addEventListener('scroll', () => {  // on a phone the bar and the Ask button give the page back once you're reading
+  const next = shrunk ? scrollY > 300 : scrollY > 460;
+  if (next === shrunk) return;
+  shrunk = next;
+  $('.bar').classList.toggle('compact', next);
+  $('#dock').classList.toggle('small', next);
+}, { passive: true });
+
 const here = new IntersectionObserver((en) => {
   for (const x of en) {
     if (x.isIntersecting) {
+      inView = x.target.id;
+      const link = $(`.desks a[href="/#${x.target.id}"]`), nav = $('.desks');
+      if (link && nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: link.offsetLeft - nav.clientWidth / 2 + link.offsetWidth / 2, behavior: reduce ? 'auto' : 'smooth' });
       $$('.desks a').forEach((a) => (a.getAttribute('href') === `/#${x.target.id}` ? a.setAttribute('aria-current', 'true') : a.removeAttribute('aria-current')));
     }
   }
