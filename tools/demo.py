@@ -367,7 +367,7 @@ def demo_world():
     def nowhere(*_, **__):
         raise OSError("the demo stays on this machine")
     s.ai.ask, s.ai.web_search = asked, looked_up
-    s.read_page, s.around, s.war, s.hazard_depth, s.outside_at = read_page, around, war, cyclone, nowhere
+    s.read_page, s.around, s.war, s.war_open, s.hazard_depth, s.outside_at = read_page, around, war, war, cyclone, nowhere
     follows = [priced("HRBR", "Harbor Freight Lines", "NYSE", 141.2, 139.9), TEAM, TOWN, {**s.conflict_card({"id": "north_strait", "name": "The Northern Strait", "esc": 61})},
                {"kind": "topic", "key": "Battery plant", "name": "Battery plant", "rows": [{"t": "New battery plant promises four thousand jobs by 2029", "u": "https://demo.invalid/story/6", "src": "Global Wire", "ts": NOW - 3 * HOUR}, {"t": "Second site named for the battery plant's suppliers", "u": "https://demo.invalid/more/9", "src": "The Ledger", "ts": NOW - 9 * HOUR}], "href": "/topic/Battery%20plant"}]
     cards = [{**c, "id": s.follow_id(c["kind"], c["key"]), "at": NOW} for c in follows]

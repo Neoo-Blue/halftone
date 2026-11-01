@@ -110,9 +110,9 @@ _won = elect.outcome({"decided": False, "rows": [{"party": "A"}, {"party": "B", 
 assert _won["decided"] is False and [r["party"] for r in _won["rows"]] == ["B"], "a row with no numbers isn't a result"
 
 # the job looks again when it should, and a bad answer can't replace a good one
-_real_war, _asked, _soon = s.war, [], (s.datetime.now(s.zone()).date() + s.timedelta(days=2)).isoformat()
+_real_war, _asked, _soon = s.war_open, [], (s.datetime.now(s.zone()).date() + s.timedelta(days=2)).isoformat()
 _doc = {**_us, "date": _soon}
-s.war = lambda path, timeout=30: _asked.append(path) or ({"featured": {"id": "us-2026", "date": _soon, "phase": "campaign"}, "items": []} if path == "/elections" else _doc)
+s.war_open = lambda path, timeout=30: _asked.append(path) or ({"featured": {"id": "us-2026", "date": _soon, "phase": "campaign"}, "items": []} if path == "/elections" else _doc)
 s.save("elections", s.elections_run())
 s.save("elections", s.elections_run())
 assert _asked.count("/elections/us") == 1, "calm before the polls open"
@@ -146,5 +146,15 @@ assert s.election_note_run()["text"] == "A note." and len(_tried) == _n, "and a 
 s.save("election_note", {"text": "Old.", "at": 1})
 s.NOTE_TRIED["at"] = time.time()
 assert s.election_note_run()["text"] == "Old." and len(_tried) == _n, "a provider that's failing gets one try each half hour"
-s.ai.ask, s.ai.ready, s.war = _real_ask, _real_ready, _real_war
+s.ai.ask, s.ai.ready, s.war_open = _real_ask, _real_ready, _real_war
 s.save("elections", {"us": None, "world": []})
+
+# an edition reading WARROOM's own /api still gets the public shapes, which is what the live paper does
+_fetched, _real_fetch = [], s.fetch
+s.fetch = lambda url, **k: _fetched.append(url) or {}
+for _base in ("https://war.example/api", "https://war.example/api/", "https://war.example/api/v1"):
+    settings.update({"WARROOM_URL": _base})
+    s.war_open("/elections")
+assert set(_fetched) == {"https://war.example/api/v1/elections"}, _fetched
+s.fetch = _real_fetch
+settings.update({"WARROOM_URL": ""})

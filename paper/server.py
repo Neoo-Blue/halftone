@@ -248,6 +248,12 @@ def war(path, timeout=30):
     return fetch(f"{C('WARROOM_URL')}{path}", timeout=timeout)
 
 
+def war_open(path, timeout=30):
+    """The public API, whichever address is set. An edition can read WARROOM's own /api, which has the same paths and other shapes, and the election desk is built on the public ones."""
+    base = C("WARROOM_URL").rstrip("/")
+    return fetch(f"{base if base.endswith('/v1') else f'{base}/v1'}{path}", timeout=timeout)
+
+
 # ---------------------------------------------------------------------- the AI brief
 
 def inside(href):
@@ -3088,13 +3094,13 @@ VOTE_WORDS = ("midterm", "midterms", "election", "elections", "voters", "ballot"
 def elections_run():
     """WARROOM's calendar, and the races once a US election is near. An older WARROOM has neither, and the desk just stays away."""
     today, now = datetime.now(zone()).date(), int(time.time())
-    cal = war("/elections", timeout=20)
+    cal = war_open("/elections", timeout=20)
     when, phase = cal.get("featured") or {}, (cal.get("featured") or {}).get("phase")
     old = (load("elections")["data"] or {}).get("us")
     s = None
     if elect.us_on(when.get("date"), today):
         calm = phase in ("campaign", "final") and old and old["id"] == when.get("id") and old["phase"] == phase and now - old.get("fetched", 0) < ELECTION_CALM
-        s = old if calm else {**elect.us(war("/elections/us", timeout=30)), "fetched": now}
+        s = old if calm else {**elect.us(war_open("/elections/us", timeout=30)), "fetched": now}
     fresh = {"us": s, "world": elect.world([e for e in cal.get("items") or [] if isinstance(e, dict)], today)}
     elect.summary(fresh, today, now)  # if this can't be read it mustn't replace a copy that can, and the job keeps the last good one
     return fresh
@@ -3164,7 +3170,7 @@ def d_race(key):
     on = {f["id"] for f in follow_rows()}
     names = [elect.surname(n).title() for n in list(r["noms"].values())[:2]]
     q = plain(f"{r['seat']} {' '.join(names)}", 110)
-    got = waited({"polls": lambda: elect.polls(war(f"/elections/us/races/{key}", timeout=8)), "news": lambda: outside_news(q)})
+    got = waited({"polls": lambda: elect.polls(war_open(f"/elections/us/races/{key}", timeout=8)), "news": lambda: outside_news(q)})
     return {**r, "kind": "race", "office": r["kind"], "phase": s["phase"], "reading": elect.reading(r), "open": elect.open_seat(r), "chase": elect.chase(r), "place": elect.place(r, s), "calls": elect.forecasters(r), "polls": got.get("polls") or [],
             "q": q, "ai": bool(ai.ready() and C("FIND_AI")), "stories": vote_stories(*r["noms"].values()), "news": got.get("news") or [], "followed": follow_id("race", key) in on}
 
@@ -3173,7 +3179,7 @@ def d_ballot(eid):
     e = next((x for x in (live("elections")["data"] or {}).get("world", []) if x["id"] == eid), None)
     if not e:
         raise LookupError(eid)
-    got = waited({"won": lambda: elect.outcome(war(f"/elections/{eid}/outcome", timeout=8)) if e["outcome"] else None, "news": lambda: outside_news(f"{e['country']} election")})
+    got = waited({"won": lambda: elect.outcome(war_open(f"/elections/{eid}/outcome", timeout=8)) if e["outcome"] else None, "news": lambda: outside_news(f"{e['country']} election")})
     on = {f["id"] for f in follow_rows()}
     return {"kind": "ballot", **e, "won": got.get("won"), "q": plain(f"{e['country']} election {' '.join(e['offices'][:2])}", 110), "ai": bool(ai.ready() and C("FIND_AI")), "stories": vote_stories(also=about_all(e["country"]) or (lambda _: False)), "news": got.get("news") or [], "followed": follow_id("ballot", eid) in on}
 
