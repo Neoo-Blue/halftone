@@ -24,5 +24,7 @@ disks=$(df -kP 2>/dev/null | awk 'NR > 1 && $1 ~ /^\// && $2 > 1048576 && !seen[
 raid=0
 [ -r /proc/mdstat ] && raid=$(grep -c '\[[U]*_[U_]*\]' /proc/mdstat)
 failed=$(systemctl --failed --no-legend --plain 2>/dev/null | awk '{sub(/\.service$/, "", $1); gsub(/[\\"]/, "\\\\&", $1); printf "%s\"%s\"", s, $1; s = ","}')
-printf '{"load":[%s,%s,%s],"uptime":%s,"cores":%s,"mem_total":%s,"mem_avail":%s,"cpu":%s,"io":%s,"temp":%s,"net":[%s,%s],"diskio":[%s,%s],"top":[%s],"disks":[%s],"raid_degraded":%s,"failed_units":[%s]}\n' \
-  "$l1" "$l5" "$l15" "$up" "$cores" "$memt" "$mema" "$busy" "$io" "$temp" "$rx" "$tx" "$rd" "$wr" "$top" "$disks" "$raid" "$failed"
+# Only where this user can read Docker. Nothing is printed otherwise, and the paper leaves it off the page.
+containers=$(timeout 3 docker ps -a --format '{{.Names}}|{{.State}}|{{.Status}}' 2>/dev/null | head -60 | awk -F'|' '{gsub(/[\\"]/, "\\\\&"); printf "%s{\"name\":\"%s\",\"state\":\"%s\",\"status\":\"%s\"}", s, $1, $2, $3; s = ","}')
+printf '{"load":[%s,%s,%s],"uptime":%s,"cores":%s,"mem_total":%s,"mem_avail":%s,"cpu":%s,"io":%s,"temp":%s,"net":[%s,%s],"diskio":[%s,%s],"top":[%s],"containers":[%s],"disks":[%s],"raid_degraded":%s,"failed_units":[%s]}\n' \
+  "$l1" "$l5" "$l15" "$up" "$cores" "$memt" "$mema" "$busy" "$io" "$temp" "$rx" "$tx" "$rd" "$wr" "$top" "$containers" "$disks" "$raid" "$failed"

@@ -42,7 +42,20 @@ bad_top = s.host_row("n", "r", {"disks": [{"total": 10, "used": 1, "mount": "/"}
 assert bad_top["top"] == [{"name": "<b>x", "cpu": 1.5, "mem": 0.0}] and len(bad_top["volumes"]) == 1 and bad_top["net"] == [1, 2]
 if Path("/proc/stat").exists():
     report = json.loads(s.subprocess.run(["sh", str(Path(__file__).resolve().parent.parent / "agent" / "stats.sh")], capture_output=True, text=True, timeout=20).stdout)
-    assert len(report["net"]) == 2 and len(report["diskio"]) == 2 and isinstance(report["top"], list) and report["io"] >= 0, report
+    assert len(report["net"]) == 2 and len(report["diskio"]) == 2 and isinstance(report["top"], list) and report["io"] >= 0 and isinstance(report["containers"], list), report
+    fake = Path(tempfile.mkdtemp())
+    (fake / "docker").write_text("#!/bin/sh\nprintf 'web|running|Up 3 days (healthy)\\nod\"d\\\\|restarting|Restarting (1) 5 seconds ago\\n'\n")
+    (fake / "docker").chmod(0o755)
+    faked = json.loads(s.subprocess.run(["sh", str(Path(__file__).resolve().parent.parent / "agent" / "stats.sh")], capture_output=True, text=True, timeout=20, env={**os.environ, "PATH": f"{fake}:{os.environ['PATH']}"}).stdout)
+    assert [(c["name"], c["state"]) for c in faked["containers"]] == [("web", "running"), ('od"d\\', "restarting")], "a quote in a name can't break the report"
+
+docked = s.host_row("n", "r", {"disks": [{"total": 10, "used": 1, "mount": "/"}], "load": [1], "cores": 1, "cpu": 1, "mem_total": 1, "mem_avail": 1, "uptime": 1, "temp": None, "raid_degraded": 0, "failed_units": [],
+                               "containers": [{"name": "web", "state": "running", "status": "Up 3 days (healthy)"}, {"name": "db", "state": "running", "status": "Up 2 hours (unhealthy)"}, {"name": "api", "state": "restarting", "status": "Restarting (1)"}, {"name": "old", "state": "exited", "status": "Exited (0) 2 days ago"}] * 20})
+assert len(docked["containers"]) == 60, "a long list is cut, not trusted"
+docked["containers"] = docked["containers"][:4]
+told = s.worries({"hosts": [docked]}, [], {})
+assert told == [(1, "n: db, api not healthy")], "a stopped container is fine, a sick one isn't"
+assert s.worries({"hosts": [docked]}, [], {}, private=False) == [(1, "n: 2 containers not healthy")], "and what an AI reads names none"
 
 # ---------------------------------------------------------------- what a hostile machine or feed can't do
 good = {"disks": [{"total": 10, "used": 1, "mount": "/"}], "load": [1], "cores": 1, "cpu": 1, "mem_total": 1, "mem_avail": 1, "uptime": 1, "temp": None, "raid_degraded": 0, "failed_units": []}

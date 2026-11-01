@@ -147,7 +147,8 @@ ev = lambda t, **k: {"id": "a", "title": t, "ts": 5, "domain": "kinetic", "sever
 got = s.curated([ev("Real headline here"), ev("Real headline here"), ev("Machine", title_source="generated"), ev("Twist Ties From China", source="federal_register"), ev("Israeli vs Hamas code"), ev("Hidden", screened_out=True), ev("Главное за сегодня, 31 октября")])
 assert [g["t"] for g in got] == ["Real headline here"], got
 
-assert s.alert_line("Escalating: Ukraine / Russia at 69, up from 54 over the past week", 46) == "Ukraine / Russia reached 69, up from 54. Now 46."
+assert s.alert_line("Escalating: Ukraine / Russia at 69, up from 54 over the past week", 66) == "Ukraine / Russia reached 69, up from 54. Now 66."
+assert s.alert_line("Escalating: South China Sea at 44, up from 29 over the past week", 30) is None, "a surge that has fallen back is no longer news"
 assert s.alert_line("New conflict watched: Mali", 40) == "New conflict watched: Mali" and s.alert_line("Escalating: Mali at 9, up from 2 over the past week", None) == "Mali reached 9, up from 2."
 assert s.short_title("\U0001f1f7\U0001f1fa Russian Air Force, : four bombs") == "Russian Air Force: four bombs" and s.outlet_of("https://t.me/x/1") == "Telegram"
 assert s.short_title("▪️ Main news today. Second sentence goes on and on.") == "Main news today." and len(s.short_title("word " * 80)) <= 153

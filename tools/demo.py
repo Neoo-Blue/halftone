@@ -114,6 +114,7 @@ def media():
 def machine(name, role, cpu, mem, disk):
     gb = 2 ** 30
     return {"name": name, "role": role, "ok": True, "cpu": cpu, "mem_used": mem * 32 * gb // 100, "mem_total": 32 * gb, "disk_used": disk * 2000 * gb // 100, "disk_total": 2000 * gb, "disk_mount": "/", "load": [cpu / 25, 1.1, .9], "cores": 8, "uptime": 19 * DAY, "temp": 41.0, "raid_degraded": 0, "failed_units": [],
+            "containers": [{"name": "photos", "state": "running", "status": "Up 6 days (healthy)"}, {"name": "postgres", "state": "running", "status": "Up 19 days"}, {"name": "indexer", "state": "exited", "status": "Exited (0) 3 hours ago"}],
             "volumes": [{"mount": "/", "used": 60 * gb, "total": 240 * gb}, {"mount": "/volume1", "used": disk * 2000 * gb // 100, "total": 2000 * gb}], "top": [{"name": "photos-indexer", "cpu": 31.2, "mem": 6.1}, {"name": "postgres", "cpu": 8.4, "mem": 12.3}, {"name": "backupd", "cpu": 2.1, "mem": 1.8}]}
 
 

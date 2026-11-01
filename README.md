@@ -82,6 +82,8 @@ Every machine gets its own page: CPU, disk wait, memory, disk, network, disk act
 
 For work no address can see, like backups and scheduled scripts, name the job under Job check-ins and have it call in when it finishes. If it goes quiet, or never starts, the paper says so.
 
+Where the script's user can read Docker, the machine's page lists its containers and flags any that keep restarting or fail a health check. Being in the docker group amounts to root on that machine, so that's your call.
+
 Proxmox connects with a read-only token. For any other Linux box, a NAS or a cloud server, copy `agent/stats.sh` to it and lock an SSH key to that one script: the first lines of the file show how. Older copies of the script keep working, but network, disk activity and top processes need the current one.
 
 ## AI

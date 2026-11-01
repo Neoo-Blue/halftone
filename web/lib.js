@@ -85,10 +85,10 @@ export function dotPlot(rows, series, { fmt = (v) => String(v), lo, hi, caption 
 }
 
 // One column a day. With href each opens that day; without it each is a button the page listens for.
-export function dayBars(days, key, { href, picked, label = '' } = {}) {
-  const top = Math.max(...days.map((d) => d[key]), 0), short = (d) => dayName(`${d.day}T12:00:00`).replace(/^\w+, /, '');
+export function dayBars(days, key, { href, picked, label = '', over = key } = {}) {
+  const top = Math.max(...days.map((d) => d[key]), 0), scale = Math.max(top, ...days.map((d) => d[over])), short = (d) => dayName(`${d.day}T12:00:00`).replace(/^\w+, /, '');
   const bar = (d, i) => {
-    const tip = esc(`${dayName(`${d.day}T12:00:00`)}: ${dollars(d[key])}${label}`), fill = `<i style="--h:${top ? Math.max(d[key] ? 2 : 0, (d[key] / top) * 100).toFixed(1) : 0}%;--i:${i}"></i>`;
+    const tip = esc(`${dayName(`${d.day}T12:00:00`)}: ${dollars(d[key])}${label}`), fill = `<i style="--h:${scale ? Math.max(d[key] ? 2 : 0, (d[key] / scale) * 100).toFixed(1) : 0}%;--i:${i}"></i>`;
     return `<li>${href ? `<a href="${esc(href(d))}" data-tip="${tip}" aria-label="${tip}">${fill}</a>` : `<button type="button" data-usage-day="${esc(d.day)}" aria-pressed="${d.day === picked}" data-tip="${tip}" aria-label="${tip}">${fill}</button>`}</li>`;
   };
   return `<p class="chart-note">Highest ${dollars(top)}. Each column is one day.</p><ol class="daybars" style="--n:${days.length}">${days.map(bar).join('')}</ol>

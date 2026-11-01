@@ -204,7 +204,7 @@ function usageBody() {
   const who = Object.values(by).sort((a, b) => b.worth - a.worth).map((w) => `<tr><th scope="row">${esc(w.who)}</th><td class="r">${dollars(w.worth)}</td><td class="r">${dollars(w.charged)}</td></tr>`).join('');
   const at = d.days.indexOf(row);
   return `<h3>Worth at list price</h3>${dayBars(days, 'worth', { picked: row.day })}
-    <h3>Really charged</h3>${dayBars(days, 'charged', { picked: row.day, label: ' charged' })}
+    <h3>Really charged</h3>${dayBars(days, 'charged', { picked: row.day, label: ' charged', over: 'worth' })}
     <div class="use-day"><h3>${esc(dayName(`${row.day}T12:00:00`))}</h3><span>${dollars(row.worth)} worth, ${dollars(row.charged)} charged</span>
       <button type="button" class="ghost text" data-usage-step="-1" ${at ? '' : 'disabled'}>Earlier</button><button type="button" class="ghost text" data-usage-step="1" ${at < d.days.length - 1 ? '' : 'disabled'}>Later</button></div>
     <table class="num-table">${head('Used by')}<tbody>${rows}</tbody></table>
@@ -342,6 +342,7 @@ const VIEWS = {
     const volumes = (d.volumes || []).map((v) => { const share = (100 * v.used) / (v.total || 1); return `<tr><th scope="row">${esc(v.mount)}</th><td><span class="meter ${share >= 93 ? 'bad' : share >= 85 ? 'warn' : ''}" style="--v:${share.toFixed(1)}"><i></i></span> <b>${Math.round(share)}%</b></td><td class="r">${bytes(v.used)} of ${bytes(v.total)}</td></tr>`; }).join('');
     const top = (d.top || []).map((t) => `<tr><th scope="row">${esc(t.name)}</th><td class="r">${t.cpu.toFixed(1)}%</td><td class="r">${t.mem.toFixed(1)}%</td></tr>`).join('');
     const pools = (d.storage?.pools || []).map((z) => `<li>${esc(z.name)}: ${bytes(z.alloc)} of ${bytes(z.size)}, ${esc(z.health.toLowerCase())}</li>`).join('');
+    const docker = [...(d.containers || [])].sort((a, b) => sick(b) - sick(a)).map((c) => `<tr><th scope="row">${esc(c.name)}</th><td class="r${sick(c) ? ' bad' : ''}">${esc(c.status)}</td></tr>`).join('');
     const guests = (d.guests || []).map((g) => `<li><a href="/systems/container/${g.id}">${esc(g.id)} ${esc(g.name)}</a> <span class="small">${esc(g.status)}, ${g.cpu ?? 0}% CPU</span></li>`).join('');
     return {
       head: d.name, deck: `CPU ${Math.round(d.cpu)}%, memory ${Math.round((100 * d.mem_used) / (d.mem_total || 1))}%, disk ${Math.round((100 * d.disk_used) / (d.disk_total || 1))}%.`, meta: `${d.role}, up ${span(d.uptime)}`,
@@ -350,8 +351,9 @@ const VIEWS = {
         ${volumes ? `<h3>Volumes</h3><table class="num-table"><tbody>${volumes}</tbody></table>` : ''}
         ${pools ? `<h3>Storage pools</h3><ul class="plain">${pools}</ul>` : ''}
         ${top ? `<h3>Using the most right now</h3><table class="num-table"><thead><tr><th scope="col">Process</th><th scope="col" class="r">CPU</th><th scope="col" class="r">Memory</th></tr></thead><tbody>${top}</tbody></table>` : ''}
-        ${guests ? `<h3>Containers</h3><ul class="plain">${guests}</ul>` : ''}`,
-      side: facts([['Load', load], ['Memory', `${bytes(d.mem_used)} of ${bytes(d.mem_total)}`], ['Disk fills', fills], ['Temperature', d.temp ? `${d.temp} C` : ''], ['Kernel', d.kernel]]),
+        ${guests ? `<h3>Containers</h3><ul class="plain">${guests}</ul>` : ''}
+        ${docker ? `<h3>Docker</h3><table class="num-table"><tbody>${docker}</tbody></table>` : ''}`,
+      side: facts([['Docker', docker ? `${d.containers.filter((c) => c.state === 'running').length} of ${d.containers.length} running` : ''], ['Load', load], ['Memory', `${bytes(d.mem_used)} of ${bytes(d.mem_total)}`], ['Disk fills', fills], ['Temperature', d.temp ? `${d.temp} C` : ''], ['Kernel', d.kernel]]),
     };
   },
 
@@ -542,6 +544,8 @@ function swap(show, paint) {
 export function isFront() {
   return !match();
 }
+
+const sick = (c) => c.state === 'restarting' || c.status.includes('unhealthy');
 
 export async function route() {
   const m = match(), mine = (turn += 1);

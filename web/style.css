@@ -269,6 +269,7 @@ h4:first-child { margin-top: 0; }
 .odds i { position: absolute; inset: 0; width: calc(var(--v) * 1%); background: radial-gradient(circle, var(--ink) 40%, transparent 44%) 0 0 / 7.4px 9px; }
 
 .num-table { font: 400 15px/1.25 var(--ui); }
+.num-table .bad { color: var(--bad); }
 .num-table caption { font: 700 15px/1.2 var(--ui); padding-bottom: 8px; }
 .num-table th, .num-table td { padding: 10px 8px 10px 0; border-top: var(--rule) solid var(--hair); vertical-align: middle; }
 .num-table thead th { border-top: 0; color: var(--ink2); font-size: 13px; font-weight: 600; white-space: nowrap; }
@@ -709,7 +710,7 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 .find input::placeholder { color: var(--ink3); opacity: 1; }
 #sportsbody .wire-top { flex-wrap: wrap; }
 #sportsbody .seg { flex-wrap: wrap; max-width: 100%; }
-.games { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0 26px; margin-bottom: 18px; }
+.games { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(230px, calc(100% / var(--cols, 4) - 26px)), 1fr)); gap: 0 26px; margin-bottom: 18px; }
 .game { border-top: var(--rule) solid var(--hair); animation: rise .6s var(--ease) both; }
 .game a { display: block; padding: 10px 0 12px; text-decoration: none; }
 .game-time { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font: 600 12.5px/1.2 var(--ui); color: var(--ink2); }

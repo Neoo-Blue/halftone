@@ -336,11 +336,14 @@ def outlet_of(url):
 
 
 def alert_line(text, score):
-    """A surge alert is a past peak, and the score has often fallen since, so "Escalating" would be a false label today."""
+    """A surge alert is a past peak, and the score has often fallen since, so "Escalating" would be a false label today. One that has fallen most of the way back is no longer news."""
     hit = re.fullmatch(r"Escalating: (.+) at (\d+), up from (\d+) over the past week", text or "")
     if not hit:
         return text
-    return f"{hit.group(1)} reached {hit.group(2)}, up from {hit.group(3)}." + (f" Now {score}." if score is not None else "")
+    name, peak, start = hit.group(1), int(hit.group(2)), int(hit.group(3))
+    if score is not None and score <= (peak + start) / 2:
+        return None
+    return f"{name} reached {peak}, up from {start}." + (f" Now {score}." if score is not None else "")
 
 
 def curated(events, limit=48, notices=False):
@@ -380,12 +383,13 @@ def world():
     top = curated(recent)
     scores = {t["id"]: round(float(t.get("escalation") or 0)) for t in state.get("theaters", [])}
     watched = lambda a: ((a.get("id") or "").split(":") + ["", "", ""])[2]
+    lines = [(alert_line(clean_title(a.get("headline")), scores.get(watched(a))), a) for a in alerts]
     return {
         "index": state.get("escalation_index"), "assessed": assessment.get("escalation_index"), "headline": clean_title(assessment.get("headline")), "ts": assessment.get("ts"),
         "rationale": first_block((assessment.get("sections") or {}).get("escalation_rationale")), "most": first_block((assessment.get("sections") or {}).get("most_important")),
         "forecast": assessment.get("forecast", [])[:4], "movers": assessment.get("movers", [])[:5], "front": assessment.get("front_page", [])[:6],
         "theaters": [{"id": t["id"], "name": t["name"], "esc": round(float(t.get("escalation") or 0)), "lat": t.get("centroid_lat"), "lon": t.get("centroid_lon")} for t in theaters],
-        "alerts": [{"t": alert_line(clean_title(a.get("headline")), scores.get(watched(a))), "ts": a.get("ts"), "s": a.get("severity"), "theater": watched(a)} for a in alerts[:6]],
+        "alerts": [{"t": t, "ts": a.get("ts"), "s": a.get("severity"), "theater": watched(a)} for t, a in lines if t][:6],
         "stories": top[:48], "dots": dots[:600], "assets": state.get("assets_summary"),
         "all_theaters": [{"id": t["id"], "name": t["name"], "esc": round(float(t.get("escalation") or 0)), "lat": t.get("centroid_lat"), "lon": t.get("centroid_lon")} for t in state.get("theaters", [])],
         "markets": [{"key": m.get("series_key"), "label": m.get("label"), "last": m.get("last"), "pct": m.get("change_pct"), "unit": m.get("unit"), "why": m.get("why_it_matters")} for m in state.get("markets", [])],
@@ -1167,6 +1171,7 @@ def host_row(name, role, s):
             "disk_used": disk["used"], "disk_total": disk["total"], "disk_mount": disk["mount"], "load": [num(x) for x in s["load"][:3]] or [0.0], "cores": int(s["cores"]),
             "volumes": disks[:12], "io": maybe(s.get("io")), "net": two(s.get("net")), "diskio": two(s.get("diskio")),
             "top": [{"name": str(t.get("name"))[:40], "cpu": num(t.get("cpu") or 0), "mem": num(t.get("mem") or 0)} for t in (s.get("top") or [])[:5]], "uptime": num(s["uptime"]),
+            "containers": [{"name": str(c["name"])[:60], "state": str(c["state"])[:12], "status": str(c["status"])[:60]} for c in (s.get("containers") or [])[:60]],
             "temp": maybe(s["temp"]), "raid_degraded": int(s["raid_degraded"]), "failed_units": [str(u)[:100] for u in s["failed_units"]][:20]}
 
 
@@ -1318,6 +1323,9 @@ def worries(m, p, s, now=None, private=True):
             out.append((2, f"{h['name']} RAID is degraded"))
         if h.get("failed_units"):
             out.append((0, f"{h['name']}: {', '.join(h['failed_units'])} failed" if private else f"{h['name']}: {len(h['failed_units'])} units failed"))
+        sick = [c["name"] for c in h.get("containers") or [] if c["state"] == "restarting" or "unhealthy" in c["status"]]
+        if sick:
+            out.append((1, f"{h['name']}: {', '.join(sick[:4])} not healthy" if private else f"{h['name']}: {len(sick)} containers not healthy"))
     auto = set((s or {}).get("autostart", []))
     for g in (m or {}).get("guests", []):
         if g["id"] in auto and g["status"] != "running":

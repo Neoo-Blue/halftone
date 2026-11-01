@@ -204,6 +204,8 @@ function gameCard(g) {
   return `<li class="game ${g.state === 'in' ? 'live' : ''}"><a href="/topic/${encodeURIComponent(String(g.home.name).toWellFormed())}"><p class="game-time">${g.state === 'in' ? '<i></i>' : ''}${esc(clock)}</p>${side(g.away)}${side(g.home)}${g.note ? `<p class="game-note">${esc(g.note)}</p>` : ''}</a></li>`;
 }
 
+const across = (n) => (n % 4 === 1 ? 3 : 4);  // so no game sits alone on the last row
+
 function sports(p) {
   const all = p.sports.data || [], el = $('#sportsbody');
   asof($('#asof-sports'), 'Scores', p.sports);
@@ -214,7 +216,7 @@ function sports(p) {
   el.innerHTML = !all.length ? '<p class="empty">The first scores are on their way.</p>' : `
     <div class="wire-top"><h3 class="sub-head">${live ? `${plural(live, 'game')} on now` : 'Scores'}</h3>
       <div class="seg" role="group" aria-label="Filter by league">${tabs.map(([k, t]) => `<button type="button" data-league="${esc(k)}" aria-pressed="${k === league}">${esc(t)}</button>`).join('')}</div></div>
-    ${shown.filter((l) => l.games.length).map((l) => `<h4>${esc(l.name)}</h4><ul class="games">${l.games.slice(0, league === 'all' ? 6 : 20).map(gameCard).join('')}</ul>`).join('') || '<p class="empty">No games today.</p>'}`;
+    ${shown.filter((l) => l.games.length).map((l) => `<h4>${esc(l.name)}</h4><ul class="games" style="--cols:${across(Math.min(l.games.length, league === 'all' ? 6 : 20))}">${l.games.slice(0, league === 'all' ? 6 : 20).map(gameCard).join('')}</ul>`).join('') || '<p class="empty">No games today.</p>'}`;
   wireList(p, 'sports');
 }
 
