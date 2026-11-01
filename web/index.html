@@ -30,6 +30,7 @@
 <nav class="bar" aria-label="Sections">
   <ul class="desks">
     <li class="only-phone"><a href="/" data-today>Today</a></li>
+    <li hidden><a href="/#elections">Elections</a></li>
     <li><a href="/#world">World</a></li>
     <li><a href="/#sides">Both sides</a></li>
     <li><a href="/#tech">Tech</a></li>
@@ -154,6 +155,12 @@
     <h2 class="desk-name" id="h-world">World</h2>
     <div class="world" id="worldbody"></div>
     <footer class="asof" id="asof-world"></footer>
+  </section>
+
+  <section class="desk sheet" id="elections" aria-labelledby="h-elections" hidden>
+    <h2 class="desk-name" id="h-elections">Election watch</h2>
+    <div id="electionsbody"></div>
+    <footer class="asof" id="asof-elections"></footer>
   </section>
 
   <section class="desk sheet" id="sides" aria-labelledby="h-sides">

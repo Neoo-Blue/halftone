@@ -31,7 +31,8 @@ def read(form, **seconds):
 
 s.remember("layout:wide", ["gone", "tech", "world"])
 fixed = s.layout_view()["order"]["wide"]
-assert sorted(fixed) == sorted(default) and fixed[:2] == ["tech", "world"], "an order saved before a section came or went stays valid"
+assert sorted(fixed) == sorted(default) and fixed.index("tech") < fixed.index("world"), "an order saved before a section came or went stays valid"
+assert fixed[0] == "elections", "and a new section takes its usual place, not the bottom"
 s.set_layout({"form": "wide", "order": default})
 settings.update({"LEARN_LAYOUT": True})
 assert s.layout_view()["learn"] is True

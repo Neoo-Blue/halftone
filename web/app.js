@@ -4,10 +4,11 @@ import { showDock, openDock, askDock } from '/dock.js';
 import { start, go, reading, picture, eventHref, isFront } from '/detail.js';
 import { startPhone, onPhone, phoneCheck } from '/phone.js';
 import { followed, findData, startFind } from '/find.js';
+import { electionDesk } from '/elections.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const THEMES = ['morning', 'night', 'cobalt', 'glass'];
-const DESKS = [['sports', 'sports'], ['mail', 'mail'], ['business', 'money'], ['usage', 'usage'], ['arts', 'media'], ['systems', 'systems']];
+const DESKS = [['elections', 'elections'], ['sports', 'sports'], ['mail', 'mail'], ['business', 'money'], ['usage', 'usage'], ['arts', 'media'], ['systems', 'systems']];
 const KIND = { k: 'Conflict', e: 'Economy', h: 'Hazard' };
 const NEWS = ['world', 'us', 'business'], TECH = ['tech', 'ai', 'security', 'science'];
 const WIRES = {
@@ -45,6 +46,7 @@ function front(p) {
   const fresh = (med?.added || []).filter((a) => (a.at || 0) >= p.now - 86400).length;
   const wx = p.weather.data;
   const rows = [
+    p.elections?.us && [p.elections.us.presidential ? 'Election' : 'Midterms', '/#elections', p.elections.us.title.replace(/ to the (midterms|election)$/, ''), ''],
     wx && ['Weather', '/weather', `${wx.now.temp}\u00b0 ${wx.now.sky}`, ''],
     p.on.systems && ['Systems', '/#systems', pr.length ? (bad ? plural(bad, 'issue') : `${pr.length} of ${pr.length} up`) : 'Checking', bad ? 'bad' : 'good'],
     p.on.money && [`${m ? m.days : 30}-day result`, '/#business', m ? `${m.result > 0 && m.missing.length ? 'At most ' : ''}${usd(m.result)}` : 'Counting', m && m.result < 0 ? 'neg' : ''],
@@ -543,7 +545,7 @@ function tape(p) {
 
 // ---------------------------------------------------------------- arranging the page
 
-const USUAL = ['world', 'sides', 'tech', 'sports', 'mail', 'business', 'usage', 'arts', 'systems'];
+const USUAL = ['elections', 'world', 'sides', 'tech', 'sports', 'mail', 'business', 'usage', 'arts', 'systems'];
 const screenForm = () => (innerWidth < 860 ? 'phone' : 'wide');
 const saveLayout = (body) => fetch('/api/layout', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify(body) });
 let order = null, arranging = false;
@@ -617,7 +619,7 @@ function render() {
     $(`.desks a[href="/#${id}"]`).parentNode.hidden = !p.on[key];
   }
   const desk = (draw) => { try { draw(p); } catch (e) { console.error(e); } };  // one desk's odd data leaves the others standing
-  [front, tops, world, sidesDesk, tech, tape].forEach(desk);
+  [front, tops, electionDesk, world, sidesDesk, tech, tape].forEach(desk);
   desk(p.on.sports ? sports : (x) => wireList(x, 'sports'));
   if (p.on.mail) desk(mail);
   if (p.on.money) desk(business);

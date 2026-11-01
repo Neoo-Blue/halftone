@@ -31,6 +31,8 @@ Please use [a private security advisory](../../security/advisories/new) rather t
 
 - A search reaches past the paper. The words you type go to Wikipedia, Bing News, Hacker News, arXiv, GitHub, Polymarket, Yahoo Finance, ESPN and Open-Meteo, and to your web search if you set one. With an AI provider on, the headlines and text of the sources on the page go to it for the answer, and a follow-up question goes with what was said before it. Nothing else goes: no mail, no money, nothing about your machines. Under Search in Settings, one switch turns the free sources off, one choice picks the web search, and another switch turns the answer off. A subject you follow goes to Bing News every half hour, and a stock, team or town to its source every few minutes, until the same switch stops them.
 
+- Opening a race or a vote abroad on Election watch searches for it the same way, so its name goes to Bing News, and with an AI provider on, to your web search and provider for the answer. While a US election is near, the race numbers and election headlines go to your AI provider a few times a day for the note at the top of the desk.
+
 - With a voice service on, the headline and text of a story you press Listen on go to that service. Nothing else does: no mail, no money, nothing about you. Your device's own voice sends nothing.
 
 - A browser that has signed in keeps the last edition for offline reading, including mail subjects and money. It goes when the session ends, and it stops being offered after three days, but anyone with that browser profile could read it until then.

@@ -1,7 +1,7 @@
 // The last edition, for when the homelab or the connection is down. The network always comes first, so a new build is never held back, and a saved copy is marked so the page can say it's old.
 // It's a private copy held in this browser: it goes when the session does, and it stops being offered after three days.
 const CACHE = 'paper-v1', MAX_AGE = 3 * 864e5;
-const SHELL = ['/', '/style.css', '/app.js', '/lib.js', '/detail.js', '/dock.js', '/phone.js', '/find.js', '/globe.js', '/scene.js', '/theme.js', '/icon-512.png'];
+const SHELL = ['/', '/style.css', '/app.js', '/lib.js', '/detail.js', '/dock.js', '/phone.js', '/find.js', '/elections.js', '/globe.js', '/scene.js', '/theme.js', '/icon-512.png'];
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));

@@ -9,6 +9,7 @@ A private morning newspaper you run yourself. It opens with real news from nearl
 - **Search past the paper.** A stock, a team, a town and a war each come back in their own form, with the web beside them.
 - **Follow anything.** Whatever you follow gets a card on the front page, in that same form, kept up to date.
 - **Every conflict from day one.** A timeline back to where it began, and who is saying what today.
+- **Election watch.** When a vote is near, a desk appears that says which seat decides it and what to watch. When it's over, the desk is gone.
 - **Your own desks.** The mail that needs you, whether you're making money, your investments, your AI bill, your Plex library and your servers.
 - **A real app on your phone.** One desk at a time, swiped between, with what you reach for under your thumb.
 - **Any AI, or none.** The paper works without one. Add any provider to ask it questions, or let your own AI read the paper.
@@ -102,6 +103,24 @@ Most of what reaches a war map is one side's word, so each conflict says who is 
 
 <img src="docs/img/who-reporting.png" width="520" alt="Who is reporting: each side's account, what both say, what's in dispute, and what only one side is saying">
 
+## Election watch
+
+When a vote is near, a desk appears at the top of the paper. When it's over, the desk leaves on its own, with its place in the menu. A US election shows from two months before to two weeks after, and a vote abroad from two weeks before to a week after. Nothing needs setting up: it comes with the world desk.
+
+It starts from what you'd ask, not from a table of numbers. Which seat decides each chamber: rank every race by how likely a party is to win it, count down to a majority, and that's the tipping point. Which seats look like changing hands. Where models, polls, forecasters and bettors disagree, because that's where a race is less settled than one number makes it look. And how the night will go, hour by hour in your own time, with the closest races as each batch of polls closes.
+
+![Election watch on a made-up election: the state of each chamber, the seat that decides the Senate, seats likely to change hands, and where the signals disagree](docs/img/elections.png)
+
+The map is printed like the rest of the paper. A state's dots grow with how sure its race is, so a safe seat reads solid and a toss-up barely prints, and you can switch between the Senate, governors and the House.
+
+Every race has its own page. It says in plain words who has it, who holds the seat, whether it's open, and how near it is to the tipping point. Every signal sits on one scale, so you can see at a glance whether they agree. Then come each poll and, with an AI connected, what the race is actually about, written from the reporting with numbered sources. Follow a race and it joins the front page.
+
+![A race's page: where it stands in words, and every signal on one scale](docs/img/race.png)
+
+On the night it follows the count. The numbers turn into what's been called, the map fills in, and a race that's still open says how many votes are left and what share of them the trailing candidate needs. That's an estimate from the share counted, and the page says so. Abroad, each vote gets its date, its stage, the result when there is one, and what it's about.
+
+All of it comes from WARROOM's public API, which credits its sources: civicAPI, Polymarket, The New York Times, VoteHub, IFES ElectionGuide and the forecasters it relays.
+
 ## On a phone
 
 On a phone the paper reads one desk at a time, and you swipe between them. A bar under your thumb has Today, Search, Ask, Saved and More. In a story it changes to Back, Listen, Ask, Save and Share, and the coverage folds to a single bar until you open it. More holds text size and a theme that matches your phone. Add the paper to your home screen and it opens like an app.
@@ -118,7 +137,7 @@ Leave anything blank and it stays off the page.
 | Tech | Nothing | Its own lead, and a wire you can filter by AI, Tech, Security and Science |
 | Sports | Nothing | Live scores and results for any of twelve leagues, and the sports wire |
 | Weather | A place name | Now, the next 48 hours and the week ahead, with feels-like, wind, sunrise, and when rain is likely |
-| World | Nothing | The [WARROOM public API](docs/warroom-api.md): globe, conflict desk, who is reporting each war, forecasts, hazards, space weather |
+| World | Nothing | The [WARROOM public API](docs/warroom-api.md): globe, conflict desk, who is reporting each war, election watch, forecasts, hazards, space weather |
 | Mail | Microsoft 365 app, optional AI provider | Read-only triage across your mailboxes. Money, customer, security and legal mail rises to the top |
 | Business | Any address returning [the money report](docs/money-feed.md) | Are you making money? Sales minus costs, by product |
 | Investments | Nothing, or [a portfolio address](docs/portfolio-feed.md) | Type in what you hold and it's priced for you. Total, gain and loss on the front page, your holdings on the tape, which you can customize |
@@ -168,13 +187,13 @@ Proxmox connects with a read-only token. For any other Linux box, a NAS or a clo
 
 The paper works without one. News, scores, the world desk, search results, the coverage bars and Listen in your device's own voice all need no AI.
 
-Add any provider in Settings: Anthropic, OpenAI, Google Gemini, xAI Grok, OpenRouter, Groq, Mistral, DeepSeek, Together, Ollama, LM Studio, or anything OpenAI-compatible. That turns on Ask, Explain, Catch me up, the editor's note every few hours, the answer at the top of a search, the case for and against, and mail sorted beyond its built-in rules.
+Add any provider in Settings: Anthropic, OpenAI, Google Gemini, xAI Grok, OpenRouter, Groq, Mistral, DeepSeek, Together, Ollama, LM Studio, or anything OpenAI-compatible. That turns on Ask, Explain, Catch me up, the editor's note every few hours, the answer at the top of a search, what an election race is about, the case for and against, and mail sorted beyond its built-in rules.
 
 Ask starts with questions that fit what you've connected, reads the story you have open, and can only answer. At the top of Settings, describe your setup in your own words and it proposes the changes, with each old value beside the new one. Nothing changes until you press Apply, and you type any keys yourself.
 
 Each kind of AI work has a daily ceiling, so a busy day can't run up the bill: 200 questions, 400 emails sorted, 60 web searches, 150 search answers, 60 story comparisons, and 150,000 characters of Listen.
 
-Any AI can also read the paper, over MCP or plain HTTP, with a token you control. News, world, weather and sports are shared, and money, media, systems and mail only once you tick them. It's read only. [docs/ai.md](docs/ai.md) has the setup for Claude, Cursor and the rest, and explains why the AI that reads strangers' words can never change a setting.
+Any AI can also read the paper, over MCP or plain HTTP, with a token you control. News, world, elections, weather and sports are shared, and money, media, systems and mail only once you tick them. It's read only. [docs/ai.md](docs/ai.md) has the setup for Claude, Cursor and the rest, and explains why the AI that reads strangers' words can never change a setting.
 
 ## Putting it on the internet
 

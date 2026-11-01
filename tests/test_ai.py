@@ -159,7 +159,7 @@ assert call("POST", "/mcp", bad_rpc, {**key, "Origin": "https://evil.example"})[
 assert call("POST", "/mcp", ["not", "an", "object"], key)[0].status == 400
 
 names = lambda: [t["name"] for t in rpc("tools/list")[1]["result"]["tools"]]
-assert names() == ["news", "world", "sports"], "only public desks until the owner shares more"
+assert names() == ["news", "world", "elections", "sports"], "only public desks until the owner shares more"
 tools = rpc("tools/list")[1]["result"]["tools"]
 assert all(t["annotations"]["readOnlyHint"] for t in tools)
 listed = json.loads(rpc("tools/call", {"name": "news", "arguments": {"query": "reveal key", "limit": 5}})[1]["result"]["content"][0]["text"])

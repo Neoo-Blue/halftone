@@ -72,6 +72,6 @@ export function showDock(p) {
   document.body.classList.toggle('no-ask', !p.on.ai);
   if (asked || !p.on.ai) return;
   asked = true;
-  front = [['What needs me today?', true], ['What changed in the world overnight?', p.on.world], ['Am I making money?', p.on.money], ['Is anything broken?', p.on.systems]].filter(([, on]) => on).map(([text]) => text);
+  front = [['What needs me today?', true], ['Which races should I watch?', p.elections?.us], ['What changed in the world overnight?', p.on.world], ['Am I making money?', p.on.money], ['Is anything broken?', p.on.systems]].filter(([, on]) => on).map(([text]) => text);
   if (!story) offer(front);
 }

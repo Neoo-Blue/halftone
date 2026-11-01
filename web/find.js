@@ -70,6 +70,16 @@ const CARD = {
   thing(c) {
     return `${c.img ? `<img class="fo-photo" src="${esc(picture(c.img))}" alt="" loading="lazy">` : ''}<span class="fo-kind">${esc(c.about || 'Wikipedia')}</span><b class="fo-name">${esc(c.name)}</b><p class="fo-text">${esc(c.text)}</p>`;
   },
+  race(c) {
+    const vs = ['D', 'R', 'I'].filter((k) => c.noms?.[k]).map((k) => `${esc(c.noms[k])} (${k})`).join(' vs ');
+    const now = c.won ? `<b>${esc(c.won.n)} wins</b>` : c.lead ? `${esc(c.lead.n)} ahead, ${esc(Math.round(c.rep))}% counted` : [c.rating, c.pd != null && `model D ${Math.round(c.pd * 100)}%`].filter(Boolean).map(esc).join(', ');
+    return `<span class="fo-kind">Race</span><b class="fo-name">${esc(c.seat || c.name)}</b><span class="fo-line">${vs}</span><span class="fo-line">${now}</span>`;
+  },
+  ballot(c) {
+    const day = c.start && new Date(`${c.start}T12:00:00Z`), over = c.end && Date.now() > new Date(`${c.end}T23:59:59Z`);
+    const when = c.line || (over ? 'Voting over' : c.phase === 'voting' ? 'Voting now' : c.phase === 'counting' ? 'Counting' : day ? `Votes ${day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : '');
+    return `<span class="fo-kind">Election</span><b class="fo-name">${esc(c.country || c.name)}</b><span class="fo-line">${esc((c.offices || []).join(', '))}</span><span class="fo-line">${esc(when)}</span>`;
+  },
   topic(c) {
     const rows = c.rows || [], fresh = newFor(c);
     return `<span class="fo-kind">${fresh ? `${whole(fresh)} new` : rows[0]?.ts ? `Latest ${esc(ago(rows[0].ts))}` : 'Following'}</span><b class="fo-name">${esc(c.name)}</b>${rows.slice(0, 2).map((r) => `<span class="fo-line">${esc(r.t)}</span>`).join('')}${rows.length ? '' : '<span class="fo-line">Nothing new yet.</span>'}`;
@@ -265,6 +275,18 @@ function drawAnswer(root, q, a) {
     input.value = '';
     ask(question);
   });
+}
+
+// An answer written from sources, anywhere on the paper. No AI, or nothing to go on, and the section simply isn't there.
+export async function answerInto(root, q) {
+  root.innerHTML = waiting(3);
+  try {
+    const a = await post('/api/find/answer', { q });
+    if (!root.isConnected) return;
+    if (a.answer) drawAnswer(root, q, a); else root.closest('section')?.remove();
+  } catch {
+    root.closest('section')?.remove();
+  }
 }
 
 export async function fillFind(d) {

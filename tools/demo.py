@@ -46,7 +46,7 @@ HEADS = [
     ("Security teams race to patch a flaw in a widely used logging library", "Attackers began scanning for it within hours of disclosure."),
     ("Telescope finds water vapour on a rocky world forty light years away", "The team will point the instrument back at it next spring."),
     ("Ferry service to the outer islands doubles for the winter", "Two more boats join the route from December."),
-    ("Dock workers vote on a four-year contract this week", "Union leaders called the offer the best in a generation."),
+    ("Early voting passes last cycle's record with two days to go", "Officials in six states said lines ran past closing time."),
     ("Grain prices slip as ships return to the outer lanes", "Traders said the fall could reverse if talks stall."),
     ("Housing starts fall for a third straight month", "Builders blamed borrowing costs and a shortage of electricians."),
     ("City opens its first floating park beside the old customs house", "The park rises and falls with the tide."),
@@ -206,10 +206,14 @@ def read_page(url):
 def asked(system, text, max_tokens=1500, cheap=False, schema=None):
     if system == s.TAKES_SYSTEM:
         return json.dumps(TAKES)
+    if system == s.ELECTION_SYSTEM:
+        return "This is the demo, so no AI read this."
     if system != s.FIND_SYSTEM:
         return "This is the demo, so no AI read this. On a real paper the answer comes from what you're reading, with its sources."
     if "The reader now asks" in text:
         return json.dumps({"answer": "The two sides have agreed on a schedule and nothing else [3]. Shipping insurers are waiting for a second week without incidents before they cut rates [2].", "next": ["Who is mediating?", "What would reopen the lane?"]})
+    if " race " in text or "Senate" in text or "Governor" in text or "election" in text:
+        return json.dumps({"answer": "The race has turned on housing costs and the harbor plan, with both candidates running ads on rents [1]. The challenger has outraised the incumbent since August, though most of that came from outside the state [2]. Early voting is running ahead of the last midterm [3].", "next": ["Who is funding the ads?", "Where did the candidates differ in the debate?", "How did this seat vote last time?"]})
     if "Strait" not in text.split("Searched for:")[-1]:
         return json.dumps({"answer": "This is the demo, so this answer is made up [1]. A real one is written from the sources below, with a number on each claim.", "next": ["What else can it find?"]})
     return json.dumps({"answer": "Talks between Norland and Costera resumed on Monday after a nine-day pause [1]. Reported incidents fell for a third day, and shipping is back near its weekly average [2]. Both sides still claim the inner channel, and neither has said what it would give up [3].",
@@ -247,8 +251,76 @@ def around(q):
     return {"q": q, "cards": cards, "news": said(q), "talk": talk, "papers": [], "code": [], "odds": odds if "strait" in low else []}
 
 
+# A made-up election. DEMO_NIGHT=1 runs it as the count comes in, which is how that page gets looked at before a real one.
+NIGHT = bool(os.environ.get("DEMO_NIGHT"))
+SEATS = {"CA": 52, "TX": 38, "FL": 28, "NY": 26, "PA": 17, "IL": 17, "OH": 15, "GA": 14, "NC": 14, "MI": 13, "NJ": 12, "VA": 11, "WA": 10, "AZ": 9, "MA": 9, "TN": 9, "IN": 9, "MD": 8, "MO": 8, "WI": 8, "CO": 8, "MN": 8, "SC": 7, "AL": 7, "LA": 6, "KY": 6, "OR": 6, "OK": 5, "CT": 5, "UT": 4, "IA": 4, "NV": 4, "AR": 4, "MS": 4, "KS": 4, "NM": 3, "NE": 3, "ID": 2, "WV": 2, "HI": 2, "NH": 2, "ME": 2, "RI": 2, "MT": 2, "DE": 1, "SD": 1, "ND": 1, "AK": 1, "VT": 1, "WY": 1}
+TILT = {"CA": .8, "WA": .7, "OR": .6, "NY": .7, "MA": .9, "VT": .9, "MD": .8, "HI": .9, "IL": .6, "NJ": .5, "CT": .6, "RI": .7, "DE": .6, "NM": .4, "CO": .4, "MN": .25, "VA": .3, "ME": .1, "NH": .15, "MI": .05, "PA": .05, "WI": 0, "NV": -.03, "AZ": -.05, "GA": .08, "NC": -.08, "OH": -.1, "IA": -.12, "TX": -.3, "FL": -.3, "AK": -.25}
+FIRST = "Mara Tomas Elise Owen Priya Caleb Nora Felix Ines Hugo June Arlo Greta Silas Vera Emil".split()
+LAST = "Quinn Lind Hale Marsh Okafor Brandt Vale Ruiz Thorne Castell Wren Abara Nilsson Holt Kerrigan Sorel".split()
+STATE_NAMES = {"AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VA": "Virginia", "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming"}
+
+
+def ballot_row(key, kind, state, name, r):
+    p = max(.02, min(.98, .5 + (TILT.get(state, -.45) + r.gauss(0, .16)) * .85))
+    both = {"D": f"{r.choice(FIRST)} {r.choice(LAST)}", "R": f"{r.choice(FIRST)} {r.choice(LAST)}"}
+    side, sure = ("D" if p >= .5 else "R"), max(p, 1 - p)
+    rating = "Tossup" if sure < .58 else f"{'Safe' if sure > .92 else 'Likely' if sure > .8 else 'Lean' if sure > .66 else 'Tilt'} {side}"
+    firm = lambda shift: (lambda q: "Tossup" if max(q, 1 - q) < .58 else f"{'Safe' if max(q, 1 - q) > .92 else 'Likely' if max(q, 1 - q) > .8 else 'Lean' if max(q, 1 - q) > .66 else 'Tilt'} {'D' if q >= .5 else 'R'}")(p + r.gauss(0, .05) + shift)
+    holds = side if r.random() > .14 else ("R" if side == "D" else "D")
+    row = {"key": key, "kind": kind, "state": state, "state_name": STATE_NAMES[state], "name": name, "incumbent_party": holds, "holder": {"name": both[holds] if r.random() > .25 else f"{r.choice(FIRST)} {r.choice(LAST)}", "party": holds, "since": f"{r.randint(2011, 2023)}-01-03"},
+           "ratings": {k: firm(0) for k in ("cook", "sabato", "insideelections", "splitticket", "ddhq")}, "nominees": {**both, "I": None}, "reporting": 0, "winner": None, "leader": None, "called_at": None, "prob": {"D": round(p, 3), "R": round(1 - p, 3)}, "rating": rating,
+           "market": {"d": round(min(.99, max(.01, p + r.gauss(0, .06))), 3), "r": 0}, "polls": {"d": round(47 + 12 * (p - .5), 1), "r": round(47 - 12 * (p - .5), 1), "n": r.randint(3, 9), "last": "2026-10-28"} if kind != "house" else {}, "candidates": [{"name": n, "party": k, "votes": 0, "pct": 0, "winner": False} for k, n in both.items()]}
+    row["market"]["r"] = round(1 - row["market"]["d"], 3)
+    if NIGHT and r.random() < .72:  # the east has reported, the west hasn't
+        share = max(40.0, min(70.0, 50 + (p - .5) * 34 + r.gauss(0, 2)))
+        lead, trail = ("D", "R") if share >= 50 and p >= .5 or r.random() < .1 else ("R", "D")
+        share = max(share, 100 - share)
+        row["reporting"] = round(r.uniform(35, 99), 1)
+        votes = r.randint(90_000, 900_000)
+        row["candidates"] = [{"name": both[lead], "party": lead, "votes": int(votes * share / 100), "pct": round(share, 1), "winner": False}, {"name": both[trail], "party": trail, "votes": int(votes * (100 - share) / 100), "pct": round(100 - share, 1), "winner": False}]
+        if share > 54 and row["reporting"] > 60:
+            row["winner"], row["called_at"] = {"name": both[lead], "party": lead}, NOW - r.randint(60, 7000)
+            row["candidates"][0]["winner"] = True
+        else:
+            row["leader"] = {"name": both[lead], "party": lead, "pct": round(share, 1)}
+    return row
+
+
+def us_vote():
+    r = random.Random(11)
+    held = (NOW // DAY) * DAY + 2 * DAY
+    day = datetime.fromtimestamp(held, timezone.utc).date().isoformat()
+    races = []
+    for state, n in SEATS.items():
+        races += [ballot_row(f"H-{state}-{i + 1:02d}" if n > 1 else f"H-{state}-AL", "house", state, f"{STATE_NAMES[state]} {i + 1 if n > 1 else 'at large'}", r) for i in range(n)]
+    for state in "AK AL AR CO DE FL GA IA ID IL KS KY LA MA ME MI MN MS MT NC NE NH NJ NM OH OK OR RI SC SD TN TX VA WV WY".split():
+        races.append(ballot_row(f"S-{state}", "senate", state, f"{STATE_NAMES[state]} Senate", r))
+    for state in "AK AL AR AZ CA CO CT FL GA HI IA ID IL KS MA MD ME MI MN NE NH NM NV NY OH OK OR PA RI SC SD TN TX VT WI WY".split():
+        races.append(ballot_row(f"G-{state}", "governor", state, f"{STATE_NAMES[state]} Governor", r))
+    return {"id": "us-demo", "name": "US midterm elections", "date": day, "presidential": False, "phase": "counting" if NIGHT else "campaign", "schedule": {"polls_open": held + 36000, "first_close": held + 82800, "last_close": held + 108000},
+            "control": {"house": {"seats": 435, "majority": 218, "market": {"d": .82, "r": .18}}, "senate": {"seats": 100, "majority": 51, "holdover": {"D": 30, "R": 33, "I": 2}, "market": {"d": .46, "r": .54}}, "governor": {"seats": 50, "majority": 26}},
+            "generic_ballot": {"d": 48.6, "r": 44.1, "n": 6, "last": "2026-10-28"}, "races": races, "sources": [{"label": "Made up for the demo"}]}
+
+
+def calendar_vote():
+    soon = lambda days: (datetime.now(timezone.utc).date() + timedelta(days=days)).isoformat()
+    vote = lambda i, country, iso, office, days, phase, line=None: {"id": f"demo-{i}", "country": country, "iso2": iso, "institution": office, "start": soon(days), "end": soon(days), "status": "Confirmed", "phase": phase, "lat": 54.9, "lon": 20.4, "outcome_line": line, "has_outcome": bool(line), "snap": False}
+    return {"featured": {"id": "us-demo", "date": soon(2), "phase": "counting" if NIGHT else "campaign"}, "items": [vote(1, "Norland", "XN", "Norland Assembly", 0, "voting"), vote(2, "Costera", "XC", "Costera Presidency", 6, "upcoming"), vote(3, "Ostmark", "XO", "Ostmark Parliament", -3, "results", "Harbor Party wins a majority: 94 of 170 seats")]}
+
+
 def war(path, timeout=30):
-    """What WARROOM would say about the made-up conflicts and the made-up storm."""
+    """What WARROOM would say about the made-up conflicts, the made-up storm and the made-up elections."""
+    if path == "/elections":
+        return calendar_vote()
+    if path == "/elections/us":
+        return us_vote()
+    if path.startswith("/elections/us/races/"):
+        r = random.Random(path)
+        got = next(x for x in us_vote()["races"] if x["key"] == path.rsplit("/", 1)[1])
+        base = got["polls"] or {"d": 47, "r": 46}
+        return {"polls_list": [{"pollster": n, "end": (datetime.now(timezone.utc).date() - timedelta(days=4 + i * 5)).isoformat(), "n": r.randint(400, 1400), "pop": "lv", "partisan": "DEM" if i == 3 else None, "url": "https://example.org/poll", "D": round(base["d"] + r.gauss(i * .3, 1.4), 1), "R": round(base["r"] + r.gauss(0, 1.4), 1)} for i, n in enumerate(("Harbor Polling", "North Star Research", "Bay Survey Group", "Keystone Insight", "The Ledger Poll", "Coastal Data"))] if got["polls"] else []}
+    if path.endswith("/outcome"):
+        return {"line": "Harbor Party wins a majority: 94 of 170 seats", "turnout": "71.2%", "seats_total": 170, "majority": 86, "url": "https://en.wikipedia.org/wiki/Example", "rows": [{"party": "Harbor Party", "person": "Mara Quinn", "seats_won": 94, "pct": 51.4}, {"party": "Coast Union", "person": "Tomas Lind", "seats_won": 61, "pct": 36.2}, {"party": "The Greens", "person": None, "seats_won": 15, "pct": 9.1}]}
     if path.startswith("/intel"):
         return {"items": [{"headline": "Talks hold while each side tests the other", "body": "Reported incidents fell for a third day. Both sides moved ships back from the inner channel, though neither has said why. The next round is set for Thursday.", "bullets": ["Shipping is near its weekly average", "Neither side has given up a claim"], "ts": NOW - 2 * HOUR}]}
     if path.startswith("/events"):
@@ -303,6 +375,8 @@ def demo_world():
     for i in range(20):  # a month of reading, so Both sides can say which way it leaned
         s.note_read(f"https://demo.invalid/old/{i}", "An older story", ("Harbor Times", "The Courier", "Northern Post", "Global Wire", "The Ledger")[i % 5 if i % 2 else 0])
     s.save("following", {"cards": cards})
+    s.save("elections", s.elections_run())
+    s.save("election_note", {"text": "The House looks settled and the Senate doesn't. It comes down to a handful of seats the model and the market read differently, and the first real signal arrives when the polls close in the east. Watch whether the races leaning away from their holders hold up once votes are counted.", "at": NOW - 1800})
     s.save("editor", {"text": "A calmer morning in the strait, a fight over rents at home, and a battery plant that wants four thousand people. Read the harbor story first: it's the one that will cost someone money by January.", "at": NOW - 40 * 60})
 
 

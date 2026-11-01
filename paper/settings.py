@@ -55,7 +55,7 @@ SECTIONS = [
         F("PORTFOLIO_URL", "Broker or portfolio address", "url", hint="docs/portfolio-feed.md shows the JSON to return."),
         F("PORTFOLIO_TOKEN", "Bearer token", "secret"),
     ]},
-    {"id": "world", "title": "World", "about": "The globe, the conflict desk and the odds. Works from the first minute.", "needs": ("WARROOM_URL",), "fields": [
+    {"id": "world", "title": "World", "about": "The globe, the conflict desk and the odds. Works from the first minute. Election watch comes with it: it appears when a vote is near and leaves when it's over.", "needs": ("WARROOM_URL",), "fields": [
         F("WARROOM_URL", "WARROOM address", "url", "https://war.wakxi.com/api/v1", "The free public API. Change it only if you run your own WARROOM."),
     ]},
     {"id": "news", "title": "News", "about": "Nearly 60 outlets are already on the wire, and 24 more count toward who is covering a story. Add your own here.", "needs": (), "fields": [

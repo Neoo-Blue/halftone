@@ -28,6 +28,12 @@ All are `GET`.
 | `/hazards` | Natural hazards, with a count by alert level | 5 min |
 | `/hazards/{id}` | One hazard | 5 min |
 | `/spaceweather` | Geomagnetic conditions and forecast | 5 min |
+| `/elections` | The world's election calendar, each with its stage and any result | 1 min |
+| `/elections/us` | The next US general election, race by race: who holds each seat, the candidates, the composite forecast, each forecaster's rating, market odds, poll averages, and on the night the count | 1 min |
+| `/elections/us/races/{key}` | One race with its latest polls. A key is `S-GA`, `G-GA` or `H-GA-05` | 1 min |
+| `/elections/{id}/outcome` | Who won an election abroad, from Wikipedia's results box (CC BY-SA) | 5 min |
+
+The election routes carry their sources and terms in `sources` and `meta.license`, and each source's own terms apply. The calendar is IFES ElectionGuide, free for non-commercial use with attribution.
 | `/intel` | Analyst notes | 5 min |
 | `/theaters/{id}/history` | A theater's timeline from day one, with a source on every entry | 5 min |
 | `/theaters/{id}/accounts` | Who is reporting a theater, what only one side is saying, and each side's account | 1 min |

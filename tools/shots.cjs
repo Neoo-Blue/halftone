@@ -63,6 +63,7 @@ async function sheet(b, name, names, { columns, width, gap = 28, pad = 28, backg
   await sleep(600);
   await p.screenshot({ path: shot('front-morning') });
   await p.setViewportSize({ width: 1440, height: 1500 });
+  await crop(p, '#elections', 'elections', { most: 1120 });
   for (const [id, name, most] of [['followed', 'following'], ['sides', 'both-sides'], ['usage', 'ai-use'], ['business', 'business'], ['mail', 'mail'], ['systems', 'systems', 575], ['arts', 'arts']]) await crop(p, `#${id}`, name, { most });
   await p.context().close();
   await sheet(b, 'desks', ['mail', 'arts', 'business', 'systems'], { columns: 2, width: 1800, gap: 24, pad: 12, radius: 0, flow: true });
@@ -94,6 +95,14 @@ async function sheet(b, name, names, { columns, width, gap = 28, pad = 28, backg
   p = await opened(b, '/systems/machine/NAS', { height: 1000 });
   await pastMasthead(p);
   await p.screenshot({ path: shot('machine') });
+  await p.context().close();
+
+  // a race
+  const race = await (await fetch(`${base}/api/paper`)).json();
+  p = await opened(b, `/elections/race/${race.elections.us.closest[0].key}`, { height: 1500, wait: '.el-verdict' });
+  await sleep(1400);
+  await pastMasthead(p);
+  await p.screenshot({ path: shot('race') });
   await p.context().close();
 
   // search

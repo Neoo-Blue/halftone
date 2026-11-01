@@ -2,6 +2,7 @@
 // and stories are read inside the paper. The only way off the site is the small "Original" link under a story.
 import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight, sideBar, reading, picture } from '/lib.js';
 import { fillFind, followingPage } from '/find.js';
+import { electionsView, fillElections, raceView, ballotView, fillRace } from '/elections.js';
 import { makeGlobe } from '/globe.js';
 import { dockStory, askDock } from '/dock.js';
 import { phoneTab, phonePage, onPhone } from '/phone.js';
@@ -24,6 +25,9 @@ const ROUTES = [
   [/^\/systems\/service\/(.+)$/, 'service', 'Systems'],
   [/^\/systems\/machine\/(.+)$/, 'machine', 'Systems'],
   [/^\/topic\/(.+)$/, 'topic', null],
+  [/^\/elections()$/, 'elections', null],
+  [/^\/elections\/race\/([A-Z0-9-]+)$/, 'race', null],
+  [/^\/elections\/world\/([a-z0-9-]+)$/, 'ballot', null],
   [/^\/weather()$/, 'weather', null],
   [/^\/usage()$/, 'usage', null],
   [/^\/investments()$/, 'investments', null],
@@ -419,6 +423,9 @@ const VIEWS = {
   },
 
   following: followingPage,
+  elections: electionsView,
+  race: raceView,
+  ballot: ballotView,
 
   theater(d) {
     const h = d.history, turns = h ? h.eras.reduce((n, e) => n + e.events.length, 0) : 0, years = h?.began ? new Date().getFullYear() - Number(h.began.slice(0, 4)) : 0;
@@ -751,6 +758,8 @@ export async function route() {
   phonePage(m.kind);
   if (m.kind === 'read' && body.lean && body.spread?.length >= 3) fillTakes(body.url);
   if (m.kind === 'topic') fillFind(body);
+  if (m.kind === 'elections') fillElections(body);
+  if (m.kind === 'race' || m.kind === 'ballot') fillRace(body);
   document.title = `${v.head} | ${NAME}`;
   $('.page-head', sheet())?.focus({ preventScroll: true });
   sideGrew.disconnect();
