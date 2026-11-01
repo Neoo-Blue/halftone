@@ -973,12 +973,12 @@ def d_saved(_):
     return {"kind": "saved", **shelf_view()}
 
 
-def beside(url, title, limit=8):
+def beside(url, title, limit=5):
     """What sits next to a story: the same subject first, then the day's most widely carried, none of it muted."""
     mute, own = word_list("MUTE"), words(title or "")
     rest = [s for s in (load("news")["data"] or {}).get("stories", []) if not about(s["t"], mute) and all(o["u"] != url for o in s["outlets"])]
     shared = lambda s: len(own & words(s["t"]))
-    near = sorted((s for s in rest if shared(s) >= 2), key=lambda s: (-shared(s), -s["ts"]))[:5]
+    near = sorted((s for s in rest if shared(s) >= 2), key=lambda s: (-shared(s), -s["ts"]))[:4]
     top = sorted((s for s in rest if s not in near), key=lambda s: -len(s["outlets"]))[:limit]
     card = lambda s: {"t": s["t"], "u": s["u"], "src": s["src"], "n": len(s["outlets"]), "ts": s["ts"], "img": s.get("img")}
     return {"related": [card(s) for s in near], "top": [card(s) for s in top]}

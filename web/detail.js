@@ -242,9 +242,24 @@ const onGlobe = (lat, lon) => (lat != null ? `<button type="button" class="ghost
 
 const rail = (title, rows) => (rows?.length ? `<h3>${title}</h3><ul class="rail-list">${rows.map((s) => `<li><a href="${esc(reading(s.u))}"><b>${esc(s.t)}</b><span>${esc(s.n > 1 ? `${s.src} and ${s.n - 1} more` : s.src)}, ${esc(ago(s.ts))}</span>${s.img ? `<i class="thumb ink"><img src="${esc(picture(s.img))}" alt="" loading="lazy"></i>` : ''}</a></li>`).join('')}</ul>` : '');
 
-function storyBody(s) {
-  return `<div class="page-body">${s.body}</div><p class="source">Original at <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.site)}</a></p>`;
+// A wide page sets the story in newspaper columns, in blocks short enough that the eye never scrolls back up to find the next column. The first block sits beside the photograph.
+function storyBody(s, photo = '') {
+  const src = document.createElement('template'), blocks = [[]];
+  src.innerHTML = s.body;
+  let words = 0;
+  for (const el of src.content.children) {
+    if (words >= (blocks.length === 1 ? 150 : 420) || (/^H\d$/.test(el.tagName) && words > 60)) {
+      blocks.push([]);
+      words = 0;
+    }
+    blocks[blocks.length - 1].push(el.outerHTML);
+    words += el.textContent.split(/\s+/).length;
+  }
+  const [first, ...rest] = blocks.map((b) => b.join(''));
+  return `<div class="page-body story-body"><div class="story-chunk story-lead">${photo}<div>${first}</div></div>${rest.map((b) => `<div class="story-chunk">${b}</div>`).join('')}</div>
+    <p class="source">Original at <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.site)}</a></p>`;
 }
+const photograph = (url) => (url ? `<button type="button" class="hero ink" data-reveal aria-pressed="false" aria-label="Show the photograph in colour"><img src="${esc(picture(url))}" alt=""></button>` : '');
 
 const VIEWS = {
   mail: (d) => ({
@@ -282,8 +297,8 @@ const VIEWS = {
       head: d.name, deck: h?.summary || `Escalation stands at ${d.esc} of 100.`, meta: `${whole(d.events.length)} recent ${d.events.length === 1 ? 'story' : 'stories'}`,
       scene: reportScene(uniqueReports([...d.events, ...getDots().filter((x) => x.w === d.id)]), null, `Reports in ${d.name}, over time`),
       wide: h ? arc(h, d) : '',
-      body: `<h3>What's happening now</h3>${notes(d.intel.slice(0, 1))}${d.intel.length > 1 ? `<details class="older"><summary>Earlier notes</summary>${notes(d.intel.slice(1))}</details>` : ''}`,
-      side: `${facts([['Escalation', `${d.esc} of 100`], ['Began', h?.began ? longDate(h.began) : ''], ['Running for', years ? `${whole(years)} years` : ''], ['Turning points', turns || '']])}${h?.began_note ? `<p class="small">${esc(h.began_note)}</p>` : ''}${d.lat == null ? '<p class="small">This one is about what two sides do, not one place, so it has no spot on the globe.</p>' : onGlobe(d.lat, d.lon)}<h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}`,
+      body: `<div class="page-cols"><section><h3>What's happening now</h3>${notes(d.intel.slice(0, 1))}${d.intel.length > 1 ? `<details class="older"><summary>Earlier notes</summary>${notes(d.intel.slice(1))}</details>` : ''}</section><section><h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}</section></div>`,
+      side: `${facts([['Escalation', `${d.esc} of 100`], ['Began', h?.began ? longDate(h.began) : ''], ['Running for', years ? `${whole(years)} years` : ''], ['Turning points', turns || '']])}${h?.began_note ? `<p class="small">${esc(h.began_note)}</p>` : ''}${d.lat == null ? '<p class="small">This one is about what two sides do, not one place, so it has no spot on the globe.</p>' : onGlobe(d.lat, d.lon)}`,
       locate: [d.lat, d.lon],
     };
   },
@@ -292,8 +307,8 @@ const VIEWS = {
     return {
       head: d.title, deck: d.summary, meta: `${whole(d.count)} reports since ${stamp(d.first)}`,
       scene: reportScene(d.events, d.events.some((e) => e.la != null) ? null : d.lat != null ? [d.lat, d.lon] : null, `How ${d.title} developed`),
-      body: notes(d.intel) || `<h3>Latest</h3>${stories(d.events)}`,
-      side: `${facts([['Status', title(d.status)], ['Last report', ago(d.last)], ['Who', d.actors.join(', ')]])}${onGlobe(d.lat, d.lon)}${d.theater && d.theater !== 'global' ? `<p class="to"><a href="/world/theater/${esc(d.theater)}">This conflict</a></p>` : ''}${d.intel?.length ? `<h3>Latest</h3>${stories(d.events)}` : ''}`,
+      body: `<div class="page-cols">${d.intel?.length ? `<section>${notes(d.intel)}</section>` : ''}<section><h3>Latest</h3>${stories(d.events)}</section></div>`,
+      side: `${facts([['Status', title(d.status)], ['Last report', ago(d.last)], ['Who', d.actors.join(', ')]])}${onGlobe(d.lat, d.lon)}${d.theater && d.theater !== 'global' ? `<p class="to"><a href="/world/theater/${esc(d.theater)}">This conflict</a></p>` : ''}`,
       locate: [d.lat, d.lon],
     };
   },
@@ -411,9 +426,8 @@ const VIEWS = {
     const none = d.why === 'not a public page' ? 'The paper only opens public web pages.' : d.why ? 'That site did not answer.' : `${d.site} would not share the full story with the paper.`;
     return {
       head: d.title || d.site, deck: d.deck, meta: [d.site, d.author, d.published ? stamp(d.published) : ''].filter(Boolean).join(', '),
-      hero: d.image ? picture(d.image) : null,
       side: `${d.homes?.length ? `<p class="small">Carried in ${esc(d.homes.map(([home, n]) => `${home} ${n}`).join(', '))}.${d.homes.length === 1 && d.homes[0][1] > 2 ? ` So far only ${esc(d.homes[0][0])} outlets.` : ''}</p>` : ''}${spread(d.spread)}${rail('On the same subject', d.related)}${rail('Top stories', d.top)}`,
-      body: d.body ? `<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${'speechSynthesis' in window ? '<button type="button" class="ghost text" data-listen aria-pressed="false">Listen</button>' : ''}</div>${storyBody(d)}` : `<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
+      body: d.body ? `<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${'speechSynthesis' in window ? '<button type="button" class="ghost text" data-listen aria-pressed="false">Listen</button>' : ''}</div>${storyBody(d, photograph(d.image))}` : `${photograph(d.image)}<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
     };
   },
 
@@ -497,8 +511,6 @@ function match() {
   return null;
 }
 
-const DATA = new Set(['usage', 'machine', 'weather', 'topic', 'product', 'service', 'container']);  // charts and lists take the width. Anything to read keeps a readable measure and the rail takes the rest
-
 // The rail runs out before a long story does, so it scrolls until its end is showing and then stays, and the right of the page is never empty.
 let side = null;
 const fitSide = () => side?.style.setProperty('--stick', `${Math.min(64, innerHeight - side.offsetHeight - 16)}px`);
@@ -508,16 +520,14 @@ addEventListener('resize', fitSide);
 function page(v, m) {
   const back = m.desk ? `<a href="${DESK[m.desk]}">Back to ${m.desk}</a>` : '<a href="/">Back to the paper</a>';
   const art = v.backdrop ? `<div class="backdrop"><img src="${esc(v.backdrop)}" alt=""></div>` : '';
-  const hero = v.hero ? `<button type="button" class="hero ink" data-reveal aria-pressed="false" aria-label="Show the photograph in colour"><img src="${esc(v.hero)}" alt=""></button>` : '';
   const left = v.poster ? `<button type="button" class="page-poster ink" data-reveal aria-pressed="false" aria-label="Show the poster in colour"><img src="${esc(v.poster)}" alt=""></button>` : '';
   const stage = v.scene ? '<div class="scene-host" data-scene></div>' : '';
   const where = !v.scene && v.locate?.[0] != null ? `<div class="locator"><canvas data-lat="${esc(v.locate[0])}" data-lon="${esc(v.locate[1])}" tabindex="0" role="img" aria-label="Globe centred on this place. Tap a dot to open that report."></canvas></div>` : '';
   const sub = `${v.deck ? `<p class="deck">${esc(v.deck)}</p>` : ''}${v.meta ? `<p class="byline">${esc(v.meta)}</p>` : ''}`;
   const side = where || v.side ? `<aside class="page-side">${where}${v.side || ''}</aside>` : '';
-  const grid = ['page-grid', !side && 'solo', DATA.has(m.kind) && 'data', v.hero && 'with-hero'].filter(Boolean).join(' ');
   return `<nav class="crumb" aria-label="Back">${back}</nav>${art}
     <header class="page-top${v.poster ? ' with-poster' : ''}">${left}<h1 class="page-head" tabindex="-1">${tight(v.head)}</h1><div class="page-sub">${sub}</div></header>${stage}
-    ${v.wide || ''}<div class="${grid}">${hero}<div class="page-main">${v.body || ''}</div>${side}</div>`;
+    ${v.wide || ''}<div class="page-grid${side ? '' : ' solo'}"><div class="page-main">${v.body || ''}</div>${side}</div>`;
 }
 
 let front = 0, turn = 0, still = null, stage = null, getDots = () => [];
