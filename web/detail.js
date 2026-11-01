@@ -242,8 +242,11 @@ function cited(text) {
     return `<a class="ref" href="/world/event/${id}" aria-label="Source ${seen.indexOf(id) + 1}">${seen.indexOf(id) + 1}</a>`;
   });
 }
-const bullet = (b) => (typeof b === 'string' ? b : b.text || '').replace(/^\[(high|medium|low)\]\s*/i, '').replace(/\s*\((up|down|flat)[^)]*confidence[^)]*\)/gi, '');  // the analyst's working, not the reader's
-const notes = (list) => (list || []).map((n) => `<section class="intel"><h3>${esc(n.headline)}</h3>${n.body ? `<p>${cited(n.body)}</p>` : ''}${n.bullets?.length ? `<ul>${n.bullets.map((b) => `<li>${cited(bullet(b))}</li>`).join('')}</ul>` : ''}<time>${esc(ago(n.ts))}</time></section>`).join('');
+const LABELS = { OBSERVED: '', ASSESSED: 'Judgement: ', UNVERIFIED: 'Not confirmed: ' };
+const bullet = (b) => (typeof b === 'string' ? b : b.text || '').replace(/^(OBSERVED|ASSESSED|UNVERIFIED):\s*/, (_, k) => LABELS[k]).replace(/^\[(high|medium|low)\]\s*/i, '').replace(/\s*\((up|down|flat)[^)]*confidence[^)]*\)/gi, '');  // the analyst's working, not the reader's
+const worked = (n) => `<h3>${esc(n.headline)}</h3>${n.body ? `<p>${cited(n.body)}</p>` : ''}${n.bullets?.length ? `<ul>${n.bullets.map((b) => `<li>${cited(bullet(b))}</li>`).join('')}</ul>` : ''}`;
+const told = (r) => `<h3>${esc(r.head)}</h3><p class="intel-lead">${esc(r.what)}</p><p><b>Why it matters.</b> ${esc(r.why)}</p><p><b>What to watch.</b> ${esc(r.watch)}</p><small>Written by AI from the analyst's note below. It can be wrong.</small>`;
+const notes = (list) => (list || []).map((n) => `<section class="intel">${n.reading ? `${told(n.reading)}<details class="intel-more"><summary>The analyst's note and its evidence</summary>${worked(n)}</details>` : worked(n)}<time>${esc(ago(n.ts))}</time></section>`).join('');
 const stories = (rows) => `<ul class="wire-list">${rows.map((s) => `<li><a href="${eventHref(s)}">${esc(s.t)}</a><span>${esc([s.src, s.place, ago(s.ts)].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>`;
 const onGlobe = (lat, lon) => (lat != null ? `<button type="button" class="ghost text" data-globe="${esc(lat)},${esc(lon)}">Show on the globe</button>` : '');
 
@@ -417,7 +420,7 @@ const VIEWS = {
       ${d.nearby.length ? `<h3>Nearby in the last three days</h3>${stories(d.nearby)}` : ''}${rail('On the same subject', d.related)}${rail('Top stories', d.top)}`;
     const long = (d.summary || '').length > 220;
     const body = `${long ? `<div class="page-body"><p>${esc(d.summary)}</p></div>` : ''}${d.note ? notes([d.note]) : ''}
-      ${d.story ? storyBody(d.story) : `<p class="empty">${d.sources.length ? 'The publisher would not share the full story with the paper. The sources alongside may have more.' : 'WARROOM has no article for this event, only the report itself.'}</p>`}`;
+      ${d.story ? storyBody(d.story) : d.note && !d.sources.length ? '' : `<p class="empty">${d.sources.length ? 'The publisher would not share the full story with the paper. The sources alongside may have more.' : 'WARROOM has no article for this event, only the report itself.'}</p>`}`;
     return {
       scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: (d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title, deck: `${whoLine(d.who) ? `${whoLine(d.who)}. ` : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
   },

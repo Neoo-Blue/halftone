@@ -208,3 +208,22 @@ for _base in ("https://war.example/api", "https://war.example/api/", "https://wa
 assert set(_fetched) == {"https://war.example/api/v1/elections"}, _fetched
 s.fetch = _real_fetch
 settings.update({"WARROOM_URL": ""})
+
+
+# an analyst's note, told by an editor: once for each note, and a reply that isn't the shape leaves the analyst's words
+_note = {"headline": "Hormuz composite risk falls to 0.55", "body": "Risk fell. <script>x</script>", "bullets": ["OBSERVED: AIS transits 12", {"text": "UNVERIFIED: a story"}], "ts": 1}
+_asks, _real_ask, _real_ready = [], s.ai.ask, s.ai.ready
+s.ai.ready = lambda: True
+s.ai.ask = lambda system, text, **k: _asks.append((system, text)) or "HEAD: Ships still aren't coming back\nWHAT: About 12 a day cross.\n**WHY:** Oil.\nWATCH: Traffic."
+_read = s.note_reading(_note)
+assert _read == {"head": "Ships still aren't coming back", "what": "About 12 a day cross.", "why": "Oil.", "watch": "Traffic."}, _read
+assert "<script" not in _asks[0][1] and _asks[0][1].startswith("<note>") and "AIS transits 12" in _asks[0][1] and "a story" in _asks[0][1], "strangers' text can't close the tag it's held in"
+assert s.note_reading(_note) == _read and len(_asks) == 1, "each note is told once"
+s.ai.ask = lambda system, text, **k: "Sorry, I can't."
+assert s.note_reading({**_note, "headline": "Another"}) is None, "a reply that isn't the shape leaves the analyst's words"
+_with = s.with_reading([{**_note}, {**_note, "headline": "Older"}])
+assert _with[0]["reading"] == _read and "reading" not in _with[1], "the first note on a page is the one told"
+assert s.with_reading([]) == []
+s.ai.ready = lambda: False
+assert s.note_reading({**_note, "headline": "Third"}) is None, "no AI, and the page stands"
+s.ai.ask, s.ai.ready = _real_ask, _real_ready

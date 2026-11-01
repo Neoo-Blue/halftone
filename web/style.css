@@ -463,6 +463,12 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 .intel { padding: 14px 0; border-bottom: var(--rule) solid var(--hair); margin-bottom: 14px; max-width: 66ch; }
 .intel h3 { margin-top: 0 !important; }
 .intel p { margin-top: 4px; }
+.intel-lead { font-size: 1.08em; }
+.intel small { display: block; margin-top: 6px; font: 400 13px/1.3 var(--ui); color: var(--ink3); }
+.intel-more { margin-top: 12px; }
+.intel-more summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font: 600 14px/1.2 var(--ui); color: var(--ink2); }
+.intel-more summary:hover { color: var(--accent); }
+.intel-more h3 { font-size: 1.05rem; }
 .intel ul { margin-top: 8px; font: 400 15.5px/1.4 var(--ui); }
 .intel li { padding: 5px 0; border-top: var(--rule) solid var(--hair); }
 .ref { display: inline-grid; place-items: center; min-width: 1.5em; height: 1.5em; margin-left: 3px; padding: 0 3px; vertical-align: .22em; border-radius: 99px; background: var(--hair); color: var(--ink); font: 700 11px/1 var(--ui); text-decoration: none; }

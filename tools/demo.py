@@ -209,6 +209,8 @@ def asked(system, text, max_tokens=1500, cheap=False, schema=None):
         return json.dumps(TAKES)
     if system == s.ELECTION_SYSTEM:
         return "This is the demo, so no AI read this."
+    if system == s.NOTE_SYSTEM:
+        return "HEAD: Almost nothing is getting through the strait\nWHAT: This is the demo, so an editor made this up. Ships still aren't coming back.\nWHY: A real reading says why it matters.\nWATCH: What would change the picture."
     if system != s.FIND_SYSTEM:
         return "This is the demo, so no AI read this. On a real paper the answer comes from what you're reading, with its sources."
     if "The reader now asks" in text:
