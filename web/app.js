@@ -135,7 +135,7 @@ function world(p) {
   $('#worldbody').innerHTML = `
     <div class="wire" id="wire"></div>
     <div class="world-main">
-      ${front ? `<h3 class="sub-head">What matters today</h3><ol class="desk">${front}</ol>` : ''}
+      ${front ? `<h3 class="sub-head">What matters today</h3><ol class="world-stories">${front}</ol>` : ''}
       <h3 class="sub-head">The escalation index stands at ${idx}</h3>
       <p class="prose">${esc(assessed)}${esc(w.rationale || w.headline)}</p>
       ${w.most ? `<p class="prose">${esc(w.most)}</p>` : ''}
