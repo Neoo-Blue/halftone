@@ -246,6 +246,8 @@ const rail = (title, rows) => (rows?.length ? `<h3>${title}</h3><ul class="rail-
 function storyBody(s, photo = '') {
   const src = document.createElement('template'), blocks = [[]];
   src.innerHTML = s.body;
+  const same = (a, b) => a?.replace(/\s+/g, ' ').trim().slice(0, 80) === b?.replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (same(src.content.firstElementChild?.textContent, s.deck)) src.content.firstElementChild.remove();  // a feed's summary is often the story's first line, and the deck has just said it
   let words = 0;
   for (const el of src.content.children) {
     if (words >= (blocks.length === 1 ? 150 : 420) || (/^H\d$/.test(el.tagName) && words > 60)) {
