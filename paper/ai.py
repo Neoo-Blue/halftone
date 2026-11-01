@@ -16,6 +16,7 @@ C = settings.get
 DEFAULT_CLAUDE, CHEAP_CLAUDE = "claude-opus-5-5", "claude-haiku-5-5"
 NO_KEY_NEEDED = ("ollama", "lmstudio", "custom")
 BASES = {value: base for value, _, base in settings.PROVIDERS}
+THINKING_ROOM = 2000  # Claude thinks first and that counts against the limit, so a caller's number has to be only for the answer
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -79,7 +80,7 @@ def _anthropic(system, text, max_tokens, cheap, schema):
     if schema:
         config["format"] = {"type": "json_schema", "schema": schema}
     try:
-        reply = anthropic.Anthropic(api_key=key(), timeout=60.0).messages.create(model=CHEAP_CLAUDE if cheap else model(), max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": text}],
+        reply = anthropic.Anthropic(api_key=key(), timeout=60.0).messages.create(model=CHEAP_CLAUDE if cheap else model(), max_tokens=max_tokens + THINKING_ROOM, system=system, messages=[{"role": "user", "content": text}],
                                                                                  **({"output_config": config} if config else {}))
     except anthropic.APIStatusError as e:
         raise urllib.error.HTTPError("https://api.anthropic.com", e.status_code, "refused", {}, None) from None
