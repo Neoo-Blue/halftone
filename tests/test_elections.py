@@ -227,3 +227,13 @@ assert s.with_reading([]) == []
 s.ai.ready = lambda: False
 assert s.note_reading({**_note, "headline": "Third"}) is None, "no AI, and the page stands"
 s.ai.ask, s.ai.ready = _real_ask, _real_ready
+
+
+# the map's zoom: a shape for every state, every seat a race can name, and each race says how it prints
+import json as _json
+_shapes = {f.stem: _json.loads(f.read_text()) for f in (Path(__file__).parent.parent / "web" / "us").glob("*.json")}
+assert len(_shapes) == 51 and sum(len(v["seats"]) for v in _shapes.values()) == 435, "every state and every seat"
+assert all(k.startswith("H-") and (k.endswith("-AL") or k[-2:].isdigit()) for v in _shapes.values() for k in (q["k"] for q in v["seats"]))
+assert _shapes["GA"]["seats"][4]["k"] == "H-GA-05" and any(c["n"] == "Fulton" and "H-GA-05" in c["k"] for c in _shapes["GA"]["cos"]), "a district knows its counties"
+assert any(t[2] == "Atlanta" for t in _shapes["GA"]["towns"]) and not any("CDP" in t[2] for t in _shapes["GA"]["towns"])
+assert "ink" in elect.row(elect.race(_race("H-GA-05", "house"))), "the map draws each seat from its row"

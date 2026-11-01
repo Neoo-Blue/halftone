@@ -301,7 +301,7 @@ def closeness(r):
 
 def row(r):
     """A race in a list, without its full field of candidates."""
-    return {**{k: r[k] for k in ("key", "kind", "state", "where", "seat", "noms", "rep", "won", "lead", "pd", "md", "rating", "poll", "at")}, "note": " ".join(reading(r)[:2])}
+    return {**{k: r[k] for k in ("key", "kind", "state", "where", "seat", "noms", "rep", "won", "lead", "pd", "md", "rating", "poll", "at")}, "note": " ".join(reading(r)[:2]), "ink": ink(r)}
 
 
 def odds_line(houses):

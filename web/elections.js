@@ -2,10 +2,9 @@
 // race is, so a safe seat reads solid and a toss-up barely prints. Names and numbers come from WARROOM through the server,
 // which keeps only known fields, and everything still goes through esc.
 import { $, $$, esc, ago, plural, sideBar, reading } from '/lib.js';
-import { go } from '/detail.js';
 import { answerInto } from '/find.js';
+import { openMap, going, shut } from '/usmap.js';
 
-const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const pct = (p) => `${Math.round(p * 100)}%`;
 const PARTY = { D: 'Democrats', R: 'Republicans', I: 'Independents' };
 const SHORT = { D: 'D', R: 'R', I: 'I' };
@@ -69,83 +68,6 @@ function chamberCard(c) {
 }
 
 // ---------------------------------------------------------------- the printed map
-let grid = null, mapDone = false;  // the map prints in once, not at every new count
-const gridded = () => (grid ||= fetch('/us-dots.json').then((r) => r.json()).catch((e) => { grid = null; throw e; }));
-const inks = (el) => {
-  const css = getComputedStyle(el);
-  return { l: css.getPropertyValue('--left').trim(), r: css.getPropertyValue('--right').trim(), m: css.getPropertyValue('--mid').trim(), h: css.getPropertyValue('--hair').trim() };
-};
-
-async function printMap(host, data, view, pick) {
-  const g = await gridded(), canvas = $('canvas', host), ctx = canvas.getContext('2d'), tip = $('.el-tip', host);
-  const races = data[view] || {}, ink = inks(host), cells = [], byCell = new Map();
-  for (const [st, flat] of Object.entries(g.states)) {
-    const seats = races[st];
-    for (let i = 0; i < flat.length; i += 2) {
-      const c = flat[i], r = flat[i + 1], v = seats?.length ? seats[Math.floor(((Math.imul(i / 2 + 1, 2654435761) >>> 0) / 4294967296) * seats.length)] : null;  // a state's House seats scatter evenly across its dots
-      const cell = { st, x: c + .5 + (r % 2) / 2, y: (r + .5) * .92, v };
-      cells.push(cell);
-      byCell.set(`${c},${r}`, cell);
-    }
-  }
-  let scale = 1, hot = null;
-  const fit = () => {
-    const w = canvas.clientWidth, h = w * (g.rows * .92 + 1) / g.cols, dpr = Math.min(3, devicePixelRatio || 1);
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.height = `${h}px`;
-    scale = w / g.cols;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  };
-  const draw = (t = 1) => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const c of cells) {
-      const sure = c.v == null ? 0 : Math.abs(c.v), sweep = Math.min(1, Math.max(0, t * 2.2 - (1 - c.x / g.cols)));  // the east reports first
-      const big = (c.v == null ? .2 : .26 + .62 * sure) * sweep * (hot === c.st ? 1.25 : 1);
-      if (big <= 0) continue;
-      ctx.fillStyle = c.v == null ? ink.h : c.v > .02 ? ink.l : c.v < -.02 ? ink.r : ink.m;
-      ctx.globalAlpha = c.v == null ? .45 : hot && hot !== c.st ? .55 : 1;
-      ctx.beginPath();
-      ctx.arc(c.x * scale, c.y * scale, big * scale * .5, 0, 7);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  };
-  const at = (e) => {
-    const box = canvas.getBoundingClientRect(), y = Math.round((e.clientY - box.top) / scale / .92 - .5), x = (e.clientX - box.left) / scale - .5 - (y % 2) / 2;
-    return byCell.get(`${Math.round(x)},${y}`) || null;
-  };
-  host.onpointermove = (e) => {
-    const c = at(e);
-    if ((c?.st || null) === hot) return;
-    hot = c?.st || null;
-    tip.hidden = !c;
-    if (c) {
-      const box = canvas.getBoundingClientRect();
-      tip.textContent = `${$(`option[value=${c.st}]`, host)?.textContent || c.st}: ${c.v == null ? 'nothing on the ballot here' : Math.abs(c.v) < .1 ? 'too close to call' : `leans ${c.v > 0 ? 'Democratic' : 'Republican'}`}`;
-      tip.style.transform = `translate(${Math.min(box.width - 180, Math.max(0, e.clientX - box.left - 60))}px, ${e.clientY - box.top + 14}px)`;
-    }
-    draw();
-  };
-  host.onpointerleave = () => { hot = null; tip.hidden = true; draw(); };
-  canvas.onclick = (e) => { const c = at(e); if (c) pick(c.st); };
-  fit();
-  if (reduce || mapDone) {
-    draw();
-  } else {
-    mapDone = true;
-    const from = performance.now(), step = (now) => {
-      const t = Math.min(1, (now - from) / 1100);
-      draw(t);
-      if (t < 1 && canvas.isConnected) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
-  host.grown?.disconnect();
-  host.grown = new ResizeObserver(() => { if (canvas.isConnected) { fit(); draw(); } else host.grown.disconnect(); });
-  host.grown.observe(canvas);
-}
-
 const STATES = { AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming' };
 
 let mapView = 'senate';
@@ -154,22 +76,25 @@ const mapBlock = (us) => {
   if (!views.some((c) => c.kind === mapView)) mapView = views[0]?.kind;
   return `<figure class="el-map"><div class="el-map-top"><div class="seg" role="group" aria-label="What the map shows">${views.map((c) => `<button type="button" data-el-view="${esc(c.kind)}" aria-pressed="${c.kind === mapView}">${esc(c.name)}</button>`).join('')}</div>
     <label class="el-find">Find a state <select data-el-state><option value="">Choose</option>${Object.entries(STATES).map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label></div>
-    <div class="el-canvas"><canvas role="img" aria-label="A map of the United States. Each state is printed in dots, blue for Democrats and red for Republicans, and the dots grow with how sure the race is."></canvas><div class="el-tip" hidden></div></div>
-    <figcaption><span class="el-key"><i class="s-l"></i>Democratic</span><span class="el-key"><i class="s-r"></i>Republican</span><span>A bigger dot means a surer race. Faint dots have nothing on the ballot.</span></figcaption></figure>`;
+    <div class="el-canvas"><canvas role="img" aria-label="A map of the United States. Each state is printed in dots, blue for Democrats and red for Republicans, and the dots grow with how sure the race is. Choose a state to go into its districts and counties."></canvas><div class="el-tip" hidden></div><nav class="el-crumbs" aria-label="Where you are on the map" hidden></nav><aside class="el-panel" hidden></aside></div>
+    <figcaption><span class="el-key"><i class="s-l"></i>Democratic</span><span class="el-key"><i class="s-r"></i>Republican</span><span>A bigger dot means a surer race. Faint dots have nothing on the ballot. Click a state to go in.</span></figcaption></figure>`;
 };
 
-function mountMap(root, us, pick) {
+function mountMap(root, us, pick, races) {
   const host = $('.el-map', root);
-  if (!host) return;
-  printMap(host, us.map, mapView, pick);
+  if (!host) return null;
+  const opts = { pick, states: STATES, row: raceRow, seat: seatText, names: nameLine, state: raceState, bar, races: races || (async () => (await (await fetch('/api/detail/elections/', { credentials: 'same-origin' })).json()).races) };
+  const opening = openMap(host, us.map, mapView, opts);
   host.onclick = (e) => {
     const b = e.target.closest('[data-el-view]');
     if (!b) return;
     mapView = b.dataset.elView;
     $$('[data-el-view]', host).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    printMap(host, us.map, mapView, pick);
+    shut(host);
+    openMap(host, us.map, mapView, opts);
   };
-  $('[data-el-state]', host).onchange = (e) => { if (e.target.value) pick(e.target.value); };
+  $('[data-el-state]', host).onchange = (e) => { if (e.target.value) going(host, e.target.value); };
+  return opening;
 }
 
 // ---------------------------------------------------------------- races
@@ -296,7 +221,7 @@ export function electionDesk(p) {
     body.classList.toggle('el-fresh', !body.dataset.seen);
     body.dataset.seen = '1';
     body.innerHTML = `${us ? usBlock(us, p.tz) : ''}<div class="page-cols">${us ? `<section class="el-part"><h3>Closest Senate and governor races</h3>${raceList(us.closest)}</section><section class="el-part"><h3>House races to watch</h3>${raceList(us.house)}</section>` : ''}${abroad(v.world)}</div>${us ? '<p class="el-all"><a href="/elections">Every race</a></p>' : ''}`;
-    if (us) mountMap(body, us, (st) => go(`/elections?state=${st}`));
+    if (us) mountMap(body, us);
   }
   const now = $('.el-now', body), age = Date.now() / 1000 - (v.as_of || 0), foot = $('#asof-elections');
   if (now) now.innerHTML = liveLine(us);
@@ -309,11 +234,10 @@ const storyRow = (s) => `<li><a href="${esc(reading(s.u))}">${esc(s.t)}</a><span
 const stories = (rows, title = 'In the paper') => (rows?.length ? `<section class="el-part"><h3>${esc(title)}</h3><ul class="wire-list">${rows.map(storyRow).join('')}</ul></section>` : '');
 
 export function electionsView(d) {
-  const us = d.us, wanted = new URLSearchParams(location.search).get('state');
+  const us = d.us;
   return {
     head: us ? us.name : 'Election watch', deck: us ? `${us.title}. ${us.line}` : 'Votes around the world this month.', meta: '',
     body: `<div id="el-page">${us ? `<div class="el-now">${liveLine(us)}</div><div class="el-houses wide">${us.chambers.map(chamberCard).join('')}</div>${mapBlock(us)}
-      <section class="el-part" id="el-state" ${wanted ? '' : 'hidden'}></section>
       <section class="el-part"><h3>Every race</h3><div class="el-filter"><input type="search" id="el-q" placeholder="A state, a name or a seat" aria-label="Filter the races" autocomplete="off"><div class="seg" role="group" aria-label="Which races">${['all', ...us.chambers.map((c) => c.kind)].map((k, i) => `<button type="button" data-el-kind="${esc(k)}" aria-pressed="${i === 0}">${esc(k === 'all' ? 'All' : us.chambers.find((c) => c.kind === k).name)}</button>`).join('')}</div></div><ul class="wire-list el-races two" id="el-list"></ul></section>` : ''}${abroad(d.world)}</div>`,
     side: stories(d.stories, 'The latest'),
   };
@@ -322,25 +246,14 @@ export function electionsView(d) {
 export function fillElections(d) {
   const root = $('#el-page');
   if (!root || !d.us) return;
-  let kind = 'all', open = null;
+  let kind = 'all';
   const list = $('#el-list', root), q = $('#el-q', root);
   const show = () => {
     const words = q.value.toLowerCase().trim();
     const rows = d.races.filter((r) => (kind === 'all' || r.kind === kind) && (!words || `${r.seat} ${r.where} ${Object.values(r.noms).join(' ')}`.toLowerCase().includes(words)));
     list.innerHTML = rows.slice(0, 120).map(raceRow).join('') || '<li class="empty">No race matches that.</li>';
   };
-  const stateRows = () => {
-    const box = $('#el-state', root), rows = d.races.filter((r) => r.state === open);
-    box.hidden = false;
-    box.innerHTML = `<h3>${esc(STATES[open] || open)}</h3>${rows.length ? raceList(rows) : '<p class="empty">Nothing federal on the ballot here.</p>'}`;
-    return box;
-  };
-  const state = (st) => {
-    open = st;
-    const box = stateRows();
-    history.replaceState(null, '', `/elections?state=${st}`);
-    box.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' });
-  };
+  const state = (st) => history.replaceState(null, '', st ? `/elections?state=${st}` : '/elections');  // the address follows the map
   q.oninput = show;
   root.onclick = (e) => {
     const b = e.target.closest('[data-el-kind]');
@@ -350,9 +263,9 @@ export function fillElections(d) {
     show();
   };
   show();
-  mountMap(root, d.us, state);
+  const races = async () => d.races;
   const wanted = new URLSearchParams(location.search).get('state');
-  if (wanted && STATES[wanted]) state(wanted);
+  mountMap(root, d.us, state, races)?.then(() => { if (wanted && STATES[wanted]) going($('.el-map', root), wanted); });
   keepUp(d.us, root, '/api/detail/elections/', (fresh) => {  // whatever the reader has typed or opened stays as it was
     if (!fresh.us) return;
     const moved = stampOf(fresh.us) !== stampOf(d.us) || stampOf(fresh.races) !== stampOf(d.races);
@@ -361,9 +274,8 @@ export function fillElections(d) {
     if (!moved) return;
     $('.page-sub .deck').textContent = `${d.us.title}. ${d.us.line}`;
     $('.el-houses', root).innerHTML = d.us.chambers.map(chamberCard).join('');
-    mountMap(root, d.us, state);
-    if (!list.contains(document.activeElement)) show();  // someone moving through a list by keyboard keeps their place
-    if (open && !$('#el-state', root).contains(document.activeElement)) stateRows();
+    mountMap(root, d.us, state, races);
+    if (!list.contains(document.activeElement)) show();  // someone moving through the list by keyboard keeps their place
   });
 }
 

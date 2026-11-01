@@ -1325,6 +1325,27 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 @keyframes el-moved { from { background: color-mix(in srgb, var(--accent) 12%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .el-live i, .el-tick > * { animation: none; } }
 .el-tip { position: absolute; top: 0; left: 0; max-width: 240px; padding: 6px 9px; font: 500 13px/1.3 var(--ui); color: var(--bg); background: var(--ink); border-radius: var(--radius); pointer-events: none; }
+.el-crumbs { position: absolute; top: 0; left: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; max-width: 60%; padding: 4px 6px; font: 600 13.5px/1.2 var(--ui); background: color-mix(in srgb, var(--bg) 84%, transparent); border-radius: var(--radius); animation: arrive .5s var(--ease); }
+.el-crumbs button { min-height: 36px; padding: 0 4px; color: var(--ink2); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--hair); }
+.el-crumbs button:hover { color: var(--accent); }
+.el-crumbs i { color: var(--ink3); font-style: normal; }
+.el-panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(340px, 36%); overflow-y: auto; overscroll-behavior: contain; padding: 4px 14px 14px; background: var(--bg); border-left: var(--rule) solid var(--hair); animation: el-panel .6s var(--ease); }
+@keyframes el-panel { from { opacity: 0; transform: translateX(26px); } }
+.el-panel h3 { margin: 8px 0 4px; font: 800 26px/1.08 var(--display); letter-spacing: var(--head-track); outline: 0; }
+.el-panel h4 { margin: 16px 0 6px; font: 700 13px/1.2 var(--ui); color: var(--ink2); }
+.el-panel .wire-list li { padding-block: 8px; }
+.el-who { margin: 2px 0 8px; font: 500 15px/1.35 var(--ui); }
+.el-said { margin: 8px 0; font-size: .95rem; line-height: 1.4; }
+.el-seats { list-style: none; margin: 0; padding: 0; }
+.el-seats li + li { border-top: var(--rule) solid var(--hair); }
+.el-seats button { display: grid; grid-template-columns: 2.1em minmax(0, 1fr) 12px; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 4px 2px; text-align: left; font: 500 13.5px/1.25 var(--ui); transition: background .18s; }
+.el-seats button:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.el-seats b { font-weight: 800; }
+.el-seats i { width: 12px; height: 12px; border-radius: 50%; background: var(--mid); }
+.el-seats i.s-l { background: var(--left); } .el-seats i.s-r { background: var(--right); }
+.el-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.el-chips a, .el-chips button { display: inline-flex; align-items: center; min-height: 36px; padding: 0 10px; font: 500 13px/1 var(--ui); text-decoration: none; border: 1px solid var(--hair); border-radius: 999px; transition: border-color .18s, transform .18s var(--ease); }
+.el-chips a:hover, .el-chips button:hover { border-color: var(--ink); transform: translateY(-1px); }
 .el-map figcaption { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font: 400 13px/1.35 var(--ui); color: var(--ink2); }
 .el-key { display: inline-flex; align-items: center; gap: 6px; }
 .el-key i { width: 10px; height: 10px; border-radius: 50%; }
@@ -1340,6 +1361,11 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 .el-filter input { flex: 1 1 220px; min-height: 42px; padding: 0 12px; font: 400 15px/1 var(--ui); color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: var(--radius); }
 .el-count li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 8px 0; border-top: var(--rule) solid var(--hair); }
 .el-count i { grid-column: 1 / -1; display: block; height: 6px; border-radius: 1px; }
+@media (max-width: 700px) {
+  .el-panel { position: static; width: auto; max-height: none; margin-top: 10px; padding: 0; background: none; border-left: 0; }
+  .el-crumbs { max-width: 100%; }
+  .el-chips a, .el-chips button { min-height: 44px; }
+}
 @media (max-width: 860px) {
   .el-lead { grid-template-columns: minmax(0, 1fr); }
   .el-times { grid-template-columns: minmax(0, 1fr); gap: 8px; }

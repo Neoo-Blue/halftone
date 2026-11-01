@@ -422,7 +422,7 @@ const VIEWS = {
     const body = `${long ? `<div class="page-body"><p>${esc(d.summary)}</p></div>` : ''}${d.note ? notes([d.note]) : ''}
       ${d.story ? storyBody(d.story) : d.note && !d.sources.length ? '' : `<p class="empty">${d.sources.length ? 'The publisher would not share the full story with the paper. The sources alongside may have more.' : 'WARROOM has no article for this event, only the report itself.'}</p>`}`;
     return {
-      scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: (d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title, deck: `${whoLine(d.who) ? `${whoLine(d.who)}. ` : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
+      scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: d.note?.reading?.head || ((d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title), deck: `${whoLine(d.who) ? `${whoLine(d.who)}. ` : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
   },
 
   following: followingPage,

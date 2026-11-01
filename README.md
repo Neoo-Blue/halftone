@@ -111,7 +111,7 @@ It starts from what you'd ask, not from a table of numbers. Which seat decides e
 
 ![Election watch on a made-up election: the state of each chamber, the seat that decides the Senate, seats likely to change hands, and where the signals disagree](docs/img/elections.png)
 
-The map is printed like the rest of the paper. A state's dots grow with how sure its race is, so a safe seat reads solid and a toss-up barely prints, and you can switch between the Senate, governors and the House.
+The map is printed like the rest of the paper. A state's dots grow with how sure its race is, so a safe seat reads solid and a toss-up barely prints, and you can switch between the Senate, governors and the House. It also goes as deep as you do. Click a state and the map flies in to its districts and counties, click a district for its race and what's in it, and click a county for its towns and the seats it's split between.
 
 Every race has its own page. It says in plain words who has it, who holds the seat, whether it's open, and how near it is to the tipping point. Every signal sits on one scale, so you can see at a glance whether they agree. Then come each poll and, with an AI connected, what the race is actually about, written from the reporting with numbered sources. Follow a race and it joins the front page.
 
