@@ -242,6 +242,20 @@ const notes = (list) => (list || []).map((n) => `<section class="intel"><h3>${es
 const stories = (rows) => `<ul class="wire-list">${rows.map((s) => `<li><a href="${eventHref(s)}">${esc(s.t)}</a><span>${esc([s.src, s.place, ago(s.ts)].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>`;
 const onGlobe = (lat, lon) => (lat != null ? `<button type="button" class="ghost text" data-globe="${esc(lat)},${esc(lon)}">Show on the globe</button>` : '');
 
+// WARROOM's answer to who is saying a report. An older WARROOM sends none, and then the page says nothing rather than guess.
+const WHO_WORDS = { both: 'Both sides report this', outside: 'Reported from outside this fight', measured: 'Measured by an instrument', record: 'An official record' };
+const campLabel = (w, code) => w.camps?.find((c) => c.code === code)?.label || code;
+const whoLine = (w) => (!w ? '' : w.basis === 'one_side' ? `Only ${campLabel(w, w.sides?.[0])} is saying this` : WHO_WORDS[w.basis] || '');
+
+function whoIsReporting(w) {
+  const t = w?.tally;
+  if (!t?.reports) return '';
+  const spoke = [...(w.camps || []).map((c) => [t.camps?.[c.code] || 0, `from ${c.label}`]), [t.outside, 'from outside this fight'], [t.unplaced, 'from voices nobody can place']].filter(([n]) => n);
+  const told = w.accounts?.sides?.length ? `<div class="cases">${w.accounts.sides.map((s) => `<div><b>${esc(campLabel(w, s.side))}</b><p>${esc(s.says)}</p></div>`).join('')}</div>${w.accounts.agreed ? `<p class="agreed"><b>Both say:</b> ${esc(w.accounts.agreed)}</p>` : ''}${w.accounts.contested ? `<p class="agreed"><b>In dispute:</b> ${esc(w.accounts.contested)}</p>` : ''}<small>Written by AI from these reports. It says what each side claims, not what happened.</small>` : '';
+  const listed = (title, cards) => (cards?.length ? `<h4>${esc(title)}</h4><ul class="wire-list">${cards.map((c) => `<li><a href="/world/event/${esc(c.id)}">${esc(c.title)}</a><span>${esc([c.voice, c.place, ago(c.ts)].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>` : '');
+  return `<section class="who-reporting"><h3>Who is reporting</h3><p class="small">${spoke.map(([n, word]) => `${whole(n)} ${word}`).join(', ')}, over the last ${Math.round(w.hours / 24)} days.</p>${told}${Object.entries(w.only || {}).map(([code, cards]) => listed(`Only ${campLabel(w, code)} is saying`, cards)).join('')}${listed('Both sides report', w.agreed)}</section>`;
+}
+
 // Who is reporting a story, and how each end of the scale tells it. The two cases fill in afterwards, because they take a question to an AI.
 function coverageBlock(d) {
   const l = d.lean, n = l ? l[0] + l[1] + l[2] : 0;
@@ -390,7 +404,7 @@ const VIEWS = {
 
   event(d) {
     const place = [...new Set([d.place, d.admin1].filter(Boolean).flatMap((x) => x.split(', ')).filter((x) => !/^[A-Z]{2}\d*$/.test(x)))].join(', ') || d.country;
-    const side = `${facts([['Kind', title(d.category)], ['Place', place], ['When', stamp(d.ts)], ['Who', d.actors.join(', ')], ['Fatalities', d.fatalities], ['Severity', d.severity != null ? `${Math.round(d.severity * 100)} of 100` : ''], ['Confidence', d.confidence != null ? `${Math.round(d.confidence * 100)}%` : '']])}
+    const side = `${facts([['Kind', title(d.category)], ['Place', place], ['When', stamp(d.ts)], ['Who', d.actors.join(', ')], ['Fatalities', d.fatalities], ['Severity', d.severity != null ? `${Math.round(d.severity * 100)} of 100` : ''], ['Confidence', d.confidence != null ? `${Math.round(d.confidence * 100)}%` : ''], ['Reported by', (d.who?.voices || []).slice(0, 3).map((v) => v.name).join(', ')]])}
       ${d.lat == null ? '' : onGlobe(d.lat, d.lon)}
       ${d.theater && d.theater !== 'global' ? `<p class="to"><a href="/world/theater/${esc(d.theater)}">This conflict</a></p>` : ''}
       ${d.thread ? `<p class="to"><a href="/world/thread/${esc(d.thread.id)}">${esc(d.thread.title)}</a></p>` : ''}
@@ -400,7 +414,7 @@ const VIEWS = {
     const body = `${long ? `<div class="page-body"><p>${esc(d.summary)}</p></div>` : ''}${d.note ? notes([d.note]) : ''}
       ${d.story ? storyBody(d.story) : `<p class="empty">${d.sources.length ? 'The publisher would not share the full story with the paper. The sources alongside may have more.' : 'WARROOM has no article for this event, only the report itself.'}</p>`}`;
     return {
-      scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: (d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title, deck: `${d.confidence != null && d.confidence < 0.4 ? "Unconfirmed: one side's account, not yet checked against another. " : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
+      scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: (d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title, deck: `${whoLine(d.who) ? `${whoLine(d.who)}. ` : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
   },
 
   theater(d) {
@@ -409,7 +423,7 @@ const VIEWS = {
       head: d.name, deck: h?.summary || `Escalation stands at ${d.esc} of 100.`, meta: `${whole(d.events.length)} recent ${d.events.length === 1 ? 'story' : 'stories'}`,
       scene: reportScene(uniqueReports([...d.events, ...getDots().filter((x) => x.w === d.id)]), null, `Reports in ${d.name}, over time`),
       wide: h ? arc(h, d) : '',
-      body: `<div class="page-cols"><section><h3>What's happening now</h3>${notes(d.intel.slice(0, 1))}${d.intel.length > 1 ? `<details class="older"><summary>Earlier notes</summary>${notes(d.intel.slice(1))}</details>` : ''}</section><section><h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}</section></div>`,
+      body: `<div class="page-cols"><section><h3>What's happening now</h3>${notes(d.intel.slice(0, 1))}${d.intel.length > 1 ? `<details class="older"><summary>Earlier notes</summary>${notes(d.intel.slice(1))}</details>` : ''}</section>${whoIsReporting(d.who)}<section><h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}</section></div>`,
       side: `${facts([['Escalation', `${d.esc} of 100`], ['Began', h?.began ? longDate(h.began) : ''], ['Running for', years ? `${whole(years)} years` : ''], ['Turning points', turns || '']])}${h?.began_note ? `<p class="small">${esc(h.began_note)}</p>` : ''}${d.lat == null ? '<p class="small">This one is about what two sides do, not one place, so it has no spot on the globe.</p>' : onGlobe(d.lat, d.lon)}`,
       locate: [d.lat, d.lon],
     };

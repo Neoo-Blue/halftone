@@ -345,6 +345,21 @@ assert raises(OverflowError, s.judge_story, {**big, "t": "Tower", "outlets": [{*
 with s.db() as c:
     c.execute("DELETE FROM takes WHERE id LIKE 'full%'")
 s.ai.ask, s.read_page, s.spend_ai = real_ask, real_read, real_spend
+real_war = s.war
+for odd in (["x"], None, {"tally": "no"}, {}):
+    s.war = lambda *a, odd=odd, **k: odd
+    assert s.theater_who("ukraine_russia") is None, odd
+
+
+def down(*a, **k):
+    raise OSError("no")
+
+
+s.war = down
+assert s.theater_who("ukraine_russia") is None, "a WARROOM that can't say leaves the page as it was"
+s.war = lambda *a, **k: {"tally": {"reports": 1}}
+assert s.theater_who("ukraine_russia") == {"tally": {"reports": 1}}
+s.war = real_war
 real_c = s.C
 for odd in (5, "x", [1], [{"name": 2}], [{"name": "A", "lean": "sideways"}]):
     s.C = lambda k, odd=odd: odd if k == "OUTLET_LEANS" else real_c(k)
