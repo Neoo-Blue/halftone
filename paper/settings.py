@@ -42,7 +42,7 @@ SECTIONS = [
         F("PAPER_TZ", "Time zone", "tz", "UTC", "A name like America/New_York. It sets the date on the masthead and the days in the money report."),
         F("PAPER_SINCE", "First edition", "date", hint="Each day's number counts from here. Blank counts from the day you started the paper."),
     ]},
-    {"id": "layout", "title": "Layout", "about": "How the front page arranges itself, and how your machines are charted. Use Arrange in the menu to move sections by hand.", "needs": (), "fields": [
+    {"id": "layout", "title": "Layout", "about": "How the front page arranges itself, and how your machines are charted.", "needs": (), "fields": [
         F("LEARN_LAYOUT", "Learn from what I read", "bool", False, "After every 2 hours of reading, the sections you spend the most time in move up. Phone and desktop learn separately, and you can undo each change."),
         F("CHART_STYLE", "Home server charts", "select", "dots", options=CHARTS),
     ]},

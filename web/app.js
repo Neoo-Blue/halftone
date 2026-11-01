@@ -90,13 +90,17 @@ function front(p) {
   }
 }
 
-// As many extra headlines as the lead column has room for, so it ends level with the globe and never runs past it.
-function fitAlso() {
-  const list = $('.also');
-  if (!list) return;
-  const room = Math.max($('#orb').getBoundingClientRect().bottom, $('#inside').getBoundingClientRect().bottom);  // their own heights: the column itself stretches to the tallest
-  while (list.lastElementChild && list.getBoundingClientRect().bottom > room) list.lastElementChild.remove();
-  if (!list.children.length) { list.previousElementSibling.remove(); list.remove(); }
+// Every column of the front page ends level. "Inside" goes under the note if the conflicts can grow to meet it, or under them if they can't, and the conflicts and the headlines then take as many rows as there's room for.
+function fitFront() {
+  const list = $('.also'), table = $('#theaters'), rows = [...table.children], side = $('#inside'), foot = (e) => e.getBoundingClientRect().bottom, tall = (e) => e.getBoundingClientRect().height;
+  if (innerWidth <= 860) { rows.slice(5).forEach((r) => r.remove()); return; }
+  const spare = rows.slice(5).reduce((a, r) => a + tall(r), 0), note = foot($('#glance'));
+  const onNote = innerWidth > 1180 && note + tall(side) <= foot(table);  // with every conflict showing, can that column reach it?
+  (onNote ? $('.note-col') : $('#orb figcaption')).append(side);
+  const end = onNote ? table : side, level = Math.max(onNote ? foot(side) : note, foot(end) - spare, list ? list.getBoundingClientRect().top + 90 : 0);  // their own heights: the columns themselves stretch
+  while (rows.length > 5 && foot(end) > level) rows.pop().remove();
+  while (list?.lastElementChild && foot(list) > level) list.lastElementChild.remove();
+  if (list && !list.children.length) { list.previousElementSibling.remove(); list.remove(); }
 }
 
 // "BBC, New York Times and 4 more": who carried it, which is also why it ranks where it does.
@@ -160,8 +164,8 @@ function world(p) {
   const as = w.assets ? `Tracking ${whole(w.assets.vessels)} ships, ${whole(w.assets.aircraft)} aircraft and ${whole(w.assets.satellites)} satellites.` : '';
   $('#worldbody').innerHTML = `
     <div class="wire" id="wire"></div>
+    ${front ? `<div class="world-lead"><h3 class="sub-head">What matters today</h3><ol class="world-stories">${front}</ol></div>` : ''}
     <div class="world-main">
-      ${front ? `<h3 class="sub-head">What matters today</h3><ol class="world-stories">${front}</ol>` : ''}
       <h3 class="sub-head">The escalation index stands at ${idx}</h3>
       <p class="prose">${esc(assessed)}${esc(w.rationale || w.headline)}</p>
       ${w.most ? `<p class="prose">${esc(w.most)}</p>` : ''}
@@ -180,7 +184,7 @@ function world(p) {
     </div>` : ''}`;
   wireList(p, 'world');
 
-  $('#theaters').innerHTML = w.theaters.slice(0, 5).map((t) => `<li><a href="/world/theater/${esc(t.id)}">${esc(t.name)}</a><b>${t.esc}</b>${t.lat == null ? '' : `<button type="button" class="locate" data-fly="${esc(t.lat)},${esc(t.lon)}" aria-label="Show ${esc(t.name)} on the globe"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><path d="M8 1v3.2M8 11.8V15M1 8h3.2M11.8 8H15"/></svg></button>`}</li>`).join('');
+  $('#theaters').innerHTML = w.theaters.slice(0, 14).map((t) => `<li><a href="/world/theater/${esc(t.id)}">${esc(t.name)}</a><b>${t.esc}</b>${t.lat == null ? '' : `<button type="button" class="locate" data-fly="${esc(t.lat)},${esc(t.lon)}" aria-label="Show ${esc(t.name)} on the globe"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><path d="M8 1v3.2M8 11.8V15M1 8h3.2M11.8 8H15"/></svg></button>`}</li>`).join('');
   if (globe) {
     const key = w.dots.length + (w.ts || '');
     if (key !== dotsKey) { dotsKey = key; globe.setDots(w.dots); }
@@ -568,8 +572,6 @@ function place(next, animate) {
 function arrange(on) {
   arranging = on;
   document.documentElement.classList.toggle('arranging', on);
-  $('#arrange').textContent = on ? 'Done' : 'Arrange';
-  $('#arrange').setAttribute('aria-pressed', String(on));
   $('#arrange-note').hidden = !on;
   $('#arrange-text').textContent = `Move sections up or down. Each screen size keeps its own order${paper.layout.learn ? ', and learning starts again from what you choose.' : '.'}`;
   $$('.desk').forEach((d) => { d.style.viewTransitionName = on ? `desk-${d.id}` : ''; });
@@ -630,7 +632,7 @@ function render() {
   desk(sinceLast);
   desk(followed);
   findData(p);
-  fitAlso();
+  fitFront();
   phoneCheck();
   if (!drawn) {
     drawn = true;
@@ -646,6 +648,10 @@ async function load() {
     paper = await r.json();
     $('#banner').hidden = !r.headers.get('x-paper-offline');  // the last edition, kept by the service worker
     render();
+    if (location.hash === '#arrange') {  // what Settings sends you here for
+      history.replaceState(null, '', '/');
+      arrange(true);
+    }
   } catch {
     $('#banner').hidden = false;
   }
@@ -697,11 +703,7 @@ document.addEventListener('click', (e) => {
     document.documentElement.style.setProperty('--text', t.dataset.text);
     try { localStorage.setItem('paper-text', t.dataset.text); } catch { /* it just won't stick */ }
     $$('[data-text]').forEach((b) => b.setAttribute('aria-pressed', String(b === t)));
-  } else if (t.hasAttribute('data-arrange')) {
-    $('#sheet-more').close();
-    arrange(true);
-  }
-  else if (t.dataset.fly) {
+  } else if (t.dataset.fly) {
     const [lat, lon] = t.dataset.fly.split(',').map(Number);
     globe?.fly(lat, lon);
     if (t.closest('#worldbody')) $('#orb').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
@@ -772,7 +774,7 @@ document.addEventListener('keydown', (e) => {
   if (!isFront()) return;
   if (e.key === '/') {
     e.preventDefault();
-    $('#find-q').focus();
+    openFind();
   }
   if (e.key === 'a' && paper?.on.ai) {
     e.preventDefault();
@@ -799,7 +801,12 @@ $$('.desk').forEach((d) => {
   const name = $('.desk-name', d);
   name.insertAdjacentHTML('afterend', `<div class="desk-move">${[['-1', 'up', 'M8 13V3.5M3.5 8 8 3.5 12.5 8'], ['1', 'down', 'M8 3v9.5M3.5 8 8 12.5 12.5 8']].map(([step, way, path]) => `<button type="button" data-move="${step}" aria-label="Move ${esc(name.textContent)} ${way}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${path}"/></svg></button>`).join('')}</div>`);
 });
-$('#arrange').addEventListener('click', () => arrange(!arranging));
+const openFind = () => {
+  $('#sheet-tags').innerHTML = $('#trend-tags').innerHTML;
+  $('#sheet-find').showModal();
+  $('#sheet-q').focus();
+};
+$('#bar-find').addEventListener('click', openFind);
 $('#arrange-reset').addEventListener('click', () => choose(USUAL));
 $('#arrange-done').addEventListener('click', () => arrange(false));
 $('#paper').addEventListener('click', (e) => {

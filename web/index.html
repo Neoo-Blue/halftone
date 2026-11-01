@@ -42,10 +42,10 @@
     <li><a href="/#systems">Systems</a></li>
     <li class="not-phone"><a href="/investments">Investments</a></li>
     <li class="not-phone"><a href="/archive">Back issues</a></li>
-    <li class="not-phone"><button type="button" class="arrange" id="arrange" aria-pressed="false">Arrange</button></li>
     <li class="not-phone"><a href="/settings">Settings</a></li>
   </ul>
   <div class="tape" id="tape" aria-label="Markets"></div>
+  <button type="button" class="bar-find" id="bar-find" aria-haspopup="dialog" aria-keyshortcuts="/"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg><span>Search</span></button>
   <div class="plates" role="radiogroup" aria-label="Theme">
     <button type="button" role="radio" data-theme-pick="morning" aria-label="Morning" title="Morning"><i></i></button>
     <button type="button" role="radio" data-theme-pick="night" aria-label="Night" title="Night"><i></i></button>
@@ -96,7 +96,6 @@
     <li><a href="/investments">Investments</a></li>
     <li><a href="/following">Following</a></li>
     <li><a href="/archive">Back issues</a></li>
-    <li><button type="button" data-arrange>Arrange the sections</button></li>
     <li><a href="/settings">Settings</a></li>
   </ul>
 </dialog>
@@ -113,7 +112,6 @@
       <p class="since" id="since" hidden></p>
       <div class="editor" id="editor" hidden></div>
       <dl class="glance" id="glance"></dl>
-      <nav class="inside" id="inside" aria-label="Inside today"></nav>
     </div>
 
     <article class="lead" id="lead">
@@ -133,6 +131,7 @@
           <button type="button" aria-pressed="true" data-layer="2"><i class="sw-h"></i>Hazards</button>
         </div>
         <ol class="theaters" id="theaters"></ol>
+        <nav class="inside" id="inside" aria-label="Inside today"></nav>
       </figcaption>
     </figure>
   </section>

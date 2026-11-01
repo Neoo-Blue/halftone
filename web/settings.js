@@ -113,6 +113,7 @@ function block(s) {
   return `<section class="set${shown ? '' : ' shut'}" id="set-${s.id}" aria-labelledby="t-${s.id}">
     <div class="set-head"><h2 id="t-${s.id}"><button type="button" class="set-open" data-open-set="${s.id}" aria-expanded="${shown}">${esc(s.title)}</button></h2>${always ? '' : `<p class="set-state ${cls}">${text}</p>`}</div>
     <p class="set-about">${esc(s.about)}</p>
+    ${s.id === 'layout' ? '<p class="set-arrange"><a class="btn" href="/#arrange">Arrange the sections</a> <span>Move them up or down on the page itself. Each screen size keeps its own order.</span></p>' : ''}
     <div class="set-fields">${s.fields.map(field).join('')}</div>
     ${s.id === 'access' ? connect() : ''}
     <div class="set-foot"><button type="button" class="btn" data-save="${s.id}" disabled>Save</button>

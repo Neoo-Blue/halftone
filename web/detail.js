@@ -875,6 +875,7 @@ export function start(fly, dots) {
     const a = e.target.closest('a[href^="/"]');
     if (!a || a.target || ['/settings', '/ask'].includes(a.pathname) || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return undefined;
     e.preventDefault();
+    if (a.closest('.nameplate')) front = 0;  // the title is the top of the front page, not wherever you left it
     go(a.getAttribute('href'));
     return undefined;
   });

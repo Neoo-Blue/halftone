@@ -620,7 +620,7 @@ def news():
     tops = picks(hard, 5)
     lead = next((t for t in tops if t["text"]), tops[0] if tops else None)  # a lead with words beats a slightly hotter one with none
     used = {c["u"] for c in tops}  # a story leads one desk only
-    also = [{"u": c["u"], "t": c["t"], "src": c["src"], "n": len(c["outlets"]), "ts": c["ts"], "lean": c["lean"]} for c in hard if c["u"] not in used][:6]
+    also = [{"u": c["u"], "t": c["t"], "src": c["src"], "n": len(c["outlets"]), "ts": c["ts"], "lean": c["lean"]} for c in hard if c["u"] not in used][:16]
     tech = [c for c in ranked if set(c["desks"]) & set(TECH_DESKS) and c["u"] not in used]
     return {"lead": lead, "tops": [t for t in tops if t is not lead], "also": also, "trending": trending(stories, now), "blind": unseen, "tech_lead": (picks(tech, 1) or [None])[0], "stories": stories[:500], "feeds": sum(s["ok"] for s in FEED_STATE.values()), "total": len(feeds), "outlets": len({f[1] for f in feeds})}
 
