@@ -146,7 +146,7 @@ def main():
     s.check = lambda section: {"ok": True, "text": "This is the demo, so nothing was really tested."}
     settings.update({"PAPER_TZ": "America/New_York", "PAPER_SINCE": str((datetime.now(timezone.utc) - timedelta(days=211)).date()), "PLEX_URL": "http://demo.invalid", "PLEX_TOKEN": "demo", "PVE_URL": "http://demo.invalid", "PVE_TOKEN": "demo",
                      "PROBES": [{"group": "Sites", "name": n, "url": "http://demo.invalid/"} for n in ("My Shop", "The Club")] + [{"group": "At home", "name": n, "url": "http://demo.invalid/"} for n in ("Router", "Photos", "Backups")],
-                     "MAIL_TENANT": "demo", "MAIL_CLIENT_ID": "demo", "MAIL_CLIENT_SECRET": "demo", "MAILBOXES": [{"address": "you@shop.example", "label": "Shop"}], "MONEY_URL": "http://demo.invalid", "COMMONS_URL": "http://demo.invalid", "WEATHER_PLACE": "Harbor City",
+                     "MAIL_TENANT": "demo", "MAIL_CLIENT_ID": "demo", "MAIL_CLIENT_SECRET": "demo", "MAILBOXES": [{"address": "you@shop.example", "label": "Shop"}], "MONEY_URL": "http://demo.invalid", "COMMONS_URL": "http://demo.invalid", "TWILIO_ACCOUNT": "demo", "TWILIO_KEY": "demo", "TWILIO_SECRET": "demo", "WEATHER_PLACE": "Harbor City",
                      "PRODUCTS": [{"key": "shop", "name": "My Shop", "host": "shop.example"}, {"key": "club", "name": "The Club", "host": "club.example"}]})
     s.save("news", news())
     s.save("world", world())
@@ -168,6 +168,7 @@ def main():
         wave, day = 1 + .6 * math.sin(i / 3), (datetime.now(timezone.utc) - timedelta(days=i)).date().isoformat()
         spent += [{"day": day, "who": "Coding plan", "model": "claude-sonnet-5-5", "qty": 9e7 * wave, "unit": "tokens", "worth": 41 * wave, "charged": 0}, {"day": day, "who": "Research agent", "model": "claude-opus-5-5", "qty": 2e7 * wave, "unit": "tokens", "worth": 12 * wave, "charged": 0},
                   {"day": day, "who": "This paper", "model": "claude-haiku-5-5", "qty": 3e5, "unit": "tokens", "worth": .11, "charged": .11}, {"day": day, "who": "LiveKit", "model": "calls", "qty": 240 * wave, "unit": "minutes", "worth": 2.4 * wave, "charged": 0}]
+    s.save("costs", [{"name": "Twilio", "cents": 2140, "per": "month", "note": "From Twilio, last month"}])
     s.save("usage", {**s.usage.report([{**r, "source": "ledger"} for r in spent], s.utc_day()), "missing": []})
     s.save("feed", feed())
     s.save("mail", {"read": 1, "failed": [], "triage_error": None})

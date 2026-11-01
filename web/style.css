@@ -297,6 +297,11 @@ h4:first-child { margin-top: 0; }
 .cost-row input:hover, .cost-row select:hover { border-color: var(--hair); }
 .cost-row input:focus { border-color: var(--ink); background: var(--paper2); outline: none; }
 .cost-row .c-amount { text-align: right; }
+.cost-auto { grid-template-columns: minmax(0, 1fr) auto; padding: 12px 0; font: 500 15px/1.25 var(--ui); }
+.cost-auto span { padding-left: 8px; }
+.cost-auto b { font-weight: 600; padding-right: 8px; }
+.cost-auto small { grid-column: 1 / -1; padding-left: 8px; font: 400 13px/1.3 var(--ui); color: var(--ink2); }
+.c-connect { display: inline-flex; align-items: center; justify-content: flex-end; min-height: 44px; padding: 0 8px; font: 600 14px/1 var(--ui); }
 .cost-row input::placeholder { color: var(--ink3); opacity: 1; }
 .cost-row [aria-invalid=true] { border-color: var(--bad); }
 .ghost { min-height: 44px; min-width: 44px; display: grid; place-items: center; color: var(--ink2); border-radius: min(var(--radius), 10px); }
@@ -534,6 +539,8 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
   .cost-row { grid-template-columns: minmax(0, 1fr) 112px 44px; gap: 0 6px; padding: 6px 0; }
   .cost-row .c-name { grid-column: 1 / -1; }
   .cost-row .c-amount { text-align: left; }
+  .cost-auto { grid-template-columns: minmax(0, 1fr) auto; }
+  .c-connect { justify-content: flex-start; }
   .cost-row input, .cost-row select { min-height: 44px; font-size: 16px; }
   .mail-filter select { min-height: 44px; font-size: 16px; }
   .mail-filter { min-height: 44px; }

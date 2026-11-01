@@ -116,6 +116,14 @@ SECTIONS = [
         F("LIVEKIT_PROJECT", "Project ID", placeholder="p_abc123", hint="The part of your LiveKit dashboard address that starts with p_.", guards=True),
         F("LIVEKIT_TOKEN", "List-only token", "secret", hint="Run: lk token create --list --valid-for 8760h. It can list sessions and nothing else, so your API secret stays where it is."),
     ]},
+    {"id": "twilio", "title": "Twilio", "about": "Fills in last month's Twilio bill on the Business desk.", "needs": ("TWILIO_ACCOUNT", "TWILIO_KEY", "TWILIO_SECRET"), "fields": [
+        F("TWILIO_ACCOUNT", "Account SID", placeholder="AC...", guards=True),
+        F("TWILIO_KEY", "API key SID", placeholder="SK...", hint="An API key, so your auth token stays where it is. Console, Account, API keys.", guards=True),
+        F("TWILIO_SECRET", "API key secret", "secret"),
+    ]},
+    {"id": "deepgram", "title": "Deepgram", "about": "Fills in what Deepgram cost over the last 30 days on the Business desk.", "needs": ("DEEPGRAM_KEY",), "fields": [
+        F("DEEPGRAM_KEY", "API key", "secret", hint="It has to be able to read billing. A key that can only transcribe is refused."),
+    ]},
     {"id": "ai", "title": "AI provider", "about": "Add one and you can ask the paper questions, set it up by describing what you want, and have your mail sorted.", "needs": (), "fields": [
         F("AI_PROVIDER", "Provider", "select", "anthropic", options=tuple((v, label) for v, label, _ in PROVIDERS), guards=True),
         F("AI_KEY", "API key", "secret", hint="Not needed for Ollama or LM Studio."),

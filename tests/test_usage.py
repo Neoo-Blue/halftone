@@ -199,6 +199,89 @@ s.fetch = real_fetch
 s.save("usage", result)
 page = s.detail("usage", "")
 assert page["kind"] == "usage" and page["today"] == s.utc_day() and page["days"] and "usage" in s.desks_on() and s.paper()["usage"]["missing"] == ["Commons"], page
+# ---------------------------------------------------------------- costs that fill themselves
+settings.update({"ANTHROPIC_ADMIN_KEY": None, "COMMONS_URL": ""})
+assert u.figure("8.04382") == 8.04382 and u.figure(0) == 0
+for bad in (None, "", [], {}, True, False):
+    assert refuses(u.figure, bad), bad
+recent, old = s.utc_day(2), s.utc_day(45)
+s.save("usage", {"days": [{"day": old, "rows": [{"who": "This paper", "charged": 99.0}]}, {"day": recent, "rows": [{"who": "This paper", "charged": 1.25}, {"who": "Commons", "charged": .5}, {"who": "Commons, openrouter", "charged": .1}, {"who": "OpenRouter", "charged": 2.0}, {"who": "Claude Code", "charged": 0}]}]})
+assert u.charged_by(s.load("usage")["data"], s.utc_day(30)) == {"Anthropic API": 1.75, "OpenRouter": 2.1}, "thirty days means thirty days, not the last thirty with use in them"
+typed_costs = [("Twilio", 797, "month"), ("Twilio numbers", 300, "month"), ("Twilio, support plan", 4900, "month"), ("Anthropic API", 30000, "month"), ("OpenRouter", 4000, "month"), ("Deepgram", None, "month"), ("Rent", 5000, "month"), ("Other", None, "month")]
+s.set_costs(typed_costs)
+settings.update({"TWILIO_ACCOUNT": "AC1", "TWILIO_KEY": "SK1", "TWILIO_SECRET": "shh", "DEEPGRAM_KEY": "dg", "OPENROUTER_KEY": "or"})
+assert s.job_on("costs")
+amounts = {"price": "8.04382", "dollars": 1.5}
+
+
+def bills(url, head=None, **k):
+    if "twilio" in url:
+        assert head["Authorization"] == "Basic " + s.base64.b64encode(b"SK1:shh").decode() and "shh" not in url and "/Accounts/AC1/" in url, url
+        return {"usage_records": [{"category": "totalprice", "price": amounts["price"], "price_unit": "usd"}]}
+    assert head == {"Authorization": "Token dg"}, head
+    if url.endswith("/projects"):
+        return {"projects": [{"project_id": "p/1"}, {"project_id": "p2"}]}
+    assert "p%2F1" in url or "p2" in url, url
+    return {"results": [{"dollars": amounts["dollars"]}, {"dollars": .25}]}
+
+
+s.fetch = bills
+rows = s.cost_rows()
+assert [(r["name"], r["cents"]) for r in rows] == [("Twilio", 804), ("Deepgram", 350)] and all(r["note"] for r in rows), rows
+s.save("costs", rows)
+for field, value in (("price", None), ("price", ""), ("dollars", None), ("price", "1e13")):
+    keep, amounts[field] = amounts[field], value
+    held = {r["name"]: r for r in s.cost_rows()}
+    amounts[field] = keep
+    moved = "Twilio" if field == "price" else "Deepgram"
+    assert held[moved]["cents"] == (804 if moved == "Twilio" else 350) and "last good" in held[moved]["note"], "a missing or absurd figure holds the last good one, never a zero"
+s.fetch = lambda url, *a, **k: {"usage_records": {}} if "twilio" in url else bills(url, *a, **k)
+assert "last good" in s.cost_rows()[0]["note"], "the wrong shape is a failure too"
+s.fetch = lambda url, *a, **k: (_ for _ in ()).throw(OSError("down")) if "twilio" in url else bills(url, *a, **k)
+held = s.cost_rows()
+assert held[0]["cents"] == 804 and "last good" in held[0]["note"] and held[1]["cents"] == 350, "a bill that can't be read keeps its last figure and says so"
+s.save("costs", [])
+s.fetch = lambda *a, **k: (_ for _ in ()).throw(OSError("down"))
+assert s.cost_rows() == [], "and with no figure yet there is no row, not a zero"
+s.fetch = real_fetch
+s.save("costs", rows)
+shown = {r["name"]: r for r in s.get_costs()}
+assert shown["Twilio"]["cents"] == 804 and shown["Deepgram"]["cents"] == 350 and shown["OpenRouter"]["cents"] == 210, "a real bill stands in for the typed row"
+real_provider, real_ready = s.ai.provider, s.ai.ready
+s.ai.provider, s.ai.ready = (lambda: "anthropic"), (lambda: True)
+assert shown["Twilio numbers"]["cents"] == 300 and shown["Twilio, support plan"]["cents"] == 4900, "and only the row of that exact name"
+shown = {r["name"]: r for r in s.get_costs()}
+assert shown["Anthropic API"]["cents"] == 30000 and "note" not in shown["Anthropic API"], "an estimate never replaces a figure you typed"
+s.ai.ready = real_ready
+assert shown["Rent"]["cents"] == 5000 and shown["Other"]["connect"] is None, "other rows stay as they are"
+page_rows = s.clean_costs({"rows": [{"name": r["name"], "cents": r["cents"], "per": r["per"]} for r in s.get_costs() if not r.get("note")]})
+s.set_costs(page_rows + s.replaced_costs(page_rows))
+settings.update({"TWILIO_ACCOUNT": "", "TWILIO_KEY": "", "TWILIO_SECRET": None})
+gone = {r["name"]: r for r in s.get_costs()}
+assert "note" not in gone["Twilio"] and gone["Twilio"]["cents"] == 797, "a page save keeps a replaced row, so it's back when its source goes, and a source that's off stops showing at once"
+assert gone["Deepgram"]["cents"] == 350
+settings.update({"DEEPGRAM_KEY": None, "OPENROUTER_KEY": None})
+s.save("costs", [])
+with s.db() as c:
+    c.execute("DELETE FROM cost")
+s.set_costs([("Deepgram", None, "month"), ("Anthropic API", None, "month"), ("Rent", 100, "month")])
+blank = {r["name"]: r for r in s.get_costs()}
+assert blank["Deepgram"]["connect"] == "deepgram", "a blank row with a source offers to connect it"
+s.ai.ready = lambda: True
+filled = {r["name"]: r for r in s.get_costs()}
+assert filled["Anthropic API"]["cents"] == 175 and filled["Anthropic API"]["estimate"] and "Estimated" in filled["Anthropic API"]["note"], "an estimate fills a blank row, and says it's an estimate"
+s.ai.provider = lambda: "ollama"
+assert "connect" in {r["name"]: r for r in s.get_costs()}["Anthropic API"], "a local model is not an Anthropic bill"
+s.ai.provider, s.ai.ready = real_provider, real_ready
+s.save("usage", {"days": []})
+settings.update({"OPENROUTER_KEY": "or"})
+assert all(r["name"] != "OpenRouter" for r in s.get_costs()), "with nothing counted there is no row, not a zero"
+s.save("usage", {"days": [{"day": recent, "rows": [{"who": "OpenRouter", "charged": 1e13}]}]})
+assert all(r["name"] != "OpenRouter" for r in s.get_costs()), "and an absurd figure can't move the money total"
+with s.db() as c:
+    c.execute("DELETE FROM cost")
+settings.update({"OPENROUTER_KEY": None})
+s.save("usage", result)
 settings.update({"COMMONS_URL": "", "ANTHROPIC_ADMIN_KEY": None, "LIVEKIT_PROJECT": "", "LIVEKIT_TOKEN": None})
 assert not s.job_on("usage"), "nothing connected and no provider means no desk"
 try:

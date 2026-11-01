@@ -6,6 +6,7 @@ source can never slow the paper: it shows the last good copy, marked with its ag
 SDK, which only mail triage imports. Everything about the owner lives in settings.py, and a section with nothing
 set is simply off. Nothing is served to anyone who hasn't passed auth.py.
 """
+import base64
 import email.utils
 import hashlib
 import html
@@ -1196,6 +1197,8 @@ def job_on(name):
         return ai.ready()
     if name == "usage":
         return ai.ready() or any(settings.enabled(s) for s, _, _ in USAGE_SOURCES)
+    if name == "costs":
+        return settings.enabled("twilio") or settings.enabled("deepgram")
     return name not in JOB_NEEDS or settings.enabled(JOB_NEEDS[name])
 
 
@@ -1285,9 +1288,38 @@ def money_report(feed, costs, days, now=None):
     }
 
 
+CONNECTABLE = {"twilio": "twilio", "deepgram": "deepgram", "openrouter": "openrouter", "anthropic api": "bill"}  # costs with a section that can fill them
+MAX_COST = 100_000_000  # cents, for a typed cost or a filled-in one alike
+
+
+def ai_costs():
+    """What AI use already knows, so it's never typed twice. Without the bill, Anthropic's is the paper's estimate of its own and Commons' calls, so a figure you typed stands."""
+    spent, bill = usage.charged_by(live("usage")["data"] or {}, utc_day(30)), settings.enabled("bill")
+    rows = [("Anthropic API", bill or settings.enabled("ledger") or (ai.provider() == "anthropic" and ai.ready()), not bill), ("OpenRouter", settings.enabled("openrouter"), False)]
+    return [{"name": name, "cents": round(spent[name] * 100), "per": "month", "note": "Estimated under AI use, last 30 days" if estimate else "From AI use, last 30 days", "estimate": estimate}
+            for name, on, estimate in rows if on and 0 < round(spent[name] * 100) <= MAX_COST]
+
+
 def get_costs():
+    """Filled-in costs first, and they stand in for a typed row of the same name. A blank row with a source to connect says so, instead of asking for a number."""
     with db() as c:
-        return [dict(r) for r in c.execute("SELECT name, cents, per FROM cost ORDER BY pos")]
+        typed = [dict(r) for r in c.execute("SELECT name, cents, per FROM cost ORDER BY pos")]
+    figures = {r["name"].lower() for r in typed if r["cents"] is not None}
+    filled = [r for r in live("costs")["data"] or [] if settings.enabled(r["name"].lower())] + [r for r in ai_costs() if not (r["estimate"] and r["name"].lower() in figures)]
+    names = {r["name"].lower() for r in filled}
+    rest = [r for r in typed if r["name"].lower() not in names]
+    for r in rest:
+        if r["cents"] is None:
+            section = CONNECTABLE.get(r["name"].lower())
+            r["connect"] = section if section and not settings.enabled(section) else None
+    return filled + rest
+
+
+def replaced_costs(sent):
+    """Typed rows a filled-in cost stands in for. The page never sees them, so saving it must not lose them, or they'd be gone when the source goes."""
+    names = {r["name"].lower() for r in get_costs() if r.get("note")} - {name.lower() for name, _, _ in sent}
+    with db() as c:
+        return [tuple(r) for r in c.execute("SELECT name, cents, per FROM cost ORDER BY pos") if r["name"].lower() in names]
 
 
 def clean_costs(body):
@@ -1302,7 +1334,7 @@ def clean_costs(body):
         name, cents, per = r["name"].strip(), r.get("cents"), r.get("per")
         if not 1 <= len(name) <= 60 or per not in ("month", "year"):
             raise ValueError("row")
-        if cents is not None and (type(cents) is not int or not 0 <= cents <= 100_000_000):
+        if cents is not None and (type(cents) is not int or not 0 <= cents <= MAX_COST):
             raise ValueError("cents")
         out.append((name, cents, per))
     return out
@@ -2255,10 +2287,7 @@ def bill_rows():
 
 
 def openrouter_total():
-    total = fetch("https://openrouter.ai/api/v1/credits", {"Authorization": f"Bearer {C('OPENROUTER_KEY')}"})["data"]["total_usage"]
-    if total is None:  # read as zero, the next good reading would look like a fortune
-        raise ValueError("no total")
-    return usage.amount(total)
+    return usage.figure(fetch("https://openrouter.ai/api/v1/credits", {"Authorization": f"Bearer {C('OPENROUTER_KEY')}"})["data"]["total_usage"])  # read as zero, a missing total would make the next one look like a fortune
 
 
 def openrouter_rows():
@@ -2338,7 +2367,42 @@ def usage_report():
     return {**usage.report(rows, utc_day()), "missing": missing}
 
 
-JOBS = [("usage", usage_report, 3600), ("sports", sports, 120), ("weather", weather, 1800), ("editor", editor_note, 900), ("brief", brief, 1800), ("world", world, 300), ("news", news, 180), ("mail", scan_mail, 300), ("media", media, 300), ("playing", now_playing, 60), ("probes", probes, 60),
+def twilio_month():
+    """Last month's whole bill, in dollars. Phone numbers, calls and messages are all in it."""
+    account = urllib.parse.quote(C("TWILIO_ACCOUNT"), safe="")  # the address before the key, as above
+    login = base64.b64encode(f"{C('TWILIO_KEY')}:{C('TWILIO_SECRET')}".encode()).decode()
+    records = fetch(f"https://api.twilio.com/2010-04-01/Accounts/{account}/Usage/Records/LastMonth.json?Category=totalprice", {"Authorization": f"Basic {login}"})["usage_records"]
+    if not isinstance(records, list):
+        raise ValueError("not a list of records")
+    return usage.figure(records[0]["price"]) if records else 0.0
+
+
+def deepgram_month():
+    """The last 30 days across every project. Credit counts: this is what the use cost, whoever paid."""
+    head, total = {"Authorization": f"Token {C('DEEPGRAM_KEY')}"}, 0.0
+    for p in fetch("https://api.deepgram.com/v1/projects", head)["projects"][:10]:
+        project = urllib.parse.quote(str(p["project_id"]), safe="")
+        total += sum(usage.figure(r["dollars"]) for r in fetch(f"https://api.deepgram.com/v1/projects/{project}/billing/breakdown?start={utc_day(30)}&end={utc_day()}", head)["results"][:2000])
+    return total
+
+
+def cost_rows():
+    """Bills that fill themselves. One that can't be read keeps its last figure and says so."""
+    before, out = {r["name"]: r for r in load("costs")["data"] or []}, []
+    for section, name, note, pull in (("twilio", "Twilio", "From Twilio, last month", twilio_month), ("deepgram", "Deepgram", "From Deepgram, last 30 days", deepgram_month)):
+        if settings.enabled(section):
+            try:
+                cents = round(pull() * 100)
+                if cents > MAX_COST:
+                    raise ValueError("not a sane bill")
+                out.append({"name": name, "cents": cents, "per": "month", "note": note})
+            except Exception:  # noqa: BLE001 - one bill failing costs that bill, not the other
+                if name in before:
+                    out.append({**before[name], "note": f"{before[name]['note'].split(',')[0]}, the last good figure"})
+    return out
+
+
+JOBS = [("usage", usage_report, 3600), ("costs", cost_rows, 3600), ("sports", sports, 120), ("weather", weather, 1800), ("editor", editor_note, 900), ("brief", brief, 1800), ("world", world, 300), ("news", news, 180), ("mail", scan_mail, 300), ("media", media, 300), ("playing", now_playing, 60), ("probes", probes, 60),
         ("machines", machines, 60), ("storage", storage, 1800), ("feed", money_feed, 300)]
 WAKE = threading.Event()  # a saved setting shouldn't wait out a job's sleep
 
@@ -2392,6 +2456,8 @@ CHECKS = {
     "bill": lambda: f"Anthropic answered with {len(bill_rows())} rows.",
     "openrouter": lambda: f"OpenRouter answered. The account has used {openrouter_total():.2f} dollars so far.",
     "livekit": lambda: f"LiveKit answered with {len(livekit_page(0))} recent sessions.",
+    "twilio": lambda: f"Twilio answered. Last month came to {twilio_month():.2f} dollars.",
+    "deepgram": lambda: f"Deepgram answered. The last 30 days came to {deepgram_month():.2f} dollars.",
     "brief": lambda: f"Found {brief()['title']}.",
     "weather": lambda: f"{weather()['place']} is {weather()['now']['sky'].lower()}.",
     "sports": lambda: f"Scores found for {len(sports())} leagues.",
@@ -2591,7 +2657,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"ok": bool(set_mail_done(done.group(1), done.group(2) == "done"))})
         try:
             if path == "/api/costs":
-                set_costs(clean_costs(self.body(20000)))
+                rows = clean_costs(self.body(20000))
+                set_costs(rows + replaced_costs(rows))
                 return self.send_json(paper())
             if path == "/api/settings":
                 dropped = settings.update(self.body(200000).get("values"))

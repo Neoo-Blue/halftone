@@ -23,6 +23,8 @@ The paper counts its own AI calls as soon as you add a provider. Each of these a
 
 Days run midnight to midnight UTC, the same as the ledger. Cache writes are priced at the five-minute rate, because the ledger doesn't separate them from the dearer one-hour cache, so heavy one-hour caching reads a little low. Haiku 5.5 is priced at its rate for prompts up to 100K tokens.
 
+The Business desk uses the same figures for its running costs, so nothing is typed twice. Without the Anthropic bill, its figure is only an estimate of the paper's and Commons' calls, so a figure you typed stands. With the bill it replaces yours, and if your money report already includes AI spend the two overlap, because the bill covers everything on the account.
+
 ## Keys
 
 - The Admin key can manage your Anthropic organization. It goes only to `api.anthropic.com`, and only to read the cost report.

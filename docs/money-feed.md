@@ -42,4 +42,4 @@ The paper asks with `Authorization: Bearer <token>`.
 
 `site` matches the Key column under Products in Settings. `day` is `YYYY-MM-DD` in the paper's time zone. Amounts are whole cents.
 
-Everything is required but may be an empty list. Fees are estimated at 2.9% plus 30 cents a sale. Costs you run on are typed in on the Business desk itself, and a cost with no amount stays visibly blank instead of counting as zero.
+Everything is required but may be an empty list. Fees are estimated at 2.9% plus 30 cents a sale. Costs you run on live on the Business desk. Connect Twilio or Deepgram in Settings and their bills fill themselves, and Anthropic and OpenRouter come from [AI use](ai-use.md). The rest you enter once. A cost with no amount stays visibly blank instead of counting as zero, and a blank one with a source to connect offers that instead of asking for a number.

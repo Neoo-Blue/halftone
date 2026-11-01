@@ -29,6 +29,13 @@ def amount(v):
     return v
 
 
+def figure(v):
+    """A number a bill has to contain. Missing is a failure, never a zero, or a renamed field would look like a free month."""
+    if v is None or v == "" or isinstance(v, (bool, list, dict)):
+        raise ValueError("no figure")
+    return amount(v)
+
+
 def day_of(v):
     """A real date, and not a future one, which would push real days off the page."""
     day = date.fromisoformat(str(v)[:10])
@@ -129,6 +136,18 @@ def report(rows, today):
         d["rows"] = sorted(d["rows"], key=lambda r: -(r["worth"] or 0))[:100]
     out = [days[k] for k in sorted(days)][-90:]
     return {"days": out, "unpriced": sorted({f"{r['who']}, {r['model']}" for d in out for r in d["rows"] if r["worth"] is None})[:20]}
+
+
+def charged_by(rep, since):
+    """Dollars since a day, by who sends the bill. A report only holds days with use in them, so this counts by date, not by row."""
+    out = {"Anthropic API": 0.0, "OpenRouter": 0.0}
+    for d in rep.get("days") or []:
+        for r in d["rows"] if d["day"] >= since else ():
+            if r["who"] == ANTHROPIC or r["who"] in OWN_API_CALLS:
+                out["Anthropic API"] += r["charged"] or 0
+            elif r["who"] == "OpenRouter" or r["who"].endswith(", openrouter"):
+                out["OpenRouter"] += r["charged"] or 0
+    return out
 
 
 def glance(rep, today):

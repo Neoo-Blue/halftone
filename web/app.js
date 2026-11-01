@@ -314,9 +314,10 @@ function ledger(m) {
 }
 
 function costRow(c = { name: '', cents: null, per: 'month' }) {
+  if (c.note) return `<li class="cost-row cost-auto"><span>${esc(c.name)}</span><b>${usd(c.cents)} a ${esc(c.per)}</b><small>${esc(c.note)}</small></li>`;
   return `<li class="cost-row">
     <input class="c-name" aria-label="Cost name" value="${esc(c.name)}" maxlength="60" placeholder="Name">
-    <input class="c-amount" aria-label="Amount in dollars" inputmode="decimal" value="${c.cents == null ? '' : (c.cents / 100).toFixed(2)}" placeholder="Amount">
+    ${c.connect ? `<a class="c-connect" href="/settings#set-${esc(c.connect)}">Connect</a><input class="c-amount" type="hidden" value="">` : `<input class="c-amount" aria-label="Amount in dollars" inputmode="decimal" value="${c.cents == null ? '' : (c.cents / 100).toFixed(2)}" placeholder="Amount">`}
     <select class="c-per" aria-label="How often"><option value="month"${c.per === 'month' ? ' selected' : ''}>a month</option><option value="year"${c.per === 'year' ? ' selected' : ''}>a year</option></select>
     <button type="button" class="ghost" data-remove aria-label="Remove ${esc(c.name || 'this cost')}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg></button>
   </li>`;
@@ -361,7 +362,7 @@ function business(p) {
 
 function readCosts() {
   const rows = [];
-  for (const li of $$('#costs .cost-row')) {
+  for (const li of $$('#costs .cost-row:not(.cost-auto)')) {
     const name = $('.c-name', li).value.trim(), raw = $('.c-amount', li).value.replace(/[$,\s]/g, '');
     const amount = $('.c-amount', li);
     const bad = raw !== '' && !/^\d+(\.\d{0,2})?$/.test(raw);
