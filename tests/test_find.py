@@ -70,6 +70,7 @@ assert [c["kind"] for c in s.named_cards([], {"team": {"kind": "team"}, "thing":
 assert [c["kind"] for c in s.named_cards([], {"market": {"kind": "market"}, "thing": {"kind": "thing"}})] == ["market"], "Apple isn't the fruit"
 assert [c["kind"] for c in s.named_cards([], {"team": {"kind": "team"}, "place": {"kind": "place"}, "thing": {"kind": "thing"}})] == ["place", "thing"], "Oakland isn't Oakland Roots"
 assert [c["kind"] for c in s.named_cards([{"kind": "conflict"}], {"team": {"kind": "team"}, "thing": {"kind": "thing"}})] == ["conflict", "thing"]
+assert [c["kind"] for c in s.named_cards([{"kind": "conflict"}], {"market": {"kind": "market"}, "thing": {"kind": "thing"}})] == ["conflict", "thing"], "Taiwan isn't its chip maker"
 
 # a search
 for bad in (None, 5, "", "x", "y" * 121):

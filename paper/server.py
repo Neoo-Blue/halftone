@@ -2939,10 +2939,12 @@ def around(q):
 
 
 def named_cards(conflicts, got):
-    """One meaning for the words, where they have one. Arsenal the club isn't also a store of weapons, Apple isn't the fruit, and Oakland isn't Oakland Roots."""
+    """One meaning for the words, where they have one. Arsenal the club isn't also a store of weapons, Apple isn't the fruit, Oakland isn't Oakland Roots, and Taiwan isn't its chip maker."""
     market, team, place, thing = (got.get(k) for k in ("market", "team", "place", "thing"))
     if conflicts or place:
         team = None
+    if conflicts:
+        market = None
     if market or team:
         thing = None
     return [*conflicts, *[c for c in (market, team, place, thing) if c]]
