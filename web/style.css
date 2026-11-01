@@ -488,7 +488,9 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
   [data-theme=cobalt] .nameplate { font-size: 12.4vw; }
   [data-theme=glass] .ambient { animation: none; }
   .bar { flex-wrap: wrap; gap: 0 10px; padding-top: 0; }
-  .desks { order: 1; flex: 1 0 100%; width: 100%; justify-content: space-between; margin: 0; }
+  .desks { order: 1; flex: 1 0 100%; width: 100%; min-width: 0; justify-content: space-between; margin: 0; overflow-x: auto; scrollbar-width: none; }  /* a full paper has more desks than a phone has width */
+  .desks::-webkit-scrollbar { display: none; }
+  .desks li { flex: none; }
   .desks a { padding: 0 2px; }
   .desks a[aria-current]::after { left: 2px; right: 2px; }
   .tape { order: 2; flex: 1 1 0; min-height: 44px; align-items: center; cursor: pointer; }
