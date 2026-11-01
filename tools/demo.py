@@ -5,6 +5,7 @@ Every name, number and story here is made up. No job runs and nothing leaves thi
 folder that is gone when you stop it. The README's screenshots come from this.
 """
 import hashlib
+import json
 import math
 import os
 import random
@@ -27,11 +28,14 @@ random.seed(7)
 NOW = int(time.time())
 HOUR = 3600
 DAY = 86400
-OUTLETS = ["The Courier", "Daily Dispatch", "Northern Post", "The Ledger", "Harbor Times", "Global Wire"]
+LEANS = {"Northern Post": "left", "The Citizen": "left", "The Courier": "lean left", "Harbor Times": "lean left", "Global Wire": "center", "Daily Dispatch": "center", "The Ledger": "lean right", "Morning Bulletin": "lean right", "The Standard": "right", "Frontier Review": "right"}
+OUTLETS = list(LEANS)
+RENT = [("Northern Post", "Renters win a cap after a decade of rising bills"), ("The Citizen", "A rent cap at last for harbor families"), ("The Courier", "Council caps rents on harbor apartments at three percent a year"), ("Global Wire", "Council votes to limit yearly rent rises"),
+        ("Daily Dispatch", "Harbor rent rises capped at three percent"), ("The Ledger", "Builders warn a rent cap will freeze new harbor projects"), ("The Standard", "The council's rent cap will choke the housing it promises"), ("Frontier Review", "Rent control returns, and the harbor will pay for it")]
 HEADS = [
     ("Harbor cities agree to share a single flood barrier after decade of talks", "Ministers from four coastal states signed the plan overnight, ending a dispute that had stalled two earlier projects."),
-    ("Central banks signal a slower path as prices cool across the region", "Three policy makers said the next move depends on wages, not energy."),
-    ("Rail strike ends after overnight deal on pay and rosters", "Trains will return to full service by the weekend, the union said."),
+    ("Talks resume in the Northern Strait after a nine-day pause", "Both sides moved ships back from the inner channel ahead of the round."),
+    ("Council caps rents on harbor apartments at three percent a year", "The vote split the chamber and sets up a fight with builders."),
     ("Record wheat harvest eases fears of a winter price spike", "Exporters expect the largest shipments in six years."),
     ("Mountain towns open winter shelters early as first storm arrives", "Forecasters expect a metre of snow above the tree line."),
     ("Port workers return as shipping lanes reopen after a week of closures", "Backlogs could take a month to clear."),
@@ -41,19 +45,44 @@ HEADS = [
     ("Browser makers agree on a shared standard for passkeys across devices", "The change reaches stable releases early next year."),
     ("Security teams race to patch a flaw in a widely used logging library", "Attackers began scanning for it within hours of disclosure."),
     ("Telescope finds water vapour on a rocky world forty light years away", "The team will point the instrument back at it next spring."),
+    ("Ferry service to the outer islands doubles for the winter", "Two more boats join the route from December."),
+    ("Dock workers vote on a four-year contract this week", "Union leaders called the offer the best in a generation."),
+    ("Grain prices slip as ships return to the outer lanes", "Traders said the fall could reverse if talks stall."),
+    ("Housing starts fall for a third straight month", "Builders blamed borrowing costs and a shortage of electricians."),
+    ("City opens its first floating park beside the old customs house", "The park rises and falls with the tide."),
+    ("Small chip maker wins a contract to supply harbor cranes", "The deal is worth more than its last two years of sales combined."),
+    ("Solar output hits a record as spring comes early to the coast", "Grid operators paid some farms to switch off at noon."),
+    ("Language model learns to say when it doesn't know", "Researchers said the change cut wrong answers by a third."),
+    ("Regulators open an inquiry into a cloud outage that stopped payments", "The failure lasted six hours on a busy Friday."),
+    ("Password manager patches a bug found by a teenager", "The company paid the largest bounty in its history."),
+    ("Deep sea survey maps a mountain range nobody had seen", "The peaks rise more than two kilometers from the floor."),
+    ("Bird flu vaccine for poultry clears its last trial", "Farmers could have it before the spring migration."),
 ]
 
 
+LATER = (["us"], ["us"], ["business"], ["business"], ["us"], ["tech"], ["science"], ["ai", "tech"], ["tech"], ["security"], ["science"], ["science"])  # the desks of the later headlines
+
+
 def png(seed, w=480, h=270):
-    """A made-up picture: soft shapes in grey, which each theme then screens like everything else on the page."""
+    """A made-up picture of a harbor: sky, hills, water. It's in grey, and each theme screens it like everything else on the page."""
     r = random.Random(seed)
-    spots = [(r.uniform(0, w), r.uniform(0, h), r.uniform(50, 170), r.uniform(.3, 1)) for _ in range(6)]
+    sun, far, near, phase = r.uniform(.15, .85) * w, r.uniform(.30, .42), r.uniform(.46, .56), r.uniform(0, 6.28)
     rows = b""
     for y in range(h):
         row = bytearray([0])
         for x in range(w):
-            v = .22 + .25 * y / h + sum(a * math.exp(-((x - sx) ** 2 + (y - sy) ** 2) / (2 * sr ** 2)) for sx, sy, sr, a in spots)
-            row.append(min(255, int(255 * v)))
+            u, v = x / w, y / h
+            ridge = far + .05 * math.sin(u * 7 + phase) + .02 * math.sin(u * 23 + phase)
+            shore = near + .03 * math.sin(u * 5 - phase) + .012 * math.sin(u * 31)
+            if v > .62:
+                ink = .52 + .3 * (v - .62) + .16 * math.sin(y / 2.2 + 3 * math.sin(x / 40 + phase))
+            elif v > shore:
+                ink = .18
+            elif v > ridge:
+                ink = .36
+            else:
+                ink = .95 - .55 * v - .5 * math.exp(-(((x - sun) / 46) ** 2 + ((y - h * .2) / 46) ** 2))
+            row.append(max(0, min(255, int(255 * (1 - ink) * 1.05))))
         rows += bytes(row)
 
     def chunk(kind, data):
@@ -70,17 +99,24 @@ def picture(name):
 def story(i, desks):
     title, deck = HEADS[i % len(HEADS)]
     url = f"https://demo.invalid/story/{i}"
-    outlets = [{"src": o, "u": f"{url}/{o}"} for o in random.sample(OUTLETS, random.randint(1, 5))]
-    return {"id": f"{i:012x}", "t": title, "u": url, "src": outlets[0]["src"], "ts": NOW - i * 1700, "first": NOW - i * 2000, "sum": deck, "img": None, "desks": desks, "outlets": outlets}
+    told = RENT if i == 2 else [(o, title) for o in random.sample(OUTLETS, random.randint(1, 7))]
+    outlets = [{"src": o, "u": f"{url}/{o.lower().replace(' ', '-')}", "t": t, "ts": NOW - i * 1700 - n * 1500} for n, (o, t) in enumerate(told)]
+    return {"id": f"{i:012x}", "t": title, "u": outlets[0]["u"], "src": outlets[0]["src"], "ts": NOW - i * 1700, "first": NOW - i * 2000, "sum": deck, "img": None, "desks": desks, "outlets": outlets}
 
 
 def news():
-    stories = [story(i, ["world"] if i < 3 else ["business"] if i < 5 else ["us"] if i < 7 else ["ai", "tech"] if i < 9 else ["tech"] if i < 10 else ["security"] if i < 11 else ["science"]) for i in range(len(HEADS))]
+    stories = [story(i, ["world"] if i < 3 else ["business"] if i < 5 else ["us"] if i < 7 else ["ai", "tech"] if i < 9 else ["tech"] if i < 10 else ["security"] if i < 11 else ["science"] if i < 12 else LATER[i - 12]) for i in range(len(HEADS))]
     for i, c in enumerate(stories[:6] + stories[7:8]):
         c["img"] = picture(f"story{i}")
+    for c in stories:
+        c["lean"] = s.sides.count(c["outlets"], s.own_leans())
     lead = {**stories[0], "text": "<p>The agreement, reached after a night of talks, gives each city a seat on a joint board and a share of the upkeep. Engineers say the first section could close to shipping in a storm within four years.</p><p>Critics in the smaller ports said they would watch the costs closely.</p>"}
-    also = [{"u": c["u"], "t": c["t"], "src": c["src"], "n": len(c["outlets"]), "ts": c["ts"]} for c in stories[5:7] + stories[8:11]]
-    return {"lead": lead, "tops": stories[1:5], "also": also, "tech_lead": {**stories[7], "text": ""}, "stories": stories * 4, "feeds": 57, "total": 57, "outlets": 50}
+    also = [{"u": c["u"], "t": c["t"], "src": c["src"], "n": len(c["outlets"]), "ts": c["ts"], "lean": c["lean"]} for c in stories[5:7] + stories[8:11]]
+    only = lambda t, names, lean: {"u": f"https://demo.invalid/only/{abs(hash(t)) % 9999}", "t": t, "src": names[0], "n": len(names), "ts": NOW - 5 * HOUR, "lean": lean, "names": names}
+    blind = {"l": [only("Tenants sue over mould in city-run towers", ["Northern Post", "The Citizen", "The Courier", "Harbor Times"], [4, 0, 0]), only("School meals fund runs out in March, report finds", ["The Citizen", "The Courier", "Harbor Times", "Northern Post"], [4, 0, 0])],
+             "r": [only("Audit finds the transit agency overpaid on its new depot", ["The Standard", "Frontier Review", "The Ledger"], [0, 0, 3]), only("Small farms say the water rule will close them by spring", ["Frontier Review", "Morning Bulletin", "The Standard"], [0, 0, 3])]}
+    trending = [{"name": n, "n": k} for n, k in (("Northern Strait", 9), ("Harbor", 7), ("Rent cap", 6), ("Battery plant", 4), ("Passkeys", 3))]
+    return {"lead": lead, "tops": stories[1:5], "also": also, "tech_lead": {**stories[7], "text": ""}, "stories": stories, "blind": blind, "trending": trending, "feeds": 57, "total": 57, "outlets": 50}
 
 
 def world():
@@ -143,13 +179,141 @@ def mail():
             c.execute("INSERT INTO mail (id, box, gid, sender, addr, subject, preview, received, unread, junk, triaged, cat, important, why) VALUES (?, 'you@shop.example', ?, ?, ?, ?, '', ?, 1, 0, 1, ?, ?, ?)", (f"{i:024x}", str(i), sender, addr, subject, NOW - i * 5000, cat, want, why))
 
 
+# ---------------------------------------------------------------------- what would come from outside, made up as well
+# Each stub stands where the paper would reach a stranger, so the whole page works and nothing leaves this machine.
+
+RENT_BODY = """<p>The harbor council voted seven to four on Tuesday night to cap yearly rent rises at three percent on apartments older than ten years, the first limit of its kind in the city.</p>
+<p>Supporters said the cap would keep long-time tenants near their work after five years of rises that outran wages. Opponents said it would drive builders away just as the city needs more homes.</p>
+<h2>What the cap covers</h2>
+<p>The rule applies to about 41,000 apartments in the harbor district. New buildings are exempt for their first ten years, and landlords can ask a review board for more when they pay for major repairs.</p>
+<p>"Nobody here is asking for free housing," said Dana Reyes, who has rented the same two rooms on Quay Street for 19 years. "We're asking to know what next year costs."</p>
+<h2>What builders say</h2>
+<p>The Harbor Builders Group said three planned towers were now under review. "Money goes where the rules are steady," said its chair, Tomas Lind. "This tells it to go somewhere else."</p>
+<p>The city's own analysis found that a cap of this size would slow new construction by a small amount over a decade, and that it could not say how large. The council has asked for a fresh estimate within a year.</p>
+<h2>What happens next</h2>
+<p>The cap takes effect in January unless opponents collect enough signatures to force a public vote. Both sides have said they expect that to happen.</p>"""
+TAKES = {"contested": True, "subject": "The harbor rent cap", "case_for": "Supporters say a cap protects long-time tenants from sudden rises while the city builds more homes.", "case_against": "Opponents say a cap scares off builders and leaves fewer homes for everyone within a decade.",
+         "agreed": "The council voted seven to four to cap yearly rent rises at three percent from January.", "stances": [{"i": i, "stance": x} for i, x in enumerate(("against", "against", "against", "neutral", "neutral", "neutral", "for", "for"))]}
+CAMPS = [{"code": "NL", "label": "Norland's side"}, {"code": "CO", "label": "Costera's side"}]
+
+
+def read_page(url):
+    item = s.known_item(url) or {}
+    body = RENT_BODY if "/story/2/" in url else "".join(f"<p>{p}</p>" for p in (item.get("sum", "Every word here is made up."), "This story is made up for the demo. On a real paper, the article opens here in a clean reader, with nothing but the words.", "Outlets, people and places in it are all invented, and the paper reached nothing outside this machine to show it."))
+    return {"url": url, "site": item.get("src", "The Courier"), "title": item.get("t", "A made-up story"), "deck": item.get("sum", ""), "image": None, "author": "Mara Quinn", "published": item.get("ts", NOW), "body": body, "words": len(body.split())}
+
+
+def asked(system, text, max_tokens=1500, cheap=False, schema=None):
+    if system == s.TAKES_SYSTEM:
+        return json.dumps(TAKES)
+    if system != s.FIND_SYSTEM:
+        return "This is the demo, so no AI read this. On a real paper the answer comes from what you're reading, with its sources."
+    if "The reader now asks" in text:
+        return json.dumps({"answer": "The two sides have agreed on a schedule and nothing else [3]. Shipping insurers are waiting for a second week without incidents before they cut rates [2].", "next": ["Who is mediating?", "What would reopen the lane?"]})
+    if "Strait" not in text.split("Searched for:")[-1]:
+        return json.dumps({"answer": "This is the demo, so this answer is made up [1]. A real one is written from the sources below, with a number on each claim.", "next": ["What else can it find?"]})
+    return json.dumps({"answer": "Talks between Norland and Costera resumed on Monday after a nine-day pause [1]. Reported incidents fell for a third day, and shipping is back near its weekly average [2]. Both sides still claim the inner channel, and neither has said what it would give up [3].",
+                       "next": ["What is each side asking for?", "How close is shipping to normal?", "Who is mediating the talks?"]})
+
+
+def looked_up(query, most=8):
+    return [{"t": f"{query}: a short history", "u": "https://example.org/history", "sum": "How the dispute began, and who has held what since."}, {"t": f"{query} shipping map", "u": "https://example.net/map", "sum": "Lanes, ports and the inner channel."}, {"t": f"Explaining the {query} talks", "u": "https://example.com/talks", "sum": "What each side has asked for."}]
+
+
+def said(q, n=5):
+    heads = [f"{q}: talks resume after a nine-day pause", f"Insurers watch {q} for a second calm week", f"Why {q} matters to grain prices", f"Ships return to {q} as reports of incidents fall", f"What Norland wants from {q}"]
+    return [{"t": t, "u": f"https://demo.invalid/more/{i}", "src": OUTLETS[i], "sum": "A made-up line from the story.", "ts": NOW - i * 4 * HOUR} for i, t in enumerate(heads[:n])]
+
+
+def priced(key, name, where, price, prev):
+    wave = [round(prev * (1 + .03 * math.sin((i - 21) / 3) - (21 - i) / 300), 2) for i in range(22)]
+    return {"kind": "market", "key": key, "name": name, "where": where, "price": price, "prev": prev, "currency": "USD", "closes": wave + [price], "href": f"/topic/{key}"}
+
+
+def around(q):
+    q = s.clean_query(q)
+    low = q.lower()
+    cards = [s.conflict_card(t) for t in s.theaters_on(q)]
+    if "freight" in low or low == "hrbr":
+        cards.append(priced("HRBR", "Harbor Freight Lines", "NYSE", 141.2, 139.9))
+    elif "rangers" in low:
+        cards.append(TEAM)
+    elif "harbor city" in low:
+        cards.append(TOWN)
+    else:
+        cards.append({"kind": "thing", "name": q.title(), "about": "Made up for the demo", "text": "A made-up channel between two made-up coasts, 140 km long and 22 km wide at its narrowest. About a fifth of the region's grain passes through it." if "strait" in low else f"{q.title()} would have its encyclopedia entry here: a paragraph on what it is, with a link to the rest.", "url": "https://demo.invalid/wiki"})
+    odds = [{"t": "Do talks end in a signed deal by...?", "u": "https://demo.invalid/odds", "volume": 2400000, "lines": [{"t": "December 31", "pct": 18}, {"t": "March 31", "pct": 37}, {"t": "June 30", "pct": 56}]}, {"t": "New incident in the strait this month?", "u": "https://demo.invalid/odds2", "volume": 610000, "lines": [{"t": "Yes", "pct": 41}]}]
+    talk = [{"t": f"Tracking {q} from public ship positions", "u": "https://demo.invalid/talk", "src": "Hacker News", "sum": "412 points, 188 comments", "ts": NOW - 6 * DAY}]
+    return {"q": q, "cards": cards, "news": said(q), "talk": talk, "papers": [], "code": [], "odds": odds if "strait" in low else []}
+
+
+def war(path, timeout=30):
+    """What WARROOM would say about the made-up conflicts and the made-up storm."""
+    if path.startswith("/intel"):
+        return {"items": [{"headline": "Talks hold while each side tests the other", "body": "Reported incidents fell for a third day. Both sides moved ships back from the inner channel, though neither has said why. The next round is set for Thursday.", "bullets": ["Shipping is near its weekly average", "Neither side has given up a claim"], "ts": NOW - 2 * HOUR}]}
+    if path.startswith("/events"):
+        return {"items": REPORTS}
+    if path.endswith("/history"):
+        return HISTORY
+    if path.endswith("/accounts"):
+        return WHO
+    if path.startswith("/hazards/"):
+        return {"name": "MARIN-26", "kind": "cyclone", "severity_text": "A made-up tropical storm, with winds up to 190 km/h", "alert": "orange", "country": "The Bay Coast", "from_ts": NOW - 4 * DAY, "to_ts": NOW + DAY, "lat": 16.7, "lon": 81.0, "extra": {}}
+    raise OSError("the demo has no WARROOM")
+
+
+def corridor(points, width):
+    """A band along a path, as [lon, lat] pairs."""
+    side = [[lo, la + width] for la, lo, _ in points]
+    return [*side, *([lo, la - width] for la, lo, _ in reversed(points)), side[0]]
+
+
+def cyclone(_):
+    path = [(11.5, 93.0, 65), (12.2, 91.2, 85), (12.9, 89.6, 110), (13.5, 88.0, 140), (14.1, 86.4, 165), (14.8, 84.9, 185), (15.4, 83.4, 190), (16.0, 82.0, 170), (16.7, 81.0, 130)]
+    ahead = [(18.2, 80.8, 90), (19.8, 80.6, 65), (21.3, 81.0, 45)]
+    track = [{"la": la, "lo": lo, "t": NOW - (len(path) - 1 - i) * 12 * HOUR, "v": v, "label": "Tropical storm", "fc": False} for i, (la, lo, v) in enumerate(path)]
+    track += [{"la": la, "lo": lo, "t": NOW + (i + 1) * 12 * HOUR, "v": v, "label": "Tropical depression", "fc": True} for i, (la, lo, v) in enumerate(ahead)]
+    return {"track": track, "areas": [{"level": 0, "rings": [corridor(path[-1:] + ahead, 1.3)]}, {"level": 1, "rings": [corridor(path, 1.5)]}, {"level": 3, "rings": [corridor(path[3:8], .6)]}],
+            "impact": [["Peak winds", "190 km/h"], ["People in gale-force winds", "4,200,000"], ["People in hurricane-force winds", "310,000"], ["Storm surge", "up to 2.4 m"]], "countries": ["The Bay Coast"], "source": "Made up for the demo", "report": None}
+
+
+TEAM = {"kind": "team", "key": "demo/city/1", "name": "Harbor Rangers", "standing": "2nd in City League", "record": "14-5", "last": {"mine": 101, "theirs": 96, "home": True, "vs": "Summit Comets", "state": "post", "at": NOW - DAY}, "next": {"home": False, "vs": "Bay Pilots", "at": NOW + 2 * DAY}, "href": "/topic/Harbor%20Rangers"}
+TOWN = {"kind": "place", "key": "40.7,-74.0", "name": "Harbor City", "region": "Made Up, Nowhere", "tz": "UTC", "now": {"temp": 58, "sky": "Partly cloudy"}, "days": [{"t": NOW + i * DAY, "hi": 62 + i, "lo": 49 + i, "rain": (10, 70, 20, 40)[i]} for i in range(4)], "href": "/weather"}
+ONLY = {"NL": [{"id": "1" * 16, "title": "Norland says it turned back two patrol boats at the inner channel", "voice": "Norland Press Office", "place": "Inner Channel", "ts": NOW - 3 * HOUR}], "CO": [{"id": "2" * 16, "title": "Costera says Norland drones crossed the line twice overnight", "voice": "Costera Daily", "place": "Skerry Point", "ts": NOW - 5 * HOUR}]}
+WHO = {"hours": 72, "camps": CAMPS, "tally": {"reports": 66, "camps": {"NL": 33, "CO": 21}, "outside": 9, "unplaced": 3}, "only": ONLY, "agreed": [{"id": "3" * 16, "title": "Both sides confirm ships pulled back ahead of Thursday's talks", "voice": "Global Wire", "place": "The Strait", "ts": NOW - 7 * HOUR}],
+       "accounts": {"sides": [{"side": "NL", "says": "Norland's channels say its patrols are protecting shipping, and that Costera's ships crossed the line first."}, {"side": "CO", "says": "Costera's outlets say Norland is using the talks as cover to hold the inner channel."}], "agreed": "Ships from both sides have moved back ahead of Thursday's round.", "contested": "Who crossed the line first, and who the inner channel belongs to."}}
+HISTORY = {"began": "1998-03", "began_note": "The first shots came after a fishing boat was seized in the inner channel.", "summary": "A quarrel over a channel that became a standoff over who may use it, and for how long.", "eras": [
+    {"name": "The fishing quarrel", "from": "1998", "to": "2009", "summary": "Boats, nets and a line nobody had drawn.", "events": [{"date": "1998-03-14", "title": "A fishing boat is seized in the inner channel", "detail": "Both coasts claim the water. Nobody is hurt, and nobody backs down.", "source": "https://example.org/1998"}, {"date": "2004-06", "title": "The first talks fail", "detail": "A map offered by mediators is rejected by both sides within a week.", "source": "https://example.org/2004"}]},
+    {"name": "The line", "from": "2010", "to": "2021", "summary": "A patrol line, and the first shipping lanes closed.", "events": [{"date": "2012-09-02", "title": "A patrol line is declared", "detail": "Norland publishes the line and sends ships to hold it.", "source": "https://example.org/2012"}, {"date": "2018", "title": "Insurers price the strait as a war zone", "detail": "Freight costs through the channel double in a month.", "source": "https://example.org/2018"}]},
+    {"name": "The standoff", "from": "2022", "to": "now", "summary": "Drones, closures and talks that keep stopping.", "events": [{"date": "2022-11-20", "title": "The channel closes for 40 days", "detail": "The longest closure so far, ended by a grain deal.", "source": "https://example.org/2022"}, {"date": "2026-10-19", "title": "Talks resume, then pause", "detail": "A nine-day pause after an overnight incident.", "source": "https://example.org/2026"}]}]}
+REPORTS = [{"id": f"{i + 16:016x}", "title": t, "domain": "kinetic" if i % 3 else "economic", "ts": NOW - i * 5 * HOUR, "severity": .35 + (i % 5) / 8, "place": p, "lat": la, "lon": lo, "source": "rss_osint", "category": "shipping"} for i, (t, p, la, lo) in enumerate((
+    ("Patrol boats shadow a grain convoy through the outer lanes", "Outer Lanes", 56.2, 19.1), ("Overnight drone crossing reported near Skerry Point", "Skerry Point", 55.1, 21.3), ("Insurers hold rates steady for a second week", "The Strait", 55.4, 19.9), ("Ships pull back from the inner channel ahead of talks", "Inner Channel", 54.8, 20.5), ("Fishing fleet stays in port after a warning from both coasts", "Port Hale", 54.2, 18.7), ("Radar site comes back online after a two-day outage", "North Head", 57.0, 21.0)))]
+
+
+def demo_world():
+    """Where a real paper would fetch, the demo answers. Anything else that tries to reach out simply fails."""
+    def nowhere(*_, **__):
+        raise OSError("the demo stays on this machine")
+    s.ai.ask, s.ai.web_search = asked, looked_up
+    s.read_page, s.around, s.war, s.hazard_depth, s.outside_at = read_page, around, war, cyclone, nowhere
+    follows = [priced("HRBR", "Harbor Freight Lines", "NYSE", 141.2, 139.9), TEAM, TOWN, {**s.conflict_card({"id": "north_strait", "name": "The Northern Strait", "esc": 61})},
+               {"kind": "topic", "key": "Battery plant", "name": "Battery plant", "rows": [{"t": "New battery plant promises four thousand jobs by 2029", "u": "https://demo.invalid/story/6", "src": "Global Wire", "ts": NOW - 3 * HOUR}, {"t": "Second site named for the battery plant's suppliers", "u": "https://demo.invalid/more/9", "src": "The Ledger", "ts": NOW - 9 * HOUR}], "href": "/topic/Battery%20plant"}]
+    cards = [{**c, "id": s.follow_id(c["kind"], c["key"]), "at": NOW} for c in follows]
+    s.remember("follows", [{k: c[k] for k in ("id", "kind", "key", "name")} for c in cards])
+    for i in range(20):  # a month of reading, so Both sides can say which way it leaned
+        s.note_read(f"https://demo.invalid/old/{i}", "An older story", ("Harbor Times", "The Courier", "Northern Post", "Global Wire", "The Ledger")[i % 5 if i % 2 else 0])
+    s.save("following", {"cards": cards})
+    s.save("editor", {"text": "A calmer morning in the strait, a fight over rents at home, and a battery plant that wants four thousand people. Read the harbor story first: it's the one that will cost someone money by January.", "at": NOW - 40 * 60})
+
+
 def main():
     s.init_db()
     s.check = lambda section: {"ok": True, "text": "This is the demo, so nothing was really tested."}
     settings.update({"PAPER_TZ": "America/New_York", "PAPER_SINCE": str((datetime.now(timezone.utc) - timedelta(days=211)).date()), "PLEX_URL": "http://demo.invalid", "PLEX_TOKEN": "demo", "PVE_URL": "http://demo.invalid", "PVE_TOKEN": "demo",
                      "PROBES": [{"group": "Sites", "name": n, "url": "http://demo.invalid/"} for n in ("My Shop", "The Club")] + [{"group": "At home", "name": n, "url": "http://demo.invalid/"} for n in ("Router", "Photos", "Backups")],
                      "MAIL_TENANT": "demo", "MAIL_CLIENT_ID": "demo", "MAIL_CLIENT_SECRET": "demo", "MAILBOXES": [{"address": "you@shop.example", "label": "Shop"}], "MONEY_URL": "http://demo.invalid", "COMMONS_URL": "http://demo.invalid", "TWILIO_ACCOUNT": "demo", "TWILIO_KEY": "demo", "TWILIO_SECRET": "demo", "WEATHER_PLACE": "Harbor City",
-                     "PRODUCTS": [{"key": "shop", "name": "My Shop", "host": "shop.example"}, {"key": "club", "name": "The Club", "host": "club.example"}]})
+                     "PRODUCTS": [{"key": "shop", "name": "My Shop", "host": "shop.example"}, {"key": "club", "name": "The Club", "host": "club.example"}],
+                     "AI_KEY": "demo", "OUTLET_LEANS": [{"name": n, "lean": v} for n, v in LEANS.items()]})
     s.save("news", news())
     s.save("world", world())
     s.save("media", media())
@@ -180,6 +344,7 @@ def main():
     s.save("mail", {"read": 1, "failed": [], "triage_error": None})
     mail()
     s.set_costs([("Hosting", 4000, "month"), ("Email", 1200, "month"), ("Domains", 3600, "year"), ("Ads", None, "month")])
+    demo_world()
     print("The demo is at http://127.0.0.1:8096. Every word of it is made up.", flush=True)
     ThreadingHTTPServer(("127.0.0.1", 8096), s.Handler).serve_forever()
 
