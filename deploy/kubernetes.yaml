@@ -36,6 +36,7 @@ spec:
         app: paper
     spec:
       automountServiceAccountToken: false
+      enableServiceLinks: false  # or a Service named paper fills PAPER_PORT with an address
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

@@ -38,7 +38,7 @@ import auth
 import settings
 
 E = os.environ.get
-PORT = int(E("PAPER_PORT", "8095"))
+PORT = int(E("PAPER_PORT", "8095")) if E("PAPER_PORT", "8095").isdigit() else 8095  # Kubernetes sets PAPER_PORT=tcp://... for a Service named paper
 BIND = E("PAPER_BIND", "127.0.0.1")
 DATA = Path(E("PAPER_DATA", "/var/lib/paper"))
 DB_PATH = E("PAPER_DB", str(DATA / "paper.db"))

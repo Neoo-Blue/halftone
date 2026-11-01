@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "paper"))
 os.environ["PAPER_DATA"] = tmp = tempfile.mkdtemp(prefix="paper-test")
 os.environ.pop("PAPER_AUTH", None)
+os.environ["PAPER_PORT"] = "tcp://10.43.13.10:8095"  # what Kubernetes sets for a Service named paper
 os.environ.pop("PAPER_PASSWORD", None)
 import server as s  # noqa: E402
 import settings  # noqa: E402
@@ -15,6 +16,7 @@ import settings  # noqa: E402
 settings.update({"PAPER_TZ": "America/Los_Angeles", "BRIEF_URL": "https://brief.example", "PRODUCTS": [{"key": "shop", "name": "Shop", "host": "shop.example"}, {"key": "club", "name": "Club", "host": "club.example"}, {"key": "guide", "name": "Guide", "host": "guide.example"}],
                  "EARLIER": [{"label": "First invoice", "day": "2026-07-16", "amount": "268.20"}], "MAILBOXES": [{"address": "owner@shop.example", "label": "Owner"}, {"address": "hello@shop.example", "label": "Shop"}]})
 
+assert s.PORT == 8095, "a Kubernetes service address must not stop the paper"
 NOW = 1793468000
 day = lambda ago: f"2026-10-{31 - ago:02d}"
 sale = lambda ago, cents, site="shop", renewal=0: {"site": site, "item": "x", "cents": cents, "renewal": renewal, "created": NOW - ago * 86400, "day": day(ago), "country": "US", "city": None, "region": None}
