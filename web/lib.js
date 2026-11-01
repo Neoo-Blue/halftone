@@ -96,7 +96,7 @@ export function dayBars(days, key, { href, picked, label = '' } = {}) {
 }
 
 // A question for the paper. The answer goes in as text, never as markup: the model has read strangers' words, so nothing it says may become a link or a tag.
-export async function askPaper(question, log, { last = false } = {}) {
+export async function askPaper(question, log, { last = false, url } = {}) {
   const entry = document.createElement('article'), head = document.createElement('h2'), reply = document.createElement('p');
   head.textContent = question;
   reply.textContent = 'Reading the paper.';
@@ -105,7 +105,7 @@ export async function askPaper(question, log, { last = false } = {}) {
   if (last) log.append(entry); else log.prepend(entry);
   log.scrollTop = last ? log.scrollHeight : 0;
   try {
-    const r = await fetch('/api/ask', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ question }) });
+    const r = await fetch('/api/ask', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify({ question, url }) });
     if (r.status === 401) { location.assign('/login'); return entry; }
     const body = await r.json();
     reply.textContent = r.ok ? body.answer : body.error;

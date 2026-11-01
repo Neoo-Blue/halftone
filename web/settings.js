@@ -277,7 +277,8 @@ document.addEventListener('click', async (e) => {
   else if (t.id === 'token-revoke') token('/api/ai-token/revoke');
   else if (t.id === 'pw-save') changePassword();
   else if (t.id === 'sign-out') {
-    await send('POST', '/api/logout');
+    await send('POST', '/api/logout').catch(() => {});
+    await globalThis.caches?.delete('paper-v1');  // the last edition goes with the session. There's no cache API on plain http
     location.assign('/login');
   }
 });

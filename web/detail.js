@@ -2,6 +2,7 @@
 // and stories are read inside the paper. The only way off the site is the small "Original" link under a story.
 import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight } from '/lib.js';
 import { makeGlobe } from '/globe.js';
+import { dockStory } from '/dock.js';
 import { mountScene } from '/scene.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -25,6 +26,7 @@ const ROUTES = [
   [/^\/usage()$/, 'usage', null],
   [/^\/investments()$/, 'investments', null],
   [/^\/saved()$/, 'saved', null],
+  [/^\/archive\/?([0-9-]*)$/, 'archive', null],
   [/^\/systems\/container\/(\d+)$/, 'container', 'Systems'],
 ];
 const DESK = { Mail: '/#mail', Tech: '/#tech', World: '/#world', Arts: '/#arts', Business: '/#business', Systems: '/#systems' };
@@ -269,7 +271,7 @@ const VIEWS = {
       ${d.story ? storyBody(d.story) : `<p class="empty">${d.sources.length ? 'The publisher would not share the full story with the paper. The sources alongside may have more.' : 'WARROOM has no article for this event, only the report itself.'}</p>`}
       ${d.nearby.length ? `<h3>Nearby in the last three days</h3>${stories(d.nearby)}` : ''}`;
     return {
-      scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: d.title, deck: long ? '' : d.summary, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
+      scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: (d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title, deck: `${d.confidence != null && d.confidence < 0.4 ? "Unconfirmed: one side's account, not yet checked against another. " : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
   },
 
   theater(d) {
@@ -311,8 +313,8 @@ const VIEWS = {
     return {
       head: d.q, deck: d.stories.length || d.reports.length ? `${d.stories.length} ${d.stories.length === 1 ? 'story' : 'stories'} in the paper and ${d.reports.length} on the world desk.` : 'Nothing in the paper on that right now.',
       scene: reports.length ? reportScene(reports, null, `Where ${d.q} is being reported`) : null,
-      body: list ? `<ul class="wire-list">${list}</ul>` : '<p class="empty">Try a shorter word, or a name.</p>',
-      side: d.outlets.length ? `<h3>Who is covering it</h3>${facts(d.outlets)}` : '',
+      body: `${list ? `<ul class="wire-list">${list}</ul>` : '<p class="empty">Try a shorter word, or a name.</p>'}${d.earlier?.length ? `<h3>Earlier editions</h3><ul class="wire-list">${d.earlier.map((s) => `<li><a href="${esc(reading(s.u))}">${esc(s.t)}</a><span>${esc([s.src, s.day].join(', '))}</span></li>`).join('')}</ul>` : ''}`,
+      side: `<div class="story-tools"><button type="button" class="ghost text" data-follow="${esc(d.q)}">Follow</button><button type="button" class="ghost text" data-mute="${esc(d.q)}">Mute</button></div>${d.outlets.length ? `<h3>Who is covering it</h3>${facts(d.outlets)}` : ''}`,
     };
   },
 
@@ -379,6 +381,13 @@ const VIEWS = {
     };
   },
 
+  archive(d) {
+    if (d.day) {
+      return { head: longDate(d.day), deck: `The ${d.stories.length} most widely carried stories that day.`, body: `<p class="to"><a href="/archive">Every edition</a></p><ul class="wire-list">${d.stories.map((s) => `<li><a href="${esc(reading(s.u))}">${esc(s.t)}</a><span>${esc(s.n > 1 ? `${s.src} and ${s.n - 1} more` : s.src)}</span></li>`).join('')}</ul>` };
+    }
+    return { head: 'Back issues', deck: d.days.length ? `${whole(d.days.length)} editions kept.` : 'Each day is kept here from today on.', body: `<ul class="wire-list">${d.days.map((x) => `<li><a href="/archive/${esc(x.day)}">${esc(longDate(x.day))}</a><span>${esc(x.top || '')}</span></li>`).join('')}</ul>` };
+  },
+
   saved(d) {
     return {
       head: 'Saved stories', deck: d.saved.length ? `${whole(d.saved.length)} to read, on every device.` : 'Stories you save show here, on every device.',
@@ -399,7 +408,7 @@ const VIEWS = {
     return {
       head: d.title || d.site, deck: d.deck, meta: [d.site, d.author, d.published ? stamp(d.published) : ''].filter(Boolean).join(', '),
       hero: d.image ? picture(d.image) : null,
-      side: spread(d.spread),
+      side: `${d.homes?.length ? `<p class="small">Carried in ${esc(d.homes.map(([home, n]) => `${home} ${n}`).join(', '))}.${d.homes.length === 1 && d.homes[0][1] > 2 ? ` So far only ${esc(d.homes[0][0])} outlets.` : ''}</p>` : ''}${spread(d.spread)}`,
       body: d.body ? `<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${'speechSynthesis' in window ? '<button type="button" class="ghost text" data-listen aria-pressed="false">Listen</button>' : ''}</div>${storyBody(d)}` : `<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
     };
   },
@@ -536,6 +545,7 @@ export function isFront() {
 
 export async function route() {
   const m = match(), mine = (turn += 1);
+  dockStory(null);  // set again below if this page is a story: a question on the front page isn't about the last one you read
   if (!m) {
     still?.destroy();
     still = null;
@@ -569,6 +579,7 @@ export async function route() {
   mountLocator();
   mountStage(v);
   mountArc();
+  dockStory(m.kind === 'read' && body.body ? body.url : null);
   document.title = `${v.head} | ${NAME}`;
   $('.page-head', sheet())?.focus({ preventScroll: true });
 }
@@ -609,6 +620,20 @@ export function start(fly, dots) {
     const jump = e.target.closest('[data-era], [data-step]');
     if (jump) {
       $(jump.dataset.era ? `#era-${jump.dataset.era}` : `#step-${jump.dataset.step}`, sheet())?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: jump.dataset.era ? 'start' : 'center' });
+      return undefined;
+    }
+    const pin = e.target.closest('[data-follow], [data-mute]');
+    if (pin) {
+      const key = pin.dataset.follow ? 'FOLLOW' : 'MUTE', word = pin.dataset.follow || pin.dataset.mute;
+      fetch('/api/settings', { credentials: 'same-origin', headers: { 'x-paper': '1' } }).then((r) => r.json()).then((page) => {
+        const now = page.sections.flatMap((s) => s.fields).find((f) => f.key === key)?.value || '';
+        return saveValues({ [key]: [...new Set([...now.split(',').map((x) => x.trim()).filter(Boolean), word])].join(', ') });
+      }).then((r) => {
+        if (!r.ok) throw new Error('refused');
+        pin.textContent = key === 'FOLLOW' ? 'Following' : 'Muted';
+        pin.disabled = true;
+        dispatchEvent(new Event('paper:reload'));
+      }).catch(() => { pin.textContent = 'Try again'; });
       return undefined;
     }
     const keep = e.target.closest('[data-save]');

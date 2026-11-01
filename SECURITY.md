@@ -27,6 +27,8 @@ Please use [a private security advisory](../../security/advisories/new) rather t
 
 ## Known limits
 
+- A browser that has signed in keeps the last edition for offline reading, including mail subjects and money. It goes when the session ends, and it stops being offered after three days, but anyone with that browser profile could read it until then.
+
 - The login limit is global, because behind a proxy every caller has the same address. A stranger can hold the sign-in page shut, though not guess past it, and anyone already signed in isn't affected.
 - Accepting a self-signed Proxmox certificate means the token goes to whatever answers at that address. Use it on your own network only.
 - `PAPER_AUTH=password` has one user. Whoever signs in can change every setting.

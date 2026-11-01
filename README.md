@@ -50,7 +50,7 @@ Leave anything blank and it stays off the page.
 | Investments | Nothing, or [a portfolio address](docs/portfolio-feed.md) | Type in what you hold and it's priced for you. Total, gain and loss on the front page, your holdings on the tape, which you can customize |
 | AI use | An AI provider, or [any of these](docs/ai-use.md) | What your AI used each day, what it was worth at list price, and what was really charged |
 | Arts | Plex, optional Sonarr, Radarr and Seerr | What landed, what's playing, what's coming |
-| Systems | Proxmox, SSH, or plain addresses | Service checks, containers, storage and backups, 30 days of history for every machine, and a list of what needs you |
+| Systems | Proxmox, SSH, or plain addresses | Service checks, containers, storage and backups, 30 days of history for every machine, and a list of what needs you, including downloads that stuck, certificates about to run out and jobs that stopped checking in |
 
 ![Settings](docs/img/settings.png)
 
@@ -64,6 +64,14 @@ Press a or tap the button in the corner to ask the paper a question beside what 
 
 Stories you open are remembered on the server, not in a browser, so one you read on your phone isn't new on your desk. Saved stories follow you too. Add an alert address under Settings, ntfy or anything that takes a POST, and something serious reaches you without opening the paper.
 
+## Reading it
+
+Follow a name or subject and its stories get their own place on the front page. Mute one and it leaves the paper, the lead and old editions included. Do either from a topic page, or under Settings.
+
+Every day's edition is kept under Back issues, so a story that scrolled away can still be found. A story page says which outlets carry it, flags claims nobody has confirmed yet, and has an Ask button with Explain this simply, What led to this? and Who disagrees?
+
+The last edition stays readable when your server or connection is down, with a line saying it may be old. That copy is held in the browser that signed in, it goes when the session ends, and after three days it stops being offered.
+
 ## Every conflict from day one
 
 Each WARROOM theater has a timeline back to where it began, with a source on every entry. A rail shows how far through it you are as you read.
@@ -71,6 +79,8 @@ Each WARROOM theater has a timeline back to where it began, with a source on eve
 ## Watching your machines
 
 Every machine gets its own page: CPU, disk wait, memory, disk, network, disk activity, load and temperature, over the last hour, day, week or month, with its volumes and what's using it most right now. The paper warns you before a disk fills, and when a machine stays busy for an hour, not only when something has already gone wrong.
+
+For work no address can see, like backups and scheduled scripts, name the job under Job check-ins and have it call in when it finishes. If it goes quiet, or never starts, the paper says so.
 
 Proxmox connects with a read-only token. For any other Linux box, a NAS or a cloud server, copy `agent/stats.sh` to it and lock an SSH key to that one script: the first lines of the file show how. Older copies of the script keep working, but network, disk activity and top processes need the current one.
 

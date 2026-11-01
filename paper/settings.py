@@ -59,6 +59,8 @@ SECTIONS = [
         F("WARROOM_URL", "WARROOM address", "url", "https://war.wakxi.com/api/v1", "The free public API. Change it only if you run your own WARROOM."),
     ]},
     {"id": "news", "title": "News", "about": "More than 60 outlets are already on the wire. Add your own here.", "needs": (), "fields": [
+        F("FOLLOW", "Follow", hint="Names or subjects, separated by commas. Stories about them get their own place on the front page."),
+        F("MUTE", "Mute", hint="Names or subjects, separated by commas. Stories about them leave the paper."),
         F("EXTRA_FEEDS", "Your feeds", "rows", [], "Any RSS or Atom address.", columns=[
             COL("desk", "Desk", "select", options=DESKS), COL("name", "Outlet", placeholder="Local Times"), COL("url", "Feed address", "url", placeholder="https://example.com/rss.xml")]),
     ]},
@@ -129,6 +131,10 @@ SECTIONS = [
     {"id": "livekit", "title": "LiveKit", "about": "Call minutes and data by day, and what they would cost with nothing included. Needs the Scale plan or higher.", "needs": ("LIVEKIT_PROJECT", "LIVEKIT_TOKEN"), "fields": [
         F("LIVEKIT_PROJECT", "Project ID", placeholder="p_abc123", hint="The part of your LiveKit dashboard address that starts with p_.", guards=True),
         F("LIVEKIT_TOKEN", "List-only token", "secret", hint="Run: lk token create --list --valid-for 8760h. It can list sessions and nothing else, so your API secret stays where it is."),
+    ]},
+    {"id": "beats", "title": "Job check-ins", "about": "For work no address can see, like backups and scheduled scripts. Each job calls in when it finishes, and if it goes quiet the paper says so.", "needs": ("BEAT_TOKEN",), "fields": [
+        F("BEAT_TOKEN", "Check-in key", "secret", hint="At least 32 characters. A job calls: curl -X POST -H 'Authorization: Bearer KEY' https://your-paper/beat/NAME"),
+        F("BEATS", "Jobs", "rows", [], columns=[COL("name", "Name", pattern=SLUG, placeholder="backup"), COL("hours", "Every (hours)", "qty", placeholder="24")]),
     ]},
     {"id": "notify", "title": "Alerts", "about": "When something serious goes wrong, this sends you one message, and stays quiet until something new does. Works with ntfy or any address that takes a POST.", "needs": ("NOTIFY_URL",), "fields": [
         F("NOTIFY_URL", "Alert address", "url", placeholder="https://ntfy.sh/your-private-topic"),
@@ -267,6 +273,8 @@ def clean(field, value):
     if not isinstance(value, str) or len(value) > 2000:
         raise ValueError(f"{label} is too long.")
     value = value.strip()
+    if field["key"] == "BEAT_TOKEN" and value and len(value) < 32:
+        raise ValueError(f"{label} needs at least 32 characters. Nothing limits guesses at it, so length is what stops them.")
     if kind == "url":
         return clean_url(label, value)
     if kind == "date":

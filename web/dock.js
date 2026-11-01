@@ -2,7 +2,7 @@
 import { $, askPaper } from '/lib.js';
 
 const dock = $('#dock'), button = $('#dock-btn'), panel = $('#dock-panel'), form = $('#dock-form'), box = $('#dock-q'), go = $('#dock-go'), log = $('#dock-log'), tries = $('#dock-try');
-let asked = false;
+let asked = false, story = null, front = [];
 
 function open(on) {
   dock.style.setProperty('--pill-w', `${button.offsetWidth}px`);
@@ -15,7 +15,7 @@ function open(on) {
 async function ask(question) {
   tries.hidden = true;
   go.disabled = true;
-  const entry = await askPaper(question, log, { last: true });
+  const entry = await askPaper(question, log, { last: true, url: story || undefined });
   log.scrollTop = entry.offsetTop - log.offsetTop;  // the start of the answer, not the end of it
   go.disabled = false;
 }
@@ -44,16 +44,28 @@ visualViewport?.addEventListener('resize', () => dock.style.setProperty('--kb', 
 
 export const openDock = () => open(true);
 
-export function showDock(p) {
-  dock.hidden = !p.on.ai;
-  if (asked || !p.on.ai) return;
-  asked = true;
-  const offers = [['What needs me today?', true], ['What changed in the world overnight?', p.on.world], ['Am I making money?', p.on.money], ['Is anything broken?', p.on.systems]];
-  tries.replaceChildren(...offers.filter(([, on]) => on).map(([text]) => {
+function offer(list) {
+  tries.replaceChildren(...list.map((text) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'ghost text';
     b.textContent = text;
     return b;
   }));
+  tries.hidden = false;
+}
+
+// On a story, the button asks about that story.
+export function dockStory(url) {
+  story = url;
+  dock.classList.toggle('story', !!url);
+  offer(url ? ['Explain this simply', 'What led to this?', 'Who disagrees?'] : front);
+}
+
+export function showDock(p) {
+  dock.hidden = !p.on.ai;
+  if (asked || !p.on.ai) return;
+  asked = true;
+  front = [['What needs me today?', true], ['What changed in the world overnight?', p.on.world], ['Am I making money?', p.on.money], ['Is anything broken?', p.on.systems]].filter(([, on]) => on).map(([text]) => text);
+  if (!story) offer(front);
 }

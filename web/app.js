@@ -581,6 +581,12 @@ function sinceLast(p) {
   el.textContent = `Since you were here ${ago(lastVisit)}: ${new Intl.ListFormat('en').format(parts)}.`;
 }
 
+function following(p) {
+  const rows = p.news.data?.following || [];
+  $('#following').hidden = !rows.length;
+  $('#following').innerHTML = rows.length ? `<h2>Following</h2><ul>${rows.map((s) => `<li><a href="${esc(reading(s.u))}">${esc(s.t)}</a></li>`).join('')}</ul>` : '';
+}
+
 // ---------------------------------------------------------------- loading
 
 function render() {
@@ -603,6 +609,7 @@ function render() {
   if (p.on.systems) desk(systems);
   desk(movedNote);
   desk(sinceLast);
+  desk(following);
   fitAlso();
   if (!drawn) {
     drawn = true;
@@ -616,7 +623,7 @@ async function load() {
     if (r.status === 401) { location.assign('/login'); return; }
     if (!r.ok) throw new Error(String(r.status));
     paper = await r.json();
-    $('#banner').hidden = true;
+    $('#banner').hidden = !r.headers.get('x-paper-offline');  // the last edition, kept by the service worker
     render();
   } catch {
     $('#banner').hidden = false;
@@ -814,6 +821,8 @@ const here = new IntersectionObserver((en) => {
   }
 }, { rootMargin: '-40% 0px -55% 0px' });
 $$('.desk').forEach((s) => here.observe(s));
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 
 markTheme();
 try {

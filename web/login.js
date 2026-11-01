@@ -1,4 +1,5 @@
 // The door: sign in, or on a new install turn the setup code from the log into a password.
+globalThis.caches?.delete('paper-v1');  // every ended session lands here, and the saved edition goes with it
 import { $ } from '/lib.js';
 
 const field = (id, label, type, auto, note = '') => `<label class="field"><span>${label}</span><input id="${id}" name="${id}" type="${type}" autocomplete="${auto}" required>${note ? `<small>${note}</small>` : ''}</label>`;
