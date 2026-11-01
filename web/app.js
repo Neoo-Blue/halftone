@@ -3,6 +3,7 @@ import { $, $$, esc, usd, whole, dollars, pct, plural, ago, span, bytes, dayName
 import { showDock, openDock, askDock } from '/dock.js';
 import { start, go, reading, picture, eventHref, isFront } from '/detail.js';
 import { startPhone, onPhone, phoneCheck } from '/phone.js';
+import { followed, findData, startFind } from '/find.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const THEMES = ['morning', 'night', 'cobalt', 'glass'];
@@ -603,12 +604,6 @@ function sinceLast(p) {
   el.innerHTML = `Since you were here ${esc(ago(lastVisit))}: ${esc(new Intl.ListFormat('en').format(parts))}.${p.on.ai ? ` <button type="button" class="ghost text" data-catchup="${esc(span(Math.round(away)))}">Catch me up</button>` : ''}`;
 }
 
-function following(p) {
-  const rows = p.news.data?.following || [];
-  $('#following').hidden = !rows.length;
-  $('#following').innerHTML = rows.length ? `<h2>Following</h2><ul>${rows.map((s) => `<li><a href="${esc(reading(s.u))}">${esc(s.t)}</a></li>`).join('')}</ul>` : '';
-}
-
 // ---------------------------------------------------------------- loading
 
 function render() {
@@ -631,7 +626,8 @@ function render() {
   if (p.on.systems) desk(systems);
   desk(movedNote);
   desk(sinceLast);
-  desk(following);
+  desk(followed);
+  findData(p);
   fitAlso();
   phoneCheck();
   if (!drawn) {
@@ -782,12 +778,6 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-$('#find').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const q = $('#find-q').value.trim();
-  if (q) go(`/topic/${encodeURIComponent(q)}`);
-});
-
 $('#tape').addEventListener('pointerup', (e) => {
   if (e.pointerType !== 'mouse') e.currentTarget.classList.toggle('held');  // touch has no hover: a tap stops the tape, another starts it
 });
@@ -902,6 +892,7 @@ function seatGlobe(phone) {
     startGlobe();
   }
 }
+startFind(go);
 startPhone({ go, onTab: (id) => { if (id === 'world') startGlobe(); }, onForm: seatGlobe });
 
 addEventListener('paper:reload', load);

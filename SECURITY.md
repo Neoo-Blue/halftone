@@ -29,6 +29,8 @@ Please use [a private security advisory](../../security/advisories/new) rather t
 
 - With an AI provider on, the headlines and part of the text of a story several outlets carry go to it to compare the coverage. That happens every hour for the biggest stories and the first time you open any other, so the provider can see which stories get opened. Settings has a switch. What your reading leans toward stays on your server and goes to no AI.
 
+- A search reaches past the paper. The words you type go to Wikipedia, Bing News, Hacker News, arXiv, GitHub, Polymarket, Yahoo Finance, ESPN and Open-Meteo, and to your web search if you set one. With an AI provider on, the headlines and text of the sources on the page go to it for the answer, and a follow-up question goes with what was said before it. Nothing else goes: no mail, no money, nothing about your machines. Each has a switch under Search in Settings. A subject you follow goes to Bing News every half hour, and a stock, team or town to its source every few minutes, until the same switch stops them.
+
 - With a voice service on, the headline and text of a story you press Listen on go to that service. Nothing else does: no mail, no money, nothing about you. Your device's own voice sends nothing.
 
 - A browser that has signed in keeps the last edition for offline reading, including mail subjects and money. It goes when the session ends, and it stops being offered after three days, but anyone with that browser profile could read it until then.

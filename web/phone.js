@@ -114,14 +114,6 @@ export function startPhone({ go, onTab, onForm }) {
   fit();
   swipes();
   $$('.phone-sheet').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('a, [data-close]')) d.close(); }));
-  $('#sheet-find-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const q = $('#sheet-q').value.trim();
-    if (!q) return;
-    $('#sheet-find').close();
-    $('#sheet-q').value = '';
-    go(`/topic/${encodeURIComponent(q)}`);
-  });
   document.addEventListener('click', (e) => {
     if (small.matches) e.target.closest('#editor')?.classList.toggle('open');
     const act = e.target.closest('[data-phone]')?.dataset.phone;

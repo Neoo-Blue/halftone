@@ -70,8 +70,8 @@
   </div>
 </nav>
 
-<dialog class="phone-sheet" id="sheet-find" aria-label="Search the paper" closedby="any">
-  <form id="sheet-find-form" role="search"><input type="search" id="sheet-q" placeholder="Search the paper" aria-label="Search the paper" maxlength="80" autocomplete="off" enterkeyhint="search"></form>
+<dialog class="phone-sheet" id="sheet-find" aria-label="Search the paper and the web" closedby="any">
+  <form id="sheet-find-form" role="search"><input type="search" id="sheet-q" placeholder="Search the paper and the web" aria-label="Search the paper and the web" maxlength="120" autocomplete="off" enterkeyhint="search" role="combobox" aria-controls="sheet-list" aria-expanded="false" aria-autocomplete="list"><ul class="find-list" id="sheet-list" role="listbox" aria-label="Suggestions" hidden></ul></form>
   <div class="sheet-tags trend-tags" id="sheet-tags"></div>
 </dialog>
 
@@ -93,6 +93,7 @@
   </div>
   <ul class="sheet-links">
     <li><a href="/investments">Investments</a></li>
+    <li><a href="/following">Following</a></li>
     <li><a href="/archive">Back issues</a></li>
     <li><button type="button" data-arrange>Arrange the sections</button></li>
     <li><a href="/settings">Settings</a></li>
@@ -109,7 +110,6 @@
       <p class="note" id="note">Going to press.</p>
       <button type="button" class="ghost text play-paper" id="play-paper" data-listen="today" data-today="1" aria-pressed="false" hidden>Play today's paper</button>
       <p class="since" id="since" hidden></p>
-      <nav class="following" id="following" aria-label="Stories you follow" hidden></nav>
       <div class="editor" id="editor" hidden></div>
       <dl class="glance" id="glance"></dl>
       <nav class="inside" id="inside" aria-label="Inside today"></nav>
@@ -136,11 +136,16 @@
     </figure>
   </section>
 
+  <section class="followed sheet" id="followed" aria-labelledby="h-followed" hidden>
+    <div class="fo-head"><h2 id="h-followed">Following</h2><a href="/following">See all</a></div>
+    <div class="fo-row" id="fo-row"></div>
+  </section>
+
   <section class="tops sheet" id="tops" aria-label="Top stories"></section>
 
   <section class="trend sheet" id="trend" aria-label="Trending and search">
     <div class="trend-tags" id="trend-tags"></div>
-    <form class="find" id="find" role="search"><input type="search" id="find-q" placeholder="Search the paper" aria-label="Search the paper" maxlength="80" autocomplete="off"></form>
+    <form class="find" id="find" role="search"><input type="search" id="find-q" placeholder="Search the paper and the web" aria-label="Search the paper and the web" maxlength="120" autocomplete="off" role="combobox" aria-controls="find-list" aria-expanded="false" aria-autocomplete="list"><ul class="find-list" id="find-list" role="listbox" aria-label="Suggestions" hidden></ul></form>
   </section>
 
   <p class="arrange-note sheet" id="arrange-note" hidden><span id="arrange-text"></span> <button type="button" class="ghost text" id="arrange-reset">Back to the usual order</button> <button type="button" class="ghost text only-phone" id="arrange-done">Done</button></p>

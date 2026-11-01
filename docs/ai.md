@@ -10,6 +10,7 @@ Add a provider under **AI provider** in Settings. That turns on three things:
 - **Set it up by asking**: describe what you want at the top of Settings and it proposes the changes. Nothing changes until you press Apply.
 - **Mail sorting**: whatever the rules can't decide, up to 400 messages a day.
 - **The editor's note**: a few sentences at the top of the front page, written every three hours from the wire and marked as written by AI.
+- **Search**: the answer at the top of a search, written from the sources on the page, and any follow-up question. One cheap question each, and Anthropic's web search if you choose it. The model has no tools when it writes, so a page it reads can only make it wrong, and everything it says is printed as plain text with its numbers checked against the sources it was given.
 - **Both sides**: on a story at least three outlets carry, whether there's a real dispute, the case each side makes and who is for and against. One cheap question a story, kept until new outlets join, and asked ahead of time for the top stories. Answers are checked against a fixed shape and printed as plain text.
 
 | Provider | Key | Model |

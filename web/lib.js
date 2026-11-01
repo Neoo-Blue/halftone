@@ -5,6 +5,8 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 
 // ---------------------------------------------------------------- formats
 
+export const reading = (url) => `/read?${new URLSearchParams({ u: url })}`;
+export const picture = (url) => `/img/remote?${new URLSearchParams({ u: url })}`;
 export const usd = (c) => `${c < 0 ? '-' : ''}$${(Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export const whole = (n) => Number(n || 0).toLocaleString('en-US');
 export const dollars = (v) => (v == null ? 'No price' : v >= 100 ? `$${whole(Math.round(v))}` : `$${v.toFixed(2)}`);

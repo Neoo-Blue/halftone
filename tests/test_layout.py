@@ -127,7 +127,6 @@ settings.update({"FOLLOW": "Harbor, c++", "MUTE": "airpods"})
 s_data = {"stories": [{"u": "a", "t": "Harbor cities agree", "ts": NOW, "src": "A", "outlets": [1], "desks": ["us"]}, {"u": "b", "t": "AirPods battery tips", "ts": NOW, "src": "B", "outlets": [1], "desks": ["tech"]}, {"u": "c", "t": "Harborview opens", "ts": NOW, "src": "C", "outlets": [1], "desks": ["us"]}], "tops": [{"t": "AirPods again"}, {"t": "Something else"}]}
 view = s.news_view(s_data)
 assert [w["u"] for w in view["wire"]] == ["a", "c"] and [t["t"] for t in view["tops"]] == ["Something else"], "muted stories leave every desk"
-assert [w["u"] for w in view["following"]] == ["a"], "a followed name matches whole words"
 assert s.about("Learning c++ at last", ["c++"]) and s.about("Why .net survives", [".net"]) and not s.about("Abc++", ["c++"]), "punctuation in a name still matches"
 hidden = s.news_view({"stories": [], "lead": {"t": "AirPods lead"}, "tops": [{"t": "Next up"}, {"t": "Then this"}], "also": [{"t": "AirPods also"}], "tech_lead": {"t": "AirPods tech"}, "trending": [{"name": "AirPods", "n": 3}, {"name": "Gaza", "n": 2}]})
 assert hidden["lead"]["t"] == "Next up" and [t["t"] for t in hidden["tops"]] == ["Then this"] and hidden["also"] == [] and hidden["tech_lead"] is None and [t["name"] for t in hidden["trending"]] == ["Gaza"], "a muted subject leaves the top of the page too, and the next story leads"

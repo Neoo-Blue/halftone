@@ -1,6 +1,7 @@
 // Every tap opens here. Each detail is a real address on this paper, so reload, back and open-in-new-tab all work,
 // and stories are read inside the paper. The only way off the site is the small "Original" link under a story.
-import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight, sideBar } from '/lib.js';
+import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight, sideBar, reading, picture } from '/lib.js';
+import { fillFind, followingPage } from '/find.js';
 import { makeGlobe } from '/globe.js';
 import { dockStory, askDock } from '/dock.js';
 import { phoneTab, phonePage, onPhone } from '/phone.js';
@@ -28,6 +29,7 @@ const ROUTES = [
   [/^\/investments()$/, 'investments', null],
   [/^\/saved()$/, 'saved', null],
   [/^\/sides()$/, 'sides', null],
+  [/^\/following()$/, 'following', null],
   [/^\/archive\/?([0-9-]*)$/, 'archive', null],
   [/^\/systems\/container\/(\d+)$/, 'container', 'Systems'],
 ];
@@ -37,8 +39,7 @@ const WHEN = { dateStyle: 'medium', timeStyle: 'short' };
 const stamp = (ts) => (ts ? new Date(ts * 1000).toLocaleString('en-US', WHEN) : '');
 const date = (iso) => (iso ? dayName(/T/.test(iso) ? iso : `${iso}T12:00:00`) : '');
 const title = (s) => String(s ?? '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
-export const reading = (url) => `/read?${new URLSearchParams({ u: url })}`;
-export const picture = (url) => `/img/remote?${new URLSearchParams({ u: url })}`;
+export { reading, picture };
 export const eventHref = (s) => `/world/${s.k === 'h' ? 'hazard' : 'event'}/${encodeURIComponent(s.i)}`;
 
 const km = (a, b) => 6371 * Math.acos(Math.min(1, Math.sin(a.la * Math.PI / 180) * Math.sin(b.la * Math.PI / 180) + Math.cos(a.la * Math.PI / 180) * Math.cos(b.la * Math.PI / 180) * Math.cos((a.lo - b.lo) * Math.PI / 180)));
@@ -417,6 +418,8 @@ const VIEWS = {
       scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: (d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title, deck: `${whoLine(d.who) ? `${whoLine(d.who)}. ` : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
   },
 
+  following: followingPage,
+
   theater(d) {
     const h = d.history, turns = h ? h.eras.reduce((n, e) => n + e.events.length, 0) : 0, years = h?.began ? new Date().getFullYear() - Number(h.began.slice(0, 4)) : 0;
     return {
@@ -454,10 +457,10 @@ const VIEWS = {
     const list = d.stories.map((s) => `<li class="${s.n >= 3 ? 'wide-story' : ''}"><a href="${reading(s.u)}">${esc(s.t)}</a><span>${esc(s.n > 1 ? `${s.src} and ${s.n - 1} more` : s.src)}, ${esc(ago(s.ts))}</span></li>`).join('');
     const reports = d.reports.filter((r) => r.la != null);
     return {
-      head: d.q, deck: d.stories.length || d.reports.length ? `${d.stories.length} ${d.stories.length === 1 ? 'story' : 'stories'} in the paper and ${d.reports.length} on the world desk.` : 'Nothing in the paper on that right now.',
-      scene: reports.length ? reportScene(reports, null, `Where ${d.q} is being reported`) : null,
-      body: `${list ? `<ul class="wire-list">${list}</ul>` : '<p class="empty">Try a shorter word, or a name.</p>'}${d.earlier?.length ? `<h3>Earlier editions</h3><ul class="wire-list">${d.earlier.map((s) => `<li><a href="${esc(reading(s.u))}">${esc(s.t)}</a><span>${esc([s.src, s.day].join(', '))}</span></li>`).join('')}</ul>` : ''}`,
-      side: `<div class="story-tools"><button type="button" class="ghost text" data-follow="${esc(d.q)}">Follow</button><button type="button" class="ghost text" data-mute="${esc(d.q)}">Mute</button></div>${d.outlets.length ? `<h3>Who is covering it</h3>${facts(d.outlets)}` : ''}`,
+      head: d.q, deck: d.stories.length || d.reports.length ? `${d.stories.length} ${d.stories.length === 1 ? 'story' : 'stories'} in the paper and ${d.reports.length} on the world desk.` : 'Nothing in the paper on that right now. Looking further.',
+      scene: reports.length ? reportScene(reports, null, `Where ${d.q} is being reported`) : null, sceneInside: true,  // a search answers first, and the map comes after
+      body: `<div id="find-page"><div class="story-tools find-tools"><button type="button" class="ghost text" data-track="${esc(JSON.stringify({ kind: 'topic', key: d.q, name: d.q }))}" aria-pressed="false">Follow</button><button type="button" class="ghost text" data-mute="${esc(d.q)}">Mute</button></div><div class="find-top" id="find-top" hidden></div><div class="fo-grid" id="find-cards"></div>${reports.length ? SCENE_HOST : ''}${list ? `<section class="find-part"><h3>In the paper</h3><ul class="wire-list">${list}</ul></section>` : ''}<div id="find-web"></div><div id="find-more"></div></div>${d.earlier?.length ? `<h3>Earlier editions</h3><ul class="wire-list">${d.earlier.map((s) => `<li><a href="${esc(reading(s.u))}">${esc(s.t)}</a><span>${esc([s.src, s.day].join(', '))}</span></li>`).join('')}</ul>` : ''}`,
+      side: d.outlets.length ? `<h3>Who is covering it</h3>${facts(d.outlets)}` : '',
     };
   },
 
@@ -652,11 +655,13 @@ const fitSide = () => side?.style.setProperty('--stick', `${Math.min(64, innerHe
 const sideGrew = new ResizeObserver(fitSide);
 addEventListener('resize', fitSide);
 
+const SCENE_HOST = '<div class="scene-host" data-scene></div>';
+
 function page(v, m) {
   const back = m.desk ? `<a href="${DESK[m.desk]}">Back to ${m.desk}</a>` : '<a href="/">Back to the paper</a>';
   const art = v.backdrop ? `<div class="backdrop"><img src="${esc(v.backdrop)}" alt=""></div>` : '';
   const left = v.poster ? `<button type="button" class="page-poster ink" data-reveal aria-pressed="false" aria-label="Show the poster in colour"><img src="${esc(v.poster)}" alt=""></button>` : '';
-  const stage = v.scene ? '<div class="scene-host" data-scene></div>' : '';
+  const stage = v.scene && !v.sceneInside ? SCENE_HOST : '';
   const where = !v.scene && v.locate?.[0] != null ? `<div class="locator"><canvas data-lat="${esc(v.locate[0])}" data-lon="${esc(v.locate[1])}" tabindex="0" role="img" aria-label="Globe centred on this place. Tap a dot to open that report."></canvas></div>` : '';
   const sub = `${v.deck ? `<p class="deck">${esc(v.deck)}</p>` : ''}${v.meta ? `<p class="byline">${esc(v.meta)}</p>` : ''}`;
   const side = where || v.side ? `<aside class="page-side">${where}${v.side || ''}</aside>` : '';
@@ -745,6 +750,7 @@ export async function route() {
   dockStory(m.kind === 'read' && body.body ? body.url : null);
   phonePage(m.kind);
   if (m.kind === 'read' && body.lean && body.spread?.length >= 3) fillTakes(body.url);
+  if (m.kind === 'topic') fillFind(body);
   document.title = `${v.head} | ${NAME}`;
   $('.page-head', sheet())?.focus({ preventScroll: true });
   sideGrew.disconnect();
@@ -790,15 +796,15 @@ export function start(fly, dots) {
       $(jump.dataset.era ? `#era-${jump.dataset.era}` : `#step-${jump.dataset.step}`, sheet())?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: jump.dataset.era ? 'start' : 'center' });
       return undefined;
     }
-    const pin = e.target.closest('[data-follow], [data-mute]');
+    const pin = e.target.closest('[data-mute]');
     if (pin) {
-      const key = pin.dataset.follow ? 'FOLLOW' : 'MUTE', word = pin.dataset.follow || pin.dataset.mute;
+      const word = pin.dataset.mute;
       fetch('/api/settings', { credentials: 'same-origin', headers: { 'x-paper': '1' } }).then((r) => r.json()).then((page) => {
-        const now = page.sections.flatMap((s) => s.fields).find((f) => f.key === key)?.value || '';
-        return saveValues({ [key]: [...new Set([...now.split(',').map((x) => x.trim()).filter(Boolean), word])].join(', ') });
+        const now = page.sections.flatMap((s) => s.fields).find((f) => f.key === 'MUTE')?.value || '';
+        return saveValues({ MUTE: [...new Set([...now.split(',').map((x) => x.trim()).filter(Boolean), word])].join(', ') });
       }).then((r) => {
         if (!r.ok) throw new Error('refused');
-        pin.textContent = key === 'FOLLOW' ? 'Following' : 'Muted';
+        pin.textContent = 'Muted';
         pin.disabled = true;
         dispatchEvent(new Event('paper:reload'));
       }).catch(() => { pin.textContent = 'Try again'; });

@@ -59,13 +59,20 @@ SECTIONS = [
         F("WARROOM_URL", "WARROOM address", "url", "https://war.wakxi.com/api/v1", "The free public API. Change it only if you run your own WARROOM."),
     ]},
     {"id": "news", "title": "News", "about": "More than 60 outlets are already on the wire. Add your own here.", "needs": (), "fields": [
-        F("FOLLOW", "Follow", hint="Names or subjects, separated by commas. Stories about them get their own place on the front page."),
+        F("FOLLOW", "Follow", hint="Names or subjects, separated by commas, or use the Follow button on any search. They get their own place on the front page."),
         F("MUTE", "Mute", hint="Names or subjects, separated by commas. Stories about them leave the paper."),
         F("SIDES_AI", "Compare each side's case with AI", "bool", True, hint="On a story several outlets carry, sets out the case for and against. About one cheap question a story."),
         F("OUTLET_LEANS", "Outlet ratings", "rows", [], "Change where the paper places an outlet, or rate one you added, by its name on the wire. The paper's own ratings are a starting point, and they're yours to overrule.", columns=[
             COL("name", "Outlet", placeholder="Fox News"), COL("lean", "Where it sits", "select", options=["left", "lean left", "center", "lean right", "right"])]),
         F("EXTRA_FEEDS", "Your feeds", "rows", [], "Any RSS or Atom address.", columns=[
             COL("desk", "Desk", "select", options=DESKS), COL("name", "Outlet", placeholder="Local Times"), COL("url", "Feed address", "url", placeholder="https://example.com/rss.xml")]),
+    ]},
+    {"id": "search", "title": "Search", "about": "Search reaches past the paper. A question to the wider web sends the words you typed, and nothing else, to the services below.", "needs": (), "fields": [
+        F("FIND_OUTSIDE", "Search outside the paper", "bool", True, hint="Wikipedia, Bing News, Hacker News, arXiv, GitHub, Polymarket, Yahoo Finance, ESPN and Open-Meteo. No keys needed."),
+        F("WEB_SEARCH", "Web search", "select", "ai", options=(("off", "Off"), ("ai", "Your AI provider, if it has one"), ("searxng", "A SearXNG of your own"), ("brave", "Brave Search")), hint="Anthropic's costs about a cent a search."),
+        F("SEARXNG_URL", "SearXNG address", "url", placeholder="http://searxng:8080"),
+        F("BRAVE_KEY", "Brave Search key", "secret"),
+        F("FIND_AI", "Answer at the top of a search", "bool", True, hint="One cheap AI question a search, from the sources on the page. Your mail, money and machines are never part of it."),
     ]},
     {"id": "weather", "title": "Weather", "about": "Now, the next two days and the week ahead, from Open-Meteo. No key needed.", "needs": ("WEATHER_PLACE",), "fields": [
         F("WEATHER_PLACE", "Place", placeholder="Oakland"),
