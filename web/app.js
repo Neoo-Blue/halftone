@@ -148,7 +148,8 @@ function world(p) {
   }
   const idx = Math.round(w.index?.value ?? w.index ?? 0);
   const assessed = w.assessed != null ? `The analyst's hourly reading, ${ago(w.ts)}, was ${Math.round(w.assessed)}, on a narrower window than the live index. ` : '';
-  const fc = w.forecast.map((f) => `<li><span class="odds" style="--v:${Math.round((f.probability || 0) * 100)}"><i></i></span><b>${Math.round((f.probability || 0) * 100)}%</b><span class="fc-t">${esc(f.statement)} <em>${esc(f.horizon)}</em></span></li>`).join('');
+  const asks = (q, text) => (p.on.ai ? `<button type="button" class="ask-row" data-ask="${esc(q)}">${text}</button>` : text);
+  const fc = w.forecast.map((f) => `<li><span class="odds" style="--v:${Math.round((f.probability || 0) * 100)}"><i></i></span><b>${Math.round((f.probability || 0) * 100)}%</b><span class="fc-t">${asks(`The analyst gives ${Math.round((f.probability || 0) * 100)}% to this: ${f.statement} What would decide it?`, `${esc(f.statement)} <em>${esc(f.horizon)}</em>`)}</span></li>`).join('');
   const claim = { confirmed: 'Confirmed', reported: 'Reported', claimed: "One side's claim" };
   const front = (w.front || []).map((s) => {
     const ref = (s.refs || []).find((r) => /^[0-9a-f]{32}$/.test(r));
@@ -491,7 +492,7 @@ function systems(p) {
   }
   const hard = p.worries.filter((w) => w.level), direct = (pr || []).filter((x) => !x.gated), up = direct.filter((x) => x.up).length, total = direct.length, gate = (pr || []).length - total;
   const head = !hard.length ? `All ${total} services are up` : hard[0].level > 1 ? `${hard[0].text}` : `${plural(hard.length, 'thing')} to look at`;
-  const list = p.worries.map((w) => `<li>${w.level > 1 ? ICON.bad : w.level ? ICON.warn : ICON.note}${esc(w.text)}</li>`).join('');
+  const list = p.worries.map((w) => `<li>${w.level > 1 ? ICON.bad : w.level ? ICON.warn : ICON.note}${p.on.ai ? `<button type="button" class="ask-row" data-ask="${esc(`${w.text}. What does this mean, and what should I do about it?`)}">${esc(w.text)}</button>` : esc(w.text)}</li>`).join('');
   const slow = (pr || []).filter((x) => x.up && !x.gated).sort((a, b) => b.ms - a.ms)[0];
   const groups = [...new Set((pr || []).map((x) => x.group))].map((g) => {
     const rows = (pr || []).filter((x) => x.group === g && (!problems || !x.up));
@@ -534,7 +535,7 @@ function aiUse(p) {
         <p>of AI on ${esc(dayName(`${last.day}T12:00:00`))}, at list price. ${dollars(last.charged)} of it was really charged.</p>
         <p class="small">${dollars(u.month)} worth in ${plural(u.days.length, 'day')}, ${dollars(u.charged)} charged.</p></div>
       <div>${dayBars(u.days, 'worth', { href: (d) => `/usage#${d.day}`, label: ' of AI' })}</div>
-      <ul class="use-who">${u.who.map(([who, v]) => `<li style="--w:${((100 * v) / most).toFixed(1)}%"><span>${esc(who)}</span><b>${dollars(v)}</b></li>`).join('')}</ul>
+      <ul class="use-who">${u.who.map(([who, v]) => `<li style="--w:${((100 * v) / most).toFixed(1)}%"><span><a href="/usage">${esc(who)}</a></span><b>${dollars(v)}</b></li>`).join('')}</ul>
     </div>${u.missing.length ? `<p class="small">${esc(u.missing.join(' and '))} did not answer this time, so their days may be behind.</p>` : ''}`;
 }
 
@@ -698,6 +699,7 @@ document.addEventListener('click', (e) => {
   const t = e.target.closest('button');
   if (!t) return;
   if (t.dataset.themePick) setTheme(t.dataset.themePick, e);
+  else if (t.dataset.ask) askDock(t.dataset.ask);
   else if (t.dataset.catchup) askDock(`Catch me up on the last ${t.dataset.catchup}: the few things that matter most, in short points.`);
   else if (t.dataset.text) {
     document.documentElement.style.setProperty('--text', t.dataset.text);

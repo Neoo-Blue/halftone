@@ -97,6 +97,14 @@ function mountMap(root, us, pick, races) {
   return opening;
 }
 
+// Anything on the desk that names a state can take the map there.
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-el-go]'), host = b && $('.el-map', b.closest('#electionsbody, #el-page'));
+  if (!host) return;
+  going(host, b.dataset.elGo);
+  host.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+});
+
 // ---------------------------------------------------------------- races
 const seatText = (r) => r.seat.replace(/ US (Senate|House)( Special General)?/, ' $1').replace(/ House (\d+)$/, ' $1');
 const seatName = (r) => esc(seatText(r));
@@ -142,8 +150,9 @@ function tipCard(c) {
 
 function gainsCard(us) {
   const line = (c) => {
-    const d = c.gains.D, r = c.gains.R, list = (rows) => (rows.length ? (rows.length <= 6 ? rows.map((x) => x.state).join(', ') : `${rows.length} seats`) : 'none');
-    return `<li><b>${esc(c.name)}</b><span class="s-l-text">Democrats gain ${esc(list(d))}</span><span class="s-r-text">Republicans gain ${esc(list(r))}</span></li>`;
+    const link = (x) => `<a href="/elections/race/${esc(x.key)}">${esc(c.kind === 'house' ? seatText(x) : x.state)}</a>`;
+    const list = (rows) => (!rows.length ? 'none' : rows.length <= 6 && c.kind !== 'house' ? rows.map(link).join(', ') : `<details class="el-more"><summary>${esc(plural(rows.length, 'seat'))}</summary>${rows.map(link).join(', ')}</details>`);
+    return `<li><b>${esc(c.name)}</b><span class="s-l-text">Democrats gain ${list(c.gains.D)}</span><span class="s-r-text">Republicans gain ${list(c.gains.R)}</span></li>`;
   };
   return `<section class="el-card"><h3>Seats likely to change hands</h3><p>Races leaning away from the party that holds them now.</p><ul class="el-gains">${us.chambers.map(line).join('')}</ul></section>`;
 }
@@ -158,7 +167,7 @@ function signalsCard(s) {
 function night(us, tz) {
   if (!us.hours?.length || us.phase === 'final') return '';
   const now = Date.now() / 1000, next = us.hours.find((h) => h.at > now);
-  const row = (h) => `<li class="${h.at <= now ? 'el-gone' : h === next ? 'el-next' : ''}"><time>${esc(new Date(h.at * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz || undefined }))}</time><div><b>${esc(h.states.map((s) => STATES[s] || s).join(', '))}</b>${h.watch.length ? `<span>Watch ${h.watch.map((w) => `<a href="/elections/race/${esc(w.key)}">${seatName(w)}</a>`).join(', ')}</span>` : ''}</div></li>`;
+  const row = (h) => `<li class="${h.at <= now ? 'el-gone' : h === next ? 'el-next' : ''}"><time>${esc(new Date(h.at * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz || undefined }))}</time><div><b>${h.states.map((s) => `<button type="button" class="el-go" data-el-go="${esc(s)}">${esc(STATES[s] || s)}</button>`).join(', ')}</b>${h.watch.length ? `<span>Watch ${h.watch.map((w) => `<a href="/elections/race/${esc(w.key)}">${seatName(w)}</a>`).join(', ')}</span>` : ''}</div></li>`;
   return `<section class="el-part"><h3>How the night will go</h3><p class="small">When the last polls close in each state, in your time, and the closest races that come with them. Some states count far faster than others.</p><ol class="el-night">${us.hours.map(row).join('')}</ol></section>`;
 }
 
