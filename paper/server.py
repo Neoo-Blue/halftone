@@ -2823,14 +2823,21 @@ def d_show(sid):
     eps = [e for e in fetch(f"{base}/api/v3/episode?seriesId={sid}", key, timeout=15) if (e.get("airDateUtc") or "") >= now]
     return {"kind": "show", "title": s.get("title"), "year": s.get("year"), "summary": s.get("overview"), "network": s.get("network"), "status": s.get("status"), "minutes": s.get("runtime"), "genres": (s.get("genres") or [])[:6], "rating": (s.get("ratings") or {}).get("value"), "poster": f"/img/sonarr/{sid}",
             "seasons": (s.get("statistics") or {}).get("seasonCount"), "have": (s.get("statistics") or {}).get("episodeFileCount"), "total": (s.get("statistics") or {}).get("totalEpisodeCount"),
-            "next": [{"at": e.get("airDateUtc"), "title": e.get("title"), "code": f"S{e.get('seasonNumber')} E{e.get('episodeNumber')}", "about": plain(e.get("overview"), 400)} for e in sorted(eps, key=lambda x: x.get("airDateUtc"))[:6]]}
+            "next": [{"at": e.get("airDateUtc"), "title": e.get("title"), "code": f"S{e.get('seasonNumber')} E{e.get('episodeNumber')}", "about": plain(e.get("overview"), 400)} for e in sorted(eps, key=lambda x: x.get("airDateUtc"))[:6]],
+            "ai": bool(ai.ready() and C("FIND_AI")), "q": plain(f"{s.get('title')} TV series reviews latest season", 110)}
 
 
 def d_movie(mid):
     m = fetch(f"{C('RADARR_URL')}/api/v3/movie/{mid}", {"X-Api-Key": C("RADARR_KEY")}, timeout=15)
     r = m.get("ratings") or {}
+    credits = quiet(lambda: fetch(f"{C('RADARR_URL')}/api/v3/credit?movieId={int(mid)}", {"X-Api-Key": C("RADARR_KEY")}, timeout=10)) or []
+    cast = [{"n": plain(c.get("personName"), 60), "as": plain(c.get("character"), 60)} for c in credits if c.get("type") == "cast" and c.get("personName")][:10]
+    crew = [{"n": plain(c.get("personName"), 60), "job": plain(c.get("job"), 40)} for c in credits if c.get("job") in ("Director", "Screenplay", "Writer") and c.get("personName")][:4]
+    scores = {name: (r.get(key) or {}).get("value") for key, name in (("imdb", "IMDb"), ("tmdb", "TMDb"), ("rottenTomatoes", "Rotten Tomatoes"), ("metacritic", "Metacritic")) if (r.get(key) or {}).get("value")}
+    trailer = m.get("youTubeTrailerId") if re.fullmatch(r"[\w-]{6,20}", m.get("youTubeTrailerId") or "") else None
     return {"kind": "movie", "title": m.get("title"), "year": m.get("year"), "summary": m.get("overview"), "studio": m.get("studio"), "minutes": m.get("runtime"), "genres": (m.get("genres") or [])[:6], "rating": (r.get("imdb") or r.get("tmdb") or {}).get("value"), "poster": f"/img/radarr/{mid}",
-            "digital": m.get("digitalRelease"), "disc": m.get("physicalRelease"), "cinemas": m.get("inCinemas"), "have": m.get("hasFile")}
+            "digital": m.get("digitalRelease"), "disc": m.get("physicalRelease"), "cinemas": m.get("inCinemas"), "have": m.get("hasFile"), "cast": cast, "crew": crew, "scores": scores, "trailer": trailer, "rated": plain(m.get("certification"), 12),
+            "ai": bool(ai.ready() and C("FIND_AI")), "q": plain(f"{m.get('title')} {m.get('year') or ''} film reviews", 110)}
 
 
 def d_product(site):
@@ -2844,7 +2851,7 @@ def d_product(site):
     sales = [s for s in feed.get("sales", []) if s["site"] == site]
     report = next(p for p in money_report(feed, get_costs(), 90)["products"] if p["site"] == site) if feed else None
     return {"kind": "product", "site": site, "name": name, "host": host, "up": live, "report": report, "visitors": [{"day": d, "n": daily[d]} for d in sorted(daily)], "sales": sales[:30],
-            "subs": [s for s in feed.get("subs", []) if s["site"] == site]}
+            "subs": [s for s in feed.get("subs", []) if s["site"] == site], "ai": ai.ready()}
 
 
 def d_service(name):
@@ -2853,7 +2860,18 @@ def d_service(name):
     with db() as c:
         rows = c.execute("SELECT (ts / 3600) * 3600 h, ROUND(100.0 * AVG(up), 1) up, ROUND(AVG(ms)) ms FROM probe WHERE target = ? AND ts >= ? GROUP BY h ORDER BY h", (name, now - 7 * 86400)).fetchall()
         last = c.execute("SELECT ts, up, ms FROM probe WHERE target = ? ORDER BY ts DESC LIMIT 1", (name,)).fetchone()
-    return {"kind": "service", "name": name, "group": target["group"], "host": urllib.parse.urlsplit(target["url"]).hostname, "up": bool(last["up"]) if last else None, "ms": last["ms"] if last else None, "checked": last["ts"] if last else None, "hours": [dict(r) for r in rows]}
+        log = c.execute("SELECT ts, up FROM probe WHERE target = ? AND ts >= ? ORDER BY ts", (name, now - 8 * 86400)).fetchall()
+    outages, start = [], None
+    for r in log:
+        if not r["up"] and start is None:
+            start = r["ts"]
+        elif r["up"] and start is not None:
+            outages.append({"from": start, "to": r["ts"]})
+            start = None
+    if start is not None:
+        outages.append({"from": start, "to": None})
+    near = [{"name": p["name"], "up": p["up"], "ms": p.get("ms")} for p in (load("probes")["data"] or []) if p.get("group") == target["group"] and p["name"] != name and not p.get("gated")][:12]
+    return {"kind": "service", "name": name, "group": target["group"], "host": urllib.parse.urlsplit(target["url"]).hostname, "up": bool(last["up"]) if last else None, "ms": last["ms"] if last else None, "checked": last["ts"] if last else None, "hours": [dict(r) for r in rows], "outages": outages[-12:], "near": near, "ai": ai.ready()}
 
 
 def d_container(vmid):
@@ -2862,7 +2880,8 @@ def d_container(vmid):
     cfg = pve(f"{node()}/{kind}/{vmid}/config")
     hist = [{"t": p["time"], "cpu": round((p.get("cpu") or 0) * 100, 1), "mem": round(100 * (p.get("mem") or 0) / (p.get("maxmem") or 1), 1), "io": 0} for p in pve(f"{node()}/{kind}/{vmid}/rrddata?timeframe=day&cf=AVERAGE") if p.get("cpu") is not None]
     return {"kind": "container", "id": int(vmid), "name": s.get("name"), "status": s.get("status"), "cores": cfg.get("cores"), "mem": s.get("mem"), "maxmem": s.get("maxmem"), "disk": s.get("disk"), "maxdisk": s.get("maxdisk"), "uptime": s.get("uptime"),
-            "about": [x.strip(" #*-\t") for x in urllib.parse.unquote(cfg.get("description") or "").splitlines() if x.strip(" #*-\t")][:10], "autostart": bool(cfg.get("onboot")), "netin": s.get("netin"), "netout": s.get("netout"), "history": every_nth(hist)}
+            "about": [x.strip(" #*-\t") for x in urllib.parse.unquote(cfg.get("description") or "").splitlines() if x.strip(" #*-\t")][:10], "autostart": bool(cfg.get("onboot")), "netin": s.get("netin"), "netout": s.get("netout"), "history": every_nth(hist), "peak": max(hist, key=lambda h: h["cpu"], default=None), "typical": round(sum(h["cpu"] for h in hist) / len(hist), 1) if hist else None,
+            "others": [{"id": g["id"], "name": g.get("name"), "status": g.get("status") or g.get("state")} for g in (load("machines")["data"] or {}).get("guests", []) if g["id"] != int(vmid)][:16], "ai": ai.ready()}
 
 
 def d_issue(slug):

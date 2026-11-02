@@ -1,6 +1,6 @@
 // Every tap opens here. Each detail is a real address on this paper, so reload, back and open-in-new-tab all work,
 // and stories are read inside the paper. The only way off the site is the small "Original" link under a story.
-import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight, sideBar, reading, picture } from '/lib.js';
+import { $, $$, esc, usd, whole, dollars, compact, ago, span, bytes, plural, dayName, dotPlot, dayBars, lineChart, look, lookPicker, tight, sideBar, reading, picture } from '/lib.js';
 import { fillFind, followingPage, answerInto } from '/find.js';
 import { electionsView, fillElections, raceView, ballotView, fillRace } from '/elections.js';
 import { makeGlobe } from '/globe.js';
@@ -249,6 +249,8 @@ const told = (r) => `<h3>${esc(r.head)}</h3><p class="intel-lead">${esc(r.what)}
 const evidence = (html) => `<details class="intel-more"><summary>The analyst's note and its evidence</summary>${html}</details>`;
 const notes = (list) => (list || []).map((n) => `<section class="intel"${n.telling ? ` data-telling="${esc(n.telling)}"` : ''}>${n.reading ? `${told(n.reading)}${evidence(worked(n))}` : `<div class="intel-body">${worked(n)}</div>`}${n.telling ? '<p class="intel-wait">The editor is reading this.</p>' : ''}<time>${esc(ago(n.ts))}</time></section>`).join('');
 
+const askHere = (on, q, label) => (on ? `<p><button type="button" class="ghost text" data-ask="${esc(q.replace(/[<>]/g, ' '))}">${esc(label)}</button></p>` : '');
+const answerBox = (d, heading) => (d.ai ? `<section class="el-part"><h3>${esc(heading)}</h3><div id="pg-answer"></div></section>` : '');
 const marketNum = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const RANGES = [[1, 'Day'], [7, 'Week'], [30, 'Month'], [0, 'All']];
 
@@ -275,8 +277,6 @@ function fillMarket(d) {
     $$('[data-mk]', root).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
     show(+b.dataset.mk);
   };
-  const box = $('#mk-answer', root);
-  if (box) answerInto(box, d.q);
 }
 
 // A note nobody has told yet follows the page: the analyst's words stand until the editor's arrive.
@@ -610,7 +610,7 @@ const VIEWS = {
     return {
       head: d.label, deck: d.why, meta: `${marketNum(d.last)} ${d.unit || ''}, ${(d.pct || 0) >= 0 ? 'up' : 'down'} ${Math.abs(d.pct || 0).toFixed(1)}%`,
       body: `<p class="el-verdict" id="mk-said"></p><div class="seg mk-span" role="group" aria-label="How far back">${spans.map(([k, label]) => `<button type="button" data-mk="${k}" aria-pressed="${!k}">${label}</button>`).join('')}</div><div id="mk-chart"></div>
-        ${d.ai ? '<section class="el-part"><h3>Why it\'s moving</h3><div id="mk-answer"></div></section>' : ''}${stories}<p class="el-all"><a href="/topic/${encodeURIComponent(d.label)}">Everything on ${esc(d.label)}</a></p>`,
+        ${answerBox(d, 'Why it\'s moving')}${stories}<p class="el-all"><a href="/topic/${encodeURIComponent(d.label)}">Everything on ${esc(d.label)}</a></p>`,
       side: `${(d.others || []).length ? `<h3>Elsewhere today</h3><ul class="plain mk-others">${d.others.map((x) => `<li><a href="/world/market/${esc(x.key)}">${esc(x.label)}</a><b class="${(x.pct || 0) >= 0 ? 'pos' : 'neg'}">${(x.pct || 0) >= 0 ? '+' : ''}${(x.pct || 0).toFixed(1)}%</b></li>`).join('')}</ul>` : ''}`,
     };
   },
@@ -638,16 +638,21 @@ const VIEWS = {
   show(d) {
     return {
       head: d.title, deck: d.summary, meta: [d.year, d.network, d.rating ? `${d.rating} of 10` : '', title(d.status)].filter(Boolean).join(', '), poster: d.poster,
-      body: d.next.length ? `<h3>Next episodes</h3><ul class="plain">${d.next.map((e) => `<li><b>${esc(e.code)}: ${esc(e.title)}</b><time>${esc(new Date(e.at).toLocaleString('en-US', WHEN))}</time>${e.about ? `<p>${esc(e.about)}</p>` : ''}</li>`).join('')}</ul>` : '<p class="empty">No episodes scheduled.</p>',
+      body: `${d.next.length ? `<h3>Next episodes</h3><ul class="plain">${d.next.map((e) => `<li><b>${esc(e.code)}: ${esc(e.title)}</b><time>${esc(new Date(e.at).toLocaleString('en-US', WHEN))}</time>${e.about ? `<p>${esc(e.about)}</p>` : ''}</li>`).join('')}</ul>` : '<p class="empty">No episodes scheduled.</p>'}${answerBox(d, 'What people are saying')}`,
       side: facts([['Genre', d.genres.join(', ')], ['Seasons', d.seasons], ['In the library', d.total ? `${d.have} of ${d.total} episodes` : ''], ['Length', d.minutes ? `${d.minutes} min` : '']]),
     };
   },
 
   movie(d) {
+    const out = (iso) => iso && Date.parse(iso) <= Date.now(), when = [['In cinemas', d.cinemas], ['On digital', d.digital], ['On disc', d.disc]].filter(([, v]) => v).map(([k, v]) => `${k} ${out(v) ? 'since' : 'from'} ${date(v)}`);
+    const said = `${d.have ? 'In your library.' : d.digital && !out(d.digital) ? `Not in your library yet. The first copy to watch at home comes ${date(d.digital)}.` : 'Not in your library yet.'}${when.length ? ` ${when.join('. ')}.` : ''}`;
     return {
       head: d.title, deck: d.summary, meta: [d.year, d.studio, d.rating ? `${d.rating} of 10` : ''].filter(Boolean).join(', '), poster: d.poster,
-      body: '',
-      side: facts([['Genre', d.genres.join(', ')], ['Length', d.minutes ? `${d.minutes} min` : ''], ['Cinemas', date(d.cinemas)], ['Digital', date(d.digital)], ['Disc', date(d.disc)], ['In the library', d.have ? 'Yes' : 'Not yet']]),
+      body: `<p class="el-verdict">${esc(said)}</p>${d.trailer ? `<p><a class="ghost text" href="https://www.youtube.com/watch?v=${esc(d.trailer)}" target="_blank" rel="noreferrer">Watch the trailer</a></p>` : ''}
+        ${Object.keys(d.scores).length ? `<h3>What it scored</h3><dl class="facts wide-facts">${Object.entries(d.scores).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
+        ${d.cast.length ? `<h3>Cast</h3><ul class="plain people">${d.cast.map((c) => `<li><a href="/topic/${encodeURIComponent(c.n)}">${esc(c.n)}</a>${c.as ? `<span>${esc(c.as)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+        ${answerBox(d, 'What people are saying')}`,
+      side: facts([['Rated', d.rated], ...d.crew.map((c) => [c.job, c.n]), ['Genre', d.genres.join(', ')], ['Length', d.minutes ? `${d.minutes} min` : ''], ['Cinemas', date(d.cinemas)], ['Digital', date(d.digital)], ['Disc', date(d.disc)], ['In the library', d.have ? 'Yes' : 'Not yet']]),
     };
   },
 
@@ -660,9 +665,13 @@ const VIEWS = {
       }
     }
     const most = Math.max(1, ...rows.map((x) => x.n));
+    const sum = (list) => list.reduce((a, x) => a + x.n, 0), week = sum(rows.slice(-7)), before = sum(rows.slice(-14, -7)), lastSale = d.sales[0]?.created;
+    const said = [rows.length ? `${whole(week)} real ${week === 1 ? 'visitor' : 'visitors'} in the last seven days${rows.length >= 14 ? `, ${week === before ? 'the same as' : week > before ? `up from ${whole(before)}` : `down from ${whole(before)}`} the week before` : ''}.` : '',
+      r?.visitors && r.orders ? `${((r.orders / r.visitors) * 100).toFixed(1)}% of visitors bought, ${usd(Math.round(r.cents / r.orders))} an order.` : r?.visitors ? `None of the ${whole(r.visitors)} visitors in 90 days has bought yet.` : '',
+      lastSale ? `The last sale was ${ago(lastSale)}.` : '', r?.abandoned ? `${whole(r.abandoned)} left at checkout this month.` : ''].filter(Boolean).join(' ');
     return {
       head: d.name, deck: r?.cents ? `${usd(r.cents)} in sales over 90 days.` : 'No sales yet.', meta: `${d.host}${d.up ? `, ${d.up.up ? `up, ${d.up.ms} ms` : 'down'}` : ''}`,
-      body: `<h3>Real visitors per day</h3>${rows.length ? dotPlot(rows, [{ key: 'n', name: 'Visitors', cls: 'k1' }], { fmt: (v) => String(Math.round(v * 10) / 10), lo: 0, hi: most, aria: `Real visitors per day for ${d.name}` }) : '<p class="empty">Nobody has visited yet.</p>'}
+      body: `${said ? `<p class="el-verdict">${esc(said)}</p>` : ''}${askHere(d.ai, `How is ${d.name} doing, going by its sales and visitors, and what is the one thing I should change?`, 'What should I change?')}<h3>Real visitors per day</h3>${rows.length ? dotPlot(rows, [{ key: 'n', name: 'Visitors', cls: 'k1' }], { fmt: (v) => String(Math.round(v * 10) / 10), lo: 0, hi: most, aria: `Real visitors per day for ${d.name}` }) : '<p class="empty">Nobody has visited yet.</p>'}
         ${d.sales.length ? `<h3>Sales</h3><ul class="plain">${d.sales.map((s) => `<li>${esc(usd(s.cents))}, ${esc(s.item || 'order')}${s.city ? `, ${esc(s.city)}` : ''}<time>${esc(stamp(s.created))}</time></li>`).join('')}</ul>` : ''}`,
       side: `${r ? facts([['Sales, 90 days', usd(r.cents)], ['Orders', r.orders], ['Monthly recurring', usd(r.mrr)], ['Subscribers', r.subs], ['Visitors, 90 days', whole(r.visitors)], ['Left checkout, 30 days', r.abandoned], ['Refunds', usd(r.refunds)]]) : ''}<p class="source">Live at <a href="https://${esc(d.host)}/" target="_blank" rel="noopener noreferrer">${esc(d.host)}</a></p>`,
     };
@@ -675,18 +684,29 @@ const VIEWS = {
       return h ? `<span class="${h.up >= 100 ? 'ok' : h.up > 0 ? 'part' : 'out'}" data-tip="${esc(stamp(t))}: ${esc(h.up)}% up, ${esc(h.ms)} ms"></span>` : `<span class="none" data-tip="${esc(stamp(t))}: not measured"></span>`;
     }).join('');
     const all = d.hours.length ? (d.hours.reduce((a, h) => a + h.up, 0) / d.hours.length).toFixed(2) : null;
+    const timed = d.hours.filter((h) => h.ms), slow = timed.reduce((a, h) => (h.ms > (a?.ms || 0) ? h : a), null), typical = timed.length ? [...timed].sort((a, b) => a.ms - b.ms)[Math.floor(timed.length / 2)].ms : null;
+    const recent = timed.slice(-24), earlier = timed.slice(0, -24), mean = (list) => list.reduce((a, h) => a + h.ms, 0) / (list.length || 1), shift = recent.length && earlier.length ? mean(recent) / mean(earlier) - 1 : 0;
+    const said = [!d.outages.length ? 'No outages in the last week.' : `${plural(d.outages.length, 'outage')} in the last week, ${d.outages[d.outages.length - 1].to ? `the last ${ago(d.outages[d.outages.length - 1].to)}` : 'and it is down now'}.`,
+      typical ? `It usually answers in ${whole(typical)} ms${Math.abs(shift) > .2 ? `, and the last day has been ${Math.round(Math.abs(shift) * 100)}% ${shift > 0 ? 'slower' : 'faster'} than the days before` : ''}.` : '',
+      slow && typical && slow.ms > typical * 2 ? `The slowest hour was ${stamp(slow.h)}, at ${whole(slow.ms)} ms.` : ''].filter(Boolean).join(' ');
     return {
       head: d.name, deck: d.up == null ? 'Not checked yet.' : d.up ? `Up, answering in ${d.ms} ms.` : 'Not answering.', meta: `${d.host}, checked ${ago(d.checked)}`,
-      body: `<h3>The last seven days, one dot an hour</h3><div class="hours">${cells}</div><p class="small">${d.hours.length} of 168 hours measured so far.</p>`,
-      side: facts([['Group', d.group], ['Uptime, measured hours', all ? `${all}%` : '']]),
+      body: `<p class="el-verdict">${esc(said)}</p>${d.up === false ? askHere(d.ai, `${d.name} on ${d.host} isn't answering. What does the paper know about why, and what should I check first?`, 'What should I check?') : ''}
+        <h3>The last seven days, one dot an hour</h3><div class="hours">${cells}</div><p class="small">${d.hours.length} of 168 hours measured so far.</p>
+        ${d.outages.length ? `<h3>Outages</h3><ul class="plain">${[...d.outages].reverse().map((o) => `<li><b>${o.to ? esc(span(o.to - o.from)) : 'Still down'}</b><time>${esc(stamp(o.from))}</time></li>`).join('')}</ul>` : ''}`,
+      side: `${facts([['Group', d.group], ['Uptime, measured hours', all ? `${all}%` : ''], ['Typical answer', typical ? `${whole(typical)} ms` : '']])}${d.near.length ? `<h3>Also in ${esc(d.group)}</h3><ul class="plain mk-others">${d.near.map((n) => `<li><a href="/systems/service/${encodeURIComponent(n.name)}">${esc(n.name)}</a><b class="${n.up ? 'pos' : 'neg'}">${n.up ? `${whole(n.ms || 0)} ms` : 'Down'}</b></li>`).join('')}</ul>` : ''}`,
     };
   },
 
   container(d) {
+    const memory = d.maxmem ? Math.round((d.mem / d.maxmem) * 100) : null, disk = d.maxdisk ? Math.round((d.disk / d.maxdisk) * 100) : null;
+    const said = [d.status === 'running' ? `Running for ${span(d.uptime || 0)}.` : `${title(d.status)}.`,
+      d.typical != null ? `Its processors averaged ${d.typical}% over the last day${d.peak ? `, peaking at ${d.peak.cpu}% ${stamp(d.peak.t)}` : ''}.` : '',
+      memory != null ? `Memory is ${memory}% used${memory > 85 ? ', which is tight' : ''}.` : '', disk != null ? `Disk is ${disk}% used, with ${bytes(d.maxdisk - d.disk)} free${disk > 85 ? ', so it needs a look soon' : ''}.` : ''].filter(Boolean).join(' ');
     return {
       head: `${d.id} ${d.name}`, meta: `${title(d.status)}${d.uptime ? `, up ${span(d.uptime)}` : ''}`,
-      body: `${lineChart(d.history, d.name)}${d.about.length ? `<h3>Notes</h3><ul class="plain">${d.about.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`,
-      side: facts([['Cores', d.cores], ['Memory', `${bytes(d.mem)} of ${bytes(d.maxmem)}`], ['Disk', d.maxdisk ? `${bytes(d.disk)} of ${bytes(d.maxdisk)}` : ''], ['Starts on boot', d.autostart ? 'Yes' : 'No'], ['Traffic in', bytes(d.netin)], ['Traffic out', bytes(d.netout)]]),
+      body: `<p class="el-verdict">${esc(said)}</p>${(memory > 85 || disk > 85) ? askHere(d.ai, `${d.name} has memory at ${memory}% and disk at ${disk}%. What should I look at?`, 'What should I look at?') : ''}${lineChart(d.history, d.name)}${d.about.length ? `<h3>Notes</h3><ul class="plain">${d.about.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`,
+      side: `${facts([['Cores', d.cores], ['Memory', `${bytes(d.mem)} of ${bytes(d.maxmem)}`], ['Disk', d.maxdisk ? `${bytes(d.disk)} of ${bytes(d.maxdisk)}` : ''], ['Starts on boot', d.autostart ? 'Yes' : 'No'], ['Traffic in', bytes(d.netin)], ['Traffic out', bytes(d.netout)]])}${d.others.length ? `<h3>Also on this machine</h3><ul class="plain mk-others">${d.others.map((g) => `<li><a href="/systems/container/${esc(g.id)}">${esc(g.id)} ${esc(g.name)}</a><b class="${g.status === 'running' ? 'pos' : 'neg'}">${esc(title(g.status || 'unknown'))}</b></li>`).join('')}</ul>` : ''}`,
     };
   },
 };
@@ -808,6 +828,7 @@ export async function route() {
   if (m.kind === 'read' && body.lean && body.spread?.length >= 3) fillTakes(body.url);
   if (m.kind === 'topic') fillFind(body);
   fillNotes();
+  if ($('#pg-answer', sheet())) answerInto($('#pg-answer', sheet()), body.q);
   if (m.kind === 'market') fillMarket(body);
   if (m.kind === 'elections') fillElections(body);
   if (m.kind === 'race' || m.kind === 'ballot') fillRace(body);
