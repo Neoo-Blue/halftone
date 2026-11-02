@@ -97,6 +97,11 @@ async function sheet(b, name, names, { columns, width, gap = 28, pad = 28, backg
   await p.screenshot({ path: shot('machine') });
   await p.context().close();
 
+  // the map, gone into a state
+  p = await opened(b, '/elections?state=GA', { height: 1100, wait: '.el-panel:not([hidden])' });
+  await crop(p, '.el-map', 'map');
+  await p.context().close();
+
   // a race
   const race = await (await fetch(`${base}/api/paper`)).json();
   p = await opened(b, `/elections/race/${race.elections.us.closest[0].key}`, { height: 1500, wait: '.el-verdict' });

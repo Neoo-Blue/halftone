@@ -113,6 +113,8 @@ It starts from what you'd ask, not from a table of numbers. Which seat decides e
 
 The map is printed like the rest of the paper. A state's dots grow with how sure its race is, so a safe seat reads solid and a toss-up barely prints, and you can switch between the Senate, governors and the House. It also goes as deep as you do. Click a state and the map flies in to its districts and counties, click a district for its race and what's in it, and click a county for its towns and the seats it's split between.
 
+![The map gone into Georgia: every district and county printed in dots, with each seat listed beside it](docs/img/map.png)
+
 Every race has its own page. It says in plain words who has it, who holds the seat, whether it's open, and how near it is to the tipping point. Every signal sits on one scale, so you can see at a glance whether they agree. Then come each poll and, with an AI connected, what the race is actually about, written from the reporting with numbered sources. Follow a race and it joins the front page.
 
 ![A race's page: where it stands in words, and every signal on one scale](docs/img/race.png)

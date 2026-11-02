@@ -701,7 +701,7 @@ const VIEWS = {
   container(d) {
     const memory = d.maxmem ? Math.round((d.mem / d.maxmem) * 100) : null, disk = d.maxdisk ? Math.round((d.disk / d.maxdisk) * 100) : null;
     const said = [d.status === 'running' ? `Running for ${span(d.uptime || 0)}.` : `${title(d.status)}.`,
-      d.typical != null ? `Its processors averaged ${d.typical}% over the last day${d.peak ? `, peaking at ${d.peak.cpu}% ${stamp(d.peak.t)}` : ''}.` : '',
+      d.typical != null ? `Its processors averaged ${d.typical}% over the last day${d.peak ? `, peaking at ${d.peak.cpu}% on ${stamp(d.peak.t)}` : ''}.` : '',
       memory != null ? `Memory is ${memory}% used${memory > 85 ? ', which is tight' : ''}.` : '', disk != null ? `Disk is ${disk}% used, with ${bytes(d.maxdisk - d.disk)} free${disk > 85 ? ', so it needs a look soon' : ''}.` : ''].filter(Boolean).join(' ');
     return {
       head: `${d.id} ${d.name}`, meta: `${title(d.status)}${d.uptime ? `, up ${span(d.uptime)}` : ''}`,
