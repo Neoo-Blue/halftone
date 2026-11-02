@@ -83,7 +83,9 @@ Errors look like `{"ok": false, "ts": 1793485138, "error": {"code": "not_found",
 
 ## Limits
 
-30 requests in a burst, then 75 a minute, per address (per /64 on IPv6). Past that you get `429` with a `Retry-After` header. Answers are cached on the server for the times above, so polling faster than that returns the same bytes and spends your allowance.
+30 requests in a burst, then 75 a minute, per address (per /64 on IPv6). Past that you get `429` with a `Retry-After` header. Answers are cached on the server for the times above, and an answer the server already has costs a twentieth of a fresh one (it says `X-Cache: hit`), so reading what everyone reads is nearly free and only new work is rationed. Polling faster than the cache time gets you the same bytes.
+
+Halftone reuses an answer for 20 seconds, so readers opening the same page within that time ask once. After a `429` or `503` it waits out `Retry-After` on the last copy it has, up to an hour old, instead of asking again. A wait of a few seconds it sits out quietly, and a longer one the page explains and then opens by itself.
 
 If a refresh fails or the server is busy you get the last good copy, up to an hour old, so check `meta.generated_at`. With no copy to give you get `502`, or `503` with `Retry-After`.
 

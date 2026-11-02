@@ -811,6 +811,12 @@ export async function route() {
   });
   const { ok, body } = await data;
   if (mine !== turn) return;  // a later tap already won
+  if (!ok && body.retry > 0) {  // WARROOM asked the paper to wait: say so, and open it again when the wait is up
+    sheet().innerHTML = `<nav class="crumb"><a href="/">Back to the paper</a></nav><h1 class="page-head">${esc(body.error)}</h1><p class="deck">Nothing is wrong on your side. The page opens by itself.</p>`;
+    const here = location.href;
+    setTimeout(() => { if (mine === turn && location.href === here) route(); }, Math.min(body.retry, 600) * 1000);  // not if the reader has moved on
+    return;
+  }
   if (!ok) {
     sheet().innerHTML = `<nav class="crumb"><a href="/">Back to the paper</a></nav><h1 class="page-head">${esc(body.error || 'That page did not load')}</h1><p class="deck">Check your connection, or sign in again if your session ended.</p><button type="button" class="ghost text" data-retry>Try again</button>`;
     return;

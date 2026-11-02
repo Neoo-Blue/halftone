@@ -244,14 +244,60 @@ def node():
     return "/nodes/" + urllib.parse.quote(C("PVE_NODE"), safe="")
 
 
+WAR_SEEN, WAR_LOCK, WAR_QUIET = {}, threading.Lock(), {}
+
+
+def war_bucket(url):
+    """WARROOM rations /v1 and the rest of its API separately, so a wait asked on one doesn't hold the other."""
+    return "v1" if "/v1/" in url else "api"
+
+
+class Waiting(OSError):
+    """WARROOM asked the paper to wait this many seconds, and it has no copy of this page to show meanwhile."""
+WAR_FRESH = 20  # seconds an answer is reused: under the 30-second count, long enough for a burst of readers opening pages
+WAR_OLDEST = 3600  # while WARROOM asks the paper to wait, a copy this old is still shown; past that the page says so instead
+WAR_SIT_OUT = 3  # a wait this short is sat out rather than shown to a reader
+
+
+def war_fetch(url, timeout):
+    """WARROOM as a good guest. An answer is reused for a few seconds, so readers opening pages don't each ask again, and when it says slow down the paper waits it out on the last copy it has. Every answer carries its own time, so an old one never passes for new."""
+    with WAR_LOCK:
+        seen = WAR_SEEN.get(url)
+    now, bucket = time.monotonic(), war_bucket(url)
+    quiet = WAR_QUIET.get(bucket, 0.0)
+    held = seen and now - seen[0] < WAR_OLDEST
+    if seen and (now - seen[0] < WAR_FRESH or (held and now < quiet)):
+        return parsed(seen[1])
+    if 0 < quiet - now <= min(WAR_SIT_OUT, timeout / 2):  # never so long the caller's own time runs out
+        time.sleep(quiet - now)
+    elif now < quiet:
+        raise Waiting(int(quiet - now) + 1)
+    try:
+        body = fetch(url, timeout=timeout, raw=True)
+    except urllib.error.HTTPError as e:
+        if e.code not in (429, 503):
+            raise
+        wait = (e.headers.get("Retry-After") or "").strip()
+        WAR_QUIET[bucket] = time.monotonic() + min(int(wait) if wait.isdigit() else 30, 600)
+        if held:
+            return parsed(seen[1])
+        raise Waiting(int(WAR_QUIET[bucket] - time.monotonic()) + 1) from e
+    got = parsed(body)  # an answer that doesn't parse never replaces the last good one
+    with WAR_LOCK:
+        if len(WAR_SEEN) > 200:
+            WAR_SEEN.clear()
+        WAR_SEEN[url] = (time.monotonic(), body)
+    return got
+
+
 def war(path, timeout=30):
-    return fetch(f"{C('WARROOM_URL')}{path}", timeout=timeout)
+    return war_fetch(f"{C('WARROOM_URL')}{path}", timeout)
 
 
 def war_open(path, timeout=30):
     """The public API, whichever address is set. An edition can read WARROOM's own /api, which has the same paths and other shapes, and the election desk is built on the public ones."""
     base = C("WARROOM_URL").rstrip("/")
-    return fetch(f"{base if base.endswith('/v1') else f'{base}/v1'}{path}", timeout=timeout)
+    return war_fetch(f"{base if base.endswith('/v1') else f'{base}/v1'}{path}", timeout)
 
 
 # ---------------------------------------------------------------------- the AI brief
@@ -4076,6 +4122,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(detail(parts[3], urllib.parse.unquote(parts[4])))
             except (KeyError, IndexError, LookupError, StopIteration):
                 return self.send_json({"error": "There is nothing at this address."}, 404)
+            except Waiting as e:
+                return self.send_json({"error": f"WARROOM asked the paper to slow down for a moment. This opens in about {e.args[0]} seconds.", "retry": e.args[0]}, 503, extra=[("Retry-After", str(e.args[0]))])
             except (OSError, ValueError, http.client.HTTPException) as e:
                 return self.send_json({"error": "That source is not answering right now.", "why": type(e).__name__}, 502)
         if url.path.startswith("/img/"):

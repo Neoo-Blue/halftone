@@ -201,11 +201,62 @@ s.save("elections", {"us": None, "world": []})
 
 # an edition reading WARROOM's own /api still gets the public shapes, which is what the live paper does
 _fetched, _real_fetch = [], s.fetch
-s.fetch = lambda url, **k: _fetched.append(url) or {}
+s.fetch = lambda url, **k: _fetched.append(url) or b"{}"
 for _base in ("https://war.example/api", "https://war.example/api/", "https://war.example/api/v1"):
     settings.update({"WARROOM_URL": _base})
     s.war_open("/elections")
 assert set(_fetched) == {"https://war.example/api/v1/elections"}, _fetched
+
+# WARROOM as a good guest: an answer is reused for a few seconds, and a "slow down" is waited out on the last copy
+s.WAR_SEEN.clear()
+_fetched.clear()
+_answers = [b'{"n": 1}']
+s.fetch = lambda url, **k: _fetched.append(url) or _answers[0]
+assert s.war_fetch("https://war.example/x", 5) == {"n": 1} == s.war_fetch("https://war.example/x", 5) and len(_fetched) == 1, "readers opening pages together ask once"
+_got = s.war_fetch("https://war.example/x", 5)
+_got["n"] = 99
+assert s.war_fetch("https://war.example/x", 5) == {"n": 1}, "each caller gets its own copy, so one can't change another's"
+
+
+def _busy(url, **k):
+    _fetched.append(url)
+    raise s.urllib.error.HTTPError(url, 429, "Too Many Requests", {"Retry-After": "120"}, None)
+
+
+s.WAR_SEEN["https://war.example/x"] = (s.time.monotonic() - 600, b'{"n": 1}')
+s.fetch = _busy
+assert s.war_fetch("https://war.example/x", 5) == {"n": 1}, "told to slow down, the reader gets the last copy, not an error"
+assert 110 < s.WAR_QUIET["api"] - s.time.monotonic() <= 120, "and the paper waits as long as it was asked"
+_fetched.clear()
+assert s.war_fetch("https://war.example/x", 5) == {"n": 1} and not _fetched, "nothing is asked while it waits"
+s.fetch = lambda url, **k: _fetched.append(url) or b'{"n": 4}'
+assert s.war_fetch("https://war.example/api/v1/y", 5) == {"n": 4} and _fetched, "a wait on the API doesn't hold /v1, which WARROOM rations apart"
+_fetched.clear()
+s.fetch = _busy
+try:
+    s.war_fetch("https://war.example/never-seen", 5)
+    raise AssertionError("with no copy to give, it says so")
+except s.Waiting as _w:
+    assert not _fetched and 110 < _w.args[0] <= 121, "and how long to wait"
+s.WAR_SEEN["https://war.example/old"] = (s.time.monotonic() - 7200, b'{"n": 2}')
+try:
+    s.war_fetch("https://war.example/old", 5)
+    raise AssertionError("a copy two hours old isn't passed off as the news")
+except s.Waiting:
+    pass
+s.WAR_QUIET["api"] = s.time.monotonic() + 0.2
+_answers[0] = b'{"n": 3}'
+s.fetch = lambda url, **k: _fetched.append(url) or _answers[0]
+assert s.war_fetch("https://war.example/brief", 5) == {"n": 3}, "a short wait is sat out, not shown"
+_answers[0] = b"not json"
+s.WAR_SEEN["https://war.example/x"] = (s.time.monotonic() - 60, b'{"n": 1}')
+try:
+    s.war_fetch("https://war.example/x", 5)
+    raise AssertionError("a broken answer is an error")
+except ValueError:
+    assert s.WAR_SEEN["https://war.example/x"][1] == b'{"n": 1}', "and it doesn't replace the last good copy"
+s.WAR_QUIET.clear()
+s.WAR_SEEN.clear()
 s.fetch = _real_fetch
 settings.update({"WARROOM_URL": ""})
 
