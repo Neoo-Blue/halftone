@@ -7,7 +7,6 @@ import { $, esc } from '/lib.js';
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const WIDE = 960, CELL = 8, ROW = .92, GAP = 7, DEEPEST = 90;
 let grid = null, swept = false;  // the map prints in once, not at every new count
-export let where = { st: null, seat: null, county: null };  // kept across a redraw, so a new count doesn't throw the reader out
 const gridded = () => (grid ||= fetch('/us-dots.json').then((r) => r.json()).catch((e) => { grid = null; throw e; }));
 const held = new Map();
 const shapeOf = (st) => {
@@ -46,12 +45,12 @@ function shapeMap(w, h, paths) {
 
 class Lens {
   constructor(host, g) {
-    Object.assign(this, { host, g, canvas: $('canvas', host), tip: $('.el-tip', host), crumbs: $('.el-crumbs', host), panel: $('.el-panel', host), mix: 0, hot: null, turn: 0, sweep: 1 });
+    Object.assign(this, { host, g, where: { st: null, seat: null, county: null }, canvas: $('canvas', host), tip: $('.el-tip', host), crumbs: $('.el-crumbs', host), panel: $('.el-panel', host), mix: 0, hot: null, turn: 0, sweep: 1 });
     this.ctx = this.canvas.getContext('2d');
     this.canvas.onpointermove = (e) => this.hover(e);
     this.canvas.onpointerleave = () => { this.hot = this.hotSt = null; this.tip.hidden = true; this.paint(); };
     this.canvas.onclick = (e) => this.press(e);
-    this.host.onkeydown = (e) => { if (e.key === 'Escape' && where.st) { e.preventDefault(); this.up(); } };
+    this.host.onkeydown = (e) => { if (e.key === 'Escape' && this.where.st) { e.preventDefault(); this.up(); } };
     this.crumbs.onclick = (e) => {
       const b = e.target.closest('[data-to]');
       if (b) this.go({ ...JSON.parse(b.dataset.to) });
@@ -59,8 +58,8 @@ class Lens {
     this.panel.onclick = (e) => {
       const b = e.target.closest('[data-seat],[data-county]');
       if (!b) return;
-      if (b.dataset.seat) this.go({ st: where.st, seat: +b.dataset.seat, county: null });
-      else this.go({ st: where.st, seat: where.seat, county: +b.dataset.county });
+      if (b.dataset.seat) this.go({ st: this.where.st, seat: +b.dataset.seat, county: null });
+      else this.go({ st: this.where.st, seat: this.where.seat, county: +b.dataset.county });
     };
     this.panel.onpointerover = (e) => {
       const b = e.target.closest('[data-seat],[data-county]');
@@ -92,8 +91,9 @@ class Lens {
       }
     }
     this.size();
-    if (!this.W || this.pending) return;  // the observer draws it once it can be seen, and a move already on its way will draw this count
-    if (where.st) { this.go(where, true); return; }
+    if (!this.W) return;  // the observer draws it once it can be seen
+    if (this.pending) { this.paint(); return; }  // a move already on its way will draw this count
+    if (this.where.st) { this.go(this.where, true); return; }
     this.mix = 0;
     this.cam = this.home;
     if (reduce || swept) { this.paint(); return; }
@@ -120,7 +120,7 @@ class Lens {
 
   fitAll() {
     this.size();
-    if (where.st) this.go(where, true);
+    if (this.where.st) this.go(this.where, true);
     else { this.cam = this.home; this.paint(); }
   }
 
@@ -129,7 +129,7 @@ class Lens {
   y(cam, wy) { return this.H / 2 + (wy - cam.y) * this.base * cam.z; }
 
   dots(cam) {
-    const { ctx, cells, ink, W, H, mix, sweep, base } = this, focus = where.st, size = CELL * base * cam.z;
+    const { ctx, cells, ink, W, H, mix, sweep, base } = this, focus = this.where.st, size = CELL * base * cam.z;
     for (const c of cells) {
       const sx = this.x(cam, c.x), sy = this.y(cam, c.y);
       if (sx < -20 || sy < -20 || sx > W + 20 || sy > H + 20) continue;
@@ -304,7 +304,7 @@ class Lens {
     $('[data-el-state]', this.host).value = target.st || '';
     if (!target.st) {
       this.pending = false;
-      where = target;
+      this.where = target;
       this.crumbs.hidden = this.panel.hidden = true;
       this.opts.pick?.(null);
       const was = this.det;
@@ -321,8 +321,9 @@ class Lens {
     } catch {
       if (turn !== this.turn) return;
       this.pending = false;
-      if (!this.det) where = { st: null, seat: null, county: null };  // nothing to stand on, so back to the country rather than an empty frame
+      if (!this.det) this.where = { st: null, seat: null, county: null };  // nothing to stand on, so back to the country rather than an empty frame
       this.cam ||= this.home;
+      $('[data-el-state]', this.host).value = this.where.st || '';
       this.paint();
       this.say('That state could not be opened just now.');
       return;
@@ -338,7 +339,7 @@ class Lens {
     this.cam ||= this.home;
     this.was = this.det;
     this.det = fresh;
-    where = target;
+    this.where = target;
     this.card(still, stay);
     this.fly(cam, still, (e) => { this.mix = Math.max(from, e); this.on = clip((e - .3) / .7); this.wasOn = this.was ? 1 - clip(e / .55) : 0; });
   }
@@ -360,7 +361,7 @@ class Lens {
   }
 
   up() {
-    const { st, seat, county } = where;
+    const { st, seat, county } = this.where;
     this.go(county != null ? { st, seat } : seat != null ? { st } : {});
   }
 
@@ -372,10 +373,11 @@ class Lens {
 
   async loadRows() {
     if (this.rows && !this.stale) return this.rows;
+    this.stale = false;  // cleared first, so a count arriving during this read marks it old
     try {
       this.rows = await this.opts.races();
-      this.stale = false;
     } catch (e) {
+      this.stale = true;
       if (!this.rows) throw e;  // the last count stands until a new one can be read
     }
     return this.rows;
@@ -393,7 +395,7 @@ class Lens {
       tip.textContent = text;
       tip.style.transform = `translate(${Math.min(box.width - 200, Math.max(0, px - 60))}px, ${py + 14}px)`;
     };
-    if (!where.st) {
+    if (!this.where.st) {
       const r = Math.round(py / (this.base * CELL) / ROW - .5), c = this.byCell.get(`${Math.round(px / (this.base * CELL) - .5 - (r % 2) / 2)},${r}`), st = c?.st || null;
       if (st === this.hotSt) return;
       this.hotSt = st;
@@ -402,7 +404,7 @@ class Lens {
       return;
     }
     if (!this.det || this.on < 1) return;
-    const seat = this.det.seatAt(px, py), county = this.det.countyAt(px, py), hot = where.seat != null ? { seat: null, county: county < 0 ? null : county } : { seat: seat < 0 ? null : seat, county: null };
+    const seat = this.det.seatAt(px, py), county = this.det.countyAt(px, py), hot = this.where.seat != null ? { seat: null, county: county < 0 ? null : county } : { seat: seat < 0 ? null : seat, county: null };
     if (JSON.stringify(hot) === JSON.stringify(this.hot)) { if (!tip.hidden) put(tip.textContent); return; }
     this.hot = hot;
     const q = this.s.seats[seat], row = q && this.rowOf(q.k), co = this.s.cos[county];
@@ -413,23 +415,23 @@ class Lens {
   press(e) {
     if (this.flying) return;  // what's under a click in flight isn't what the click would land on
     const box = this.canvas.getBoundingClientRect(), px = e.clientX - box.left, py = e.clientY - box.top;
-    if (!where.st) {
+    if (!this.where.st) {
       const r = Math.round(py / (this.base * CELL) / ROW - .5), c = this.byCell.get(`${Math.round(px / (this.base * CELL) - .5 - (r % 2) / 2)},${r}`);
       if (c) { this.hotSt = null; this.go({ st: c.st }); }
       return;
     }
     if (!this.det) return;
-    const seat = this.det.seatAt(px, py), county = this.det.countyAt(px, py), { st } = where;
+    const seat = this.det.seatAt(px, py), county = this.det.countyAt(px, py), { st } = this.where;
     if (seat < 0 && county < 0) { this.up(); return; }
-    if (where.seat == null && where.county == null) { if (seat >= 0) this.go({ st, seat }); return; }
-    if (where.seat != null && seat >= 0 && seat !== where.seat) { this.go({ st, seat }); return; }
-    if (county >= 0 && county !== where.county) this.go({ st, seat: where.seat, county });
+    if (this.where.seat == null && this.where.county == null) { if (seat >= 0) this.go({ st, seat }); return; }
+    if (this.where.seat != null && seat >= 0 && seat !== this.where.seat) { this.go({ st, seat }); return; }
+    if (county >= 0 && county !== this.where.county) this.go({ st, seat: this.where.seat, county });
   }
 
   // ------------------------------------------------------------ what's beside the map
   card(still, stay) {
-    const { s, here, opts, crumbs, panel } = this, { st, seat, county } = where, name = opts.states[st] || st;
-    if (still && panel.contains(document.activeElement)) return;  // a new count doesn't take the reader's place in the list
+    const { s, here, opts, crumbs, panel } = this, { st, seat, county } = this.where, name = opts.states[st] || st;
+    if (still && (panel.contains(document.activeElement) || crumbs.contains(document.activeElement))) return;  // a new count doesn't take the reader's place
     const step = (label, to) => `<button type="button" data-to='${esc(JSON.stringify(to))}'>${esc(label)}</button>`;
     const seatRow = (q) => { const r = this.rowOf(q.k); return r ? `${opts.seat(r)}` : `${name} ${q.n}`; };
     const trail = [step('United States', {}), step(name, { st })];
@@ -472,5 +474,5 @@ export async function openMap(host, map, view, opts) {
   return host.lens;
 }
 
-export const shut = (host) => { if (host.lens && where.st) host.lens.go({}, true); };
+export const shut = (host) => { if (host.lens?.where.st) host.lens.go({}, true); };
 export const going = (host, st) => host.lens?.go({ st }, false, true);

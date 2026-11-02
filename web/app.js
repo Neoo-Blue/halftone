@@ -95,10 +95,13 @@ function fitFront() {
   if ($('#paper').hidden) return;  // nothing has a size while a page is open: this runs again when it's back
   const list = $('.also'), table = $('#theaters'), rows = [...table.children], side = $('#inside'), foot = (e) => e.getBoundingClientRect().bottom, tall = (e) => e.getBoundingClientRect().height;
   if (innerWidth <= 860) { rows.slice(5).forEach((r) => r.remove()); return; }
-  $('#orb figcaption').append(side);  // always measured from here, or each redraw would answer differently from the last
-  const spare = rows.slice(5).reduce((a, r) => a + tall(r), 0), note = foot($('#glance')), five = foot(table) - spare, high = tall(side);
-  const under = Math.max(0, note - (five + high + spare), five + high - note), beside = Math.max(0, note + high - (five + spare), five - note - high);  // how far apart the columns end each way, with the conflicts free to grow
-  const onNote = innerWidth > 1180 && beside < under;
+  const outer = (e) => tall(e) + parseFloat(getComputedStyle(e).marginTop), wide = innerWidth > 1180;
+  if (wide) $('.note-col').append(side);
+  const narrow = outer(side);  // it wraps taller in the note column, so each column gets its own measure
+  $('#orb figcaption').append(side);  // and always in this order, or each redraw would answer differently from the last
+  const spare = rows.slice(5).reduce((a, r) => a + tall(r), 0), note = foot($('#glance')), five = foot(table) - spare, high = outer(side);
+  const under = Math.max(0, note - (five + high + spare), five + high - note), beside = Math.max(0, note + narrow - (five + spare), five - note - narrow);  // how far apart the columns end each way, with the conflicts free to grow
+  const onNote = wide && beside < under;
   if (onNote) $('.note-col').append(side);
   const end = onNote ? table : side, level = Math.max(onNote ? foot(side) : note, foot(end) - spare, list ? list.getBoundingClientRect().top + 90 : 0);  // their own heights: the columns themselves stretch
   while (rows.length > 5 && foot(end) > level) rows.pop().remove();

@@ -2109,6 +2109,7 @@ def d_mail(mid):
     if not m:
         raise LookupError(mid)
     m = dict(m)
+    graph_token()  # outside the try: a sign-in that fails isn't a message that moved
     try:
         full = graph(f"/users/{urllib.parse.quote(m['box'])}/messages/{urllib.parse.quote(m['gid'], safe='')}?$select=toRecipients,body,hasAttachments,webLink", Prefer='outlook.body-content-type="text"')  # plain text: no images to load, no tracking pixels
     except urllib.error.HTTPError as e:
@@ -2532,7 +2533,7 @@ WHAT: two or three sentences on what is actually happening in the world: ships, 
 WHY: one or two sentences on why it matters, and to whom.
 WATCH: the one thing that would change the picture.
 
-Use only what the note says. Add no fact, name or number of your own, and don't fill gaps from memory. A number stays only if the sentence says what it means. Never write composite, index, sigma, baseline, median, AIS, VIX, kinetic, emission or severity: say what they stand for. Look hard at why a measure moved. If it improved because markets calmed or because its comparison point reset to an already bad level, then nothing got better on the ground, and that is the story. Say so plainly. Anything marked UNVERIFIED is not confirmed, and you say that. Plain text only, no markdown."""
+Use only what the note says. Add no fact, name or number of your own, and don't fill gaps from memory. Keep every number as the note writes it, and a number stays only if the sentence says what it means. Never write composite, index, sigma, baseline, median, AIS, VIX, kinetic, emission or severity: say what they stand for. Look hard at why a measure moved. If it improved because markets calmed or because its comparison point reset to an already bad level, then nothing got better on the ground, and that is the story. Say so plainly. Anything marked UNVERIFIED is not confirmed, and you say that. Plain text only, no markdown."""
 NOTE_PARTS = {"HEAD": "head", "WHAT": "what", "WHY": "why", "WATCH": "watch"}
 
 
@@ -2540,20 +2541,30 @@ def note_said(n):
     return "\n".join([n["headline"] or "", n["body"] or "", *[b if isinstance(b, str) else b.get("text") or "" for b in n["bullets"]]]).strip()
 
 
-COUNTS = "five six seven eight nine ten eleven twelve twenty thirty forty fifty sixty seventy eighty ninety hundred hundreds thousand thousands million millions billion billions dozen dozens".split()
+NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100, "hundreds": 100, "thousand": 1e3, "thousands": 1e3, "million": 1e6, "millions": 1e6, "billion": 1e9, "billions": 1e9, "trillion": 1e12, "trillions": 1e12, "dozen": 12, "dozens": 12}
+TITLED = set("former ex president premier minister chancellor secretary general ayatollah king queen prince senator governor commander ambassador mayor bn tn mn".split())  # a job title or a scale the note didn't give is a fact it didn't give
+OPENERS = set("the a an this that these those it its they their there here both only some most many few if but and while after before with without since for in on at by as what why how when where who which neither nor yet so still now even more less any all each no not nothing anyone anything anybody nobody everyone people however meanwhile although though because until unless once over under about around near much such another other others first second third last next new rising falling higher lower shipping ships tankers oil gas prices fighting talks traffic markets energy trade buyers drivers civilians families forces troops officials analysts reports sources strikes attacks us uk eu un".split())
+DIGITS = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
 
 def note_holds(said, got):
-    """The prompt says add nothing, and this is what makes it so: a number or a counted amount has to be in the note, near enough to allow for rounding, and so do the names, bar one a reader's general knowledge can supply."""
-    held = [float(x.replace(",", "")) for x in re.findall(r"\d[\d,]*(?:\.\d+)?", said)]
-    text, low = " ".join(got.values()), said.lower()
-    for x in re.findall(r"\d[\d,]*(?:\.\d+)?", text):
-        v = float(x.replace(",", ""))
-        if not any(abs(v - h) <= .015 * max(abs(v), abs(h), 1) for h in held):
-            return False
-    if any(w in COUNTS and w not in low for w in re.findall(r"[a-z]+", text.lower())):
+    """The prompt says add nothing, and this holds it to that as far as a pattern can: numbers in digits or words, near enough to allow for rounding, titles, addresses and names. A false claim in ordinary words gets past, which is why the page says who wrote this and keeps the note one tap below."""
+    said = re.sub(r"\[[0-9a-f]{8,}\]", " ", said)  # a cited report's id isn't a figure the note gave
+    told, known = ". ".join(got.values()), set(re.findall(r"[a-z]+", said.lower()))
+    words = re.findall(r"[a-z]+", told.lower())
+    held = {float(x.replace(",", "")) for x in DIGITS.findall(said)} | {NUMBER_WORDS[w] for w in known & NUMBER_WORDS.keys()}
+    asked = [float(x.replace(",", "")) for x in DIGITS.findall(told)] + [NUMBER_WORDS[w] for w in words if w in NUMBER_WORDS and w not in ("one", "two")]
+    if not all(any(abs(v - h) <= (.035 if max(v, h) >= 100 else .015) * max(v, h, 1) for h in held) for v in asked):
         return False
-    return sum(1 for w in set(re.findall(r"(?<=[a-z,;] )[A-Z][a-z]{2,}", text)) if w.lower() not in low) <= 1
+    if any(w in TITLED and w not in known for w in words) or re.search(r"\b[\w-]+\.(?:com|org|net|io|gov|info|news|ru|ir|ua|il|cn|uk|example)\b", told, re.I):
+        return False
+    inside, opening = set(), set()
+    for hit in re.finditer(r"[A-Z][\w'’-]*(?: (?:of |the )?[A-Z][\w'’-]*)*", told):
+        parts = [re.split(r"['’-]", w)[0].lower() for w in hit.group().split() if w not in ("of", "the")]
+        if not any(p in known or p in OPENERS for p in parts):
+            before = told[:hit.start()].rstrip()
+            (opening if not before or before[-1] in ".!?:" else inside).add(hit.group())
+    return len(inside) <= 1 and len(opening) <= 2 and len(inside) + len(opening) <= 2
 
 
 def note_reading(n):
@@ -2569,8 +2580,8 @@ def note_reading(n):
     except Exception:
         find_keep("noteless", said, {"at": int(time.time())})
         raise
-    got = {NOTE_PARTS[k]: plain(v, 500) for k, v in re.findall(r"^\W*(HEAD|WHAT|WHY|WATCH)\W*?:\**\s*(.+)$", text, re.M)}
-    if len(got) != len(NOTE_PARTS) or not note_holds(said, got):
+    got = {NOTE_PARTS[k]: plain(v.strip(" *"), 500) for k, v in re.findall(r"^\W*(HEAD|WHAT|WHY|WATCH)\W*?:\**\s*(.+)$", text, re.M)}
+    if len(got) != len(NOTE_PARTS) or not all(got.values()) or not note_holds(said, got):
         find_keep("noteless", said, {"at": int(time.time())})
         return None
     return find_keep("note", said, {**got, "doubt": "UNVERIFIED" in said})
@@ -2592,7 +2603,7 @@ def with_reading(notes):
         with TELLING_LOCK:
             if len(TELLING) > 64:
                 TELLING.clear()
-            if key not in TELLING:
+            if key not in TELLING or TELLING[key].done():  # a finished job with nothing kept failed, and its hour is up
                 TELLING[key] = READERS.submit(quiet, lambda: note_reading(n))
         n["telling"] = key
     return notes
@@ -2797,7 +2808,8 @@ def d_market(key):
     if not m:
         raise LookupError(key)
     bars = war("/markets", 45).get("items", {}).get(key, [])
-    words = [w for w in re.findall(r"[a-z0-9&]+", m["label"].lower()) if len(w) > 2 and w not in ("index", "the", "price", "futures")]
+    named = [w for w in re.sub(r"\(.*?\)", " ", m["label"]).lower().split() if w not in ("us", "eu", "uk", "the")]
+    words = [w for w in named if not w.isdigit() and w not in ("crude", "gas", "natural", "oil", "index", "price", "futures")] or [" ".join(named)]
     told = [c for c in (live("news")["data"] or {}).get("stories", []) if about(c["t"], words)][:6]
     others = [{k: x.get(k) for k in ("key", "label", "pct")} for x in (load("world")["data"] or {}).get("markets", []) if x["key"] != key][:12]
     return {"kind": "market", **m, "series": [{"t": b["ts"], "v": b["close"]} for b in bars[-3000:]], "stories": [{"t": c["t"], "u": c["u"], "src": c["src"], "ts": c["ts"], "n": len(c["outlets"])} for c in told], "others": others, "ai": bool(ai.ready() and C("FIND_AI")), "q": plain(f"Why is {m['label']} moving this week", 110)}
@@ -2831,7 +2843,7 @@ def d_movie(mid):
     m = fetch(f"{C('RADARR_URL')}/api/v3/movie/{mid}", {"X-Api-Key": C("RADARR_KEY")}, timeout=15)
     r = m.get("ratings") or {}
     credits = quiet(lambda: fetch(f"{C('RADARR_URL')}/api/v3/credit?movieId={int(mid)}", {"X-Api-Key": C("RADARR_KEY")}, timeout=10)) or []
-    cast = [{"n": plain(c.get("personName"), 60), "as": plain(c.get("character"), 60)} for c in credits if c.get("type") == "cast" and c.get("personName")][:10]
+    cast = [{"n": plain(c.get("personName"), 60), "as": plain(c.get("character"), 60)} for c in sorted(credits, key=lambda c: c.get("order") or 0) if c.get("type") == "cast" and c.get("personName")][:10]
     crew = [{"n": plain(c.get("personName"), 60), "job": plain(c.get("job"), 40)} for c in credits if c.get("job") in ("Director", "Screenplay", "Writer") and c.get("personName")][:4]
     scores = {name: (r.get(key) or {}).get("value") for key, name in (("imdb", "IMDb"), ("tmdb", "TMDb"), ("rottenTomatoes", "Rotten Tomatoes"), ("metacritic", "Metacritic")) if (r.get(key) or {}).get("value")}
     trailer = m.get("youTubeTrailerId") if re.fullmatch(r"[\w-]{6,20}", m.get("youTubeTrailerId") or "") else None
@@ -2860,7 +2872,7 @@ def d_service(name):
     with db() as c:
         rows = c.execute("SELECT (ts / 3600) * 3600 h, ROUND(100.0 * AVG(up), 1) up, ROUND(AVG(ms)) ms FROM probe WHERE target = ? AND ts >= ? GROUP BY h ORDER BY h", (name, now - 7 * 86400)).fetchall()
         last = c.execute("SELECT ts, up, ms FROM probe WHERE target = ? ORDER BY ts DESC LIMIT 1", (name,)).fetchone()
-        log = c.execute("SELECT ts, up FROM probe WHERE target = ? AND ts >= ? ORDER BY ts", (name, now - 8 * 86400)).fetchall()
+        log = c.execute("SELECT ts, up FROM probe WHERE target = ? AND ts >= ? ORDER BY ts", (name, now - 7 * 86400)).fetchall()
     outages, start = [], None
     for r in log:
         if not r["up"] and start is None:
@@ -2871,7 +2883,7 @@ def d_service(name):
     if start is not None:
         outages.append({"from": start, "to": None})
     near = [{"name": p["name"], "up": p["up"], "ms": p.get("ms")} for p in (load("probes")["data"] or []) if p.get("group") == target["group"] and p["name"] != name and not p.get("gated")][:12]
-    return {"kind": "service", "name": name, "group": target["group"], "host": urllib.parse.urlsplit(target["url"]).hostname, "up": bool(last["up"]) if last else None, "ms": last["ms"] if last else None, "checked": last["ts"] if last else None, "hours": [dict(r) for r in rows], "outages": outages[-12:], "near": near, "ai": ai.ready()}
+    return {"kind": "service", "name": name, "group": target["group"], "host": urllib.parse.urlsplit(target["url"]).hostname, "up": bool(last["up"]) if last else None, "ms": last["ms"] if last else None, "checked": last["ts"] if last else None, "hours": [dict(r) for r in rows], "outages": outages[-12:], "outage_count": len(outages), "near": near, "ai": ai.ready()}
 
 
 def d_container(vmid):
@@ -2879,7 +2891,7 @@ def d_container(vmid):
     s = pve(f"{node()}/{kind}/{vmid}/status/current")
     cfg = pve(f"{node()}/{kind}/{vmid}/config")
     hist = [{"t": p["time"], "cpu": round((p.get("cpu") or 0) * 100, 1), "mem": round(100 * (p.get("mem") or 0) / (p.get("maxmem") or 1), 1), "io": 0} for p in pve(f"{node()}/{kind}/{vmid}/rrddata?timeframe=day&cf=AVERAGE") if p.get("cpu") is not None]
-    return {"kind": "container", "id": int(vmid), "name": s.get("name"), "status": s.get("status"), "cores": cfg.get("cores"), "mem": s.get("mem"), "maxmem": s.get("maxmem"), "disk": s.get("disk"), "maxdisk": s.get("maxdisk"), "uptime": s.get("uptime"),
+    return {"kind": "container", "guest": kind, "id": int(vmid), "name": s.get("name"), "status": s.get("status"), "cores": cfg.get("cores"), "mem": s.get("mem"), "maxmem": s.get("maxmem"), "disk": s.get("disk"), "maxdisk": s.get("maxdisk"), "uptime": s.get("uptime"),
             "about": [x.strip(" #*-\t") for x in urllib.parse.unquote(cfg.get("description") or "").splitlines() if x.strip(" #*-\t")][:10], "autostart": bool(cfg.get("onboot")), "netin": s.get("netin"), "netout": s.get("netout"), "history": every_nth(hist), "peak": max(hist, key=lambda h: h["cpu"], default=None), "typical": round(sum(h["cpu"] for h in hist) / len(hist), 1) if hist else None,
             "others": [{"id": g["id"], "name": g.get("name"), "status": g.get("status") or g.get("state")} for g in (load("machines")["data"] or {}).get("guests", []) if g["id"] != int(vmid)][:16], "ai": ai.ready()}
 

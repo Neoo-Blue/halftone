@@ -224,10 +224,10 @@ assert s.note_reading({**_note, "headline": "Another"}) is None, "a reply that i
 _with = s.with_reading([{**_note}, {**_note, "headline": "Older"}])
 assert _with[0]["reading"] == _read and "reading" not in _with[1] and "telling" not in _with[0], "one already told comes with the page, and only the first note on a page is told"
 assert s.with_reading([]) == []
-s.ai.ask = lambda system, text, **k: _asks.append(1) or "HEAD: H\nWHAT: W\nWHY: Y\nWATCH: T"
+s.ai.ask = lambda system, text, **k: _asks.append(1) or "HEAD: Ships held\nWHAT: Some ships wait.\nWHY: Oil.\nWATCH: Traffic."
 _late = s.with_reading([{**_note, "headline": "A new one"}])[0]
 assert "reading" not in _late and _late["telling"], "a new one follows the page, which never waits on a model"
-assert s.detail("reading", _late["telling"])["reading"]["head"] == "H", "and the page can ask for it"
+assert s.detail("reading", _late["telling"])["reading"]["head"] == "Ships held", "and the page can ask for it"
 for _odd in ("0" * 24, "not-a-key"):
     try:
         s.detail("reading", _odd)
@@ -235,9 +235,9 @@ for _odd in ("0" * 24, "not-a-key"):
     except (LookupError, KeyError):
         pass
 _tellings = []
-s.ai.ask = lambda system, text, **k: (_tellings.append(1), time.sleep(.2), "HEAD: H\nWHAT: W\nWHY: Y\nWATCH: T")[2]
+s.ai.ask = lambda system, text, **k: (_tellings.append(1), time.sleep(.2), "HEAD: Ships held\nWHAT: Some ships wait.\nWHY: Oil.\nWATCH: Traffic.")[2]
 _a, _b = s.with_reading([{**_note, "headline": "Same note"}])[0], s.with_reading([{**_note, "headline": "Same note"}])[0]
-assert _a["telling"] == _b["telling"] and s.detail("reading", _a["telling"])["reading"]["head"] == "H" and len(_tellings) == 1, "one note on two pages is told once"
+assert _a["telling"] == _b["telling"] and s.detail("reading", _a["telling"])["reading"]["head"] == "Ships held" and len(_tellings) == 1, "one note on two pages is told once"
 
 # a failure costs one question an hour, not the day's
 _tries = []
@@ -270,6 +270,28 @@ s.ai.ask = lambda system, text, **k: "HEAD: Two ships are held up\nWHAT: Two shi
 _ok = s.note_reading({**_small, "headline": "A fourth, near Iran"})
 assert _ok and _ok["doubt"] is True, "a true telling prints, one general name is fine, and an unverified note says so on the page"
 assert s.note_holds("Brent at 113.43 a barrel", {"what": "Brent is about 113"}), "rounding isn't invention"
+_says = "Hormuz transits fall to 12. Iran says two tankers hit mines. Trump says targets remain. Brent is at $113.43."
+for _wrong in ("Fifteen ships crossed.", "Four ships crossed.", "It cost $90 trillion.", "Oil is at $113bn.", "And President Biden says so.", "And former President Trump says so.", "Putin ordered it. Netanyahu agreed. Zelensky objected.", "See evil-site.example now."):
+    assert not s.note_holds(_says, {"what": _wrong}), _wrong
+for _fine in ("Only twelve ships crossed.", "Only a dozen ships crossed.", "Iran says 2 tankers hit mines.", "Brent is around $110.", "Trade through the Gulf is at risk, and the two sides wait.", "Iran's Revolutionary Guard says so."):
+    assert s.note_holds(_says, {"what": _fine}), _fine
+for _wrong in ("Ten ships were hit.", "Eight ships were hit.", "Only 40 ships moved."):
+    assert not s.note_holds("Tensions rise over freight [ec48178dcddf1cbc87a3f2396b881a16].", {"what": _wrong}), _wrong
+s.ai.ask = lambda system, text, **k: "HEAD: \nWHAT: Some ships wait.\nWHY: Oil.\nWATCH: Traffic."
+assert s.note_reading({**_small, "headline": "A fifth"}) is None, "an empty part is no part"
+s.ai.ask = lambda system, text, **k: "**HEAD: Ships are held**\nWHAT: Some ships wait.\nWHY: Oil.\nWATCH: Traffic."
+assert s.note_reading({**_small, "headline": "A sixth"})["head"] == "Ships are held", "and stars round a line aren't kept"
+
+# an hour on, a note that failed is tried again rather than waiting for the server to restart
+_retry = {**_note, "headline": "Failed once"}
+s.ai.ask = lambda system, text, **k: "No."
+_key = s.with_reading([{**_retry}])[0]["telling"]
+assert s.TELLING[_key].result(timeout=5) is None
+with s.db() as _c:
+    _c.execute("DELETE FROM finds WHERE kind = 'noteless'")
+s.ai.ask = lambda system, text, **k: "HEAD: Ships held\nWHAT: Some ships wait.\nWHY: Oil.\nWATCH: Traffic."
+s.with_reading([{**_retry}])
+assert s.TELLING[_key].result(timeout=5)["head"] == "Ships held"
 s.ai.ready = lambda: False
 assert s.note_reading({**_note, "headline": "Third"}) is None, "no AI, and the page stands"
 s.ai.ask, s.ai.ready = _real_ask, _real_ready

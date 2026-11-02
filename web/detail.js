@@ -644,15 +644,16 @@ const VIEWS = {
   },
 
   movie(d) {
-    const out = (iso) => iso && Date.parse(iso) <= Date.now(), when = [['In cinemas', d.cinemas], ['On digital', d.digital], ['On disc', d.disc]].filter(([, v]) => v).map(([k, v]) => `${k} ${out(v) ? 'since' : 'from'} ${date(v)}`);
-    const said = `${d.have ? 'In your library.' : d.digital && !out(d.digital) ? `Not in your library yet. The first copy to watch at home comes ${date(d.digital)}.` : 'Not in your library yet.'}${when.length ? ` ${when.join('. ')}.` : ''}`;
+    const day = (iso) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00`) : null), named = (iso) => (iso ? day(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');  // a release date is a calendar day: read as a moment it's a day early here
+    const out = (iso) => iso && day(iso) <= new Date(), when = [['In cinemas', d.cinemas], ['On digital', d.digital], ['On disc', d.disc]].filter(([, v]) => v).map(([k, v]) => `${k} ${out(v) ? 'since' : 'from'} ${named(v)}`);
+    const said = `${d.have ? 'In your library.' : d.digital && !out(d.digital) ? `Not in your library yet. The first copy to watch at home comes ${named(d.digital)}.` : 'Not in your library yet.'}${when.length ? ` ${when.join('. ')}.` : ''}`;
     return {
       head: d.title, deck: d.summary, meta: [d.year, d.studio, d.rating ? `${d.rating} of 10` : ''].filter(Boolean).join(', '), poster: d.poster,
       body: `<p class="el-verdict">${esc(said)}</p>${d.trailer ? `<p><a class="ghost text" href="https://www.youtube.com/watch?v=${esc(d.trailer)}" target="_blank" rel="noreferrer">Watch the trailer</a></p>` : ''}
         ${Object.keys(d.scores).length ? `<h3>What it scored</h3><dl class="facts wide-facts">${Object.entries(d.scores).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
         ${d.cast.length ? `<h3>Cast</h3><ul class="plain people">${d.cast.map((c) => `<li><a href="/topic/${encodeURIComponent(c.n)}">${esc(c.n)}</a>${c.as ? `<span>${esc(c.as)}</span>` : ''}</li>`).join('')}</ul>` : ''}
         ${answerBox(d, 'What people are saying')}`,
-      side: facts([['Rated', d.rated], ...d.crew.map((c) => [c.job, c.n]), ['Genre', d.genres.join(', ')], ['Length', d.minutes ? `${d.minutes} min` : ''], ['Cinemas', date(d.cinemas)], ['Digital', date(d.digital)], ['Disc', date(d.disc)], ['In the library', d.have ? 'Yes' : 'Not yet']]),
+      side: facts([['Rated', d.rated], ...d.crew.map((c) => [c.job, c.n]), ['Genre', d.genres.join(', ')], ['Length', d.minutes ? `${d.minutes} min` : ''], ['Cinemas', named(d.cinemas)], ['Digital', named(d.digital)], ['Disc', named(d.disc)], ['In the library', d.have ? 'Yes' : 'Not yet']]),
     };
   },
 
@@ -665,9 +666,9 @@ const VIEWS = {
       }
     }
     const most = Math.max(1, ...rows.map((x) => x.n));
-    const sum = (list) => list.reduce((a, x) => a + x.n, 0), week = sum(rows.slice(-7)), before = sum(rows.slice(-14, -7)), lastSale = d.sales[0]?.created;
+    const sum = (list) => list.reduce((a, x) => a + x.n, 0), week = sum(rows.slice(-7)), before = sum(rows.slice(-14, -7)), lastSale = Math.max(0, ...d.sales.map((x) => x.created || 0));
     const said = [rows.length ? `${whole(week)} real ${week === 1 ? 'visitor' : 'visitors'} in the last seven days${rows.length >= 14 ? `, ${week === before ? 'the same as' : week > before ? `up from ${whole(before)}` : `down from ${whole(before)}`} the week before` : ''}.` : '',
-      r?.visitors && r.orders ? `${((r.orders / r.visitors) * 100).toFixed(1)}% of visitors bought, ${usd(Math.round(r.cents / r.orders))} an order.` : r?.visitors ? `None of the ${whole(r.visitors)} visitors in 90 days has bought yet.` : '',
+      r?.orders ? `${r.visitors >= r.orders ? `${((r.orders / r.visitors) * 100).toFixed(1)}% of visitors bought, ` : ''}${usd(Math.round(r.cents / r.orders))} an order.` : r?.visitors ? `None of the ${whole(r.visitors)} visitors in 90 days has bought yet.` : '',
       lastSale ? `The last sale was ${ago(lastSale)}.` : '', r?.abandoned ? `${whole(r.abandoned)} left at checkout this month.` : ''].filter(Boolean).join(' ');
     return {
       head: d.name, deck: r?.cents ? `${usd(r.cents)} in sales over 90 days.` : 'No sales yet.', meta: `${d.host}${d.up ? `, ${d.up.up ? `up, ${d.up.ms} ms` : 'down'}` : ''}`,
@@ -686,12 +687,12 @@ const VIEWS = {
     const all = d.hours.length ? (d.hours.reduce((a, h) => a + h.up, 0) / d.hours.length).toFixed(2) : null;
     const timed = d.hours.filter((h) => h.ms), slow = timed.reduce((a, h) => (h.ms > (a?.ms || 0) ? h : a), null), typical = timed.length ? [...timed].sort((a, b) => a.ms - b.ms)[Math.floor(timed.length / 2)].ms : null;
     const recent = timed.slice(-24), earlier = timed.slice(0, -24), mean = (list) => list.reduce((a, h) => a + h.ms, 0) / (list.length || 1), shift = recent.length && earlier.length ? mean(recent) / mean(earlier) - 1 : 0;
-    const said = [!d.outages.length ? 'No outages in the last week.' : `${plural(d.outages.length, 'outage')} in the last week, ${d.outages[d.outages.length - 1].to ? `the last ${ago(d.outages[d.outages.length - 1].to)}` : 'and it is down now'}.`,
+    const said = [!d.hours.length ? '' : !d.outages.length ? 'No outages in the last week.' : `${plural(d.outage_count, 'outage')} in the last week, ${d.outages[d.outages.length - 1].to ? `the last ${ago(d.outages[d.outages.length - 1].to)}` : 'and it is down now'}.`,
       typical ? `It usually answers in ${whole(typical)} ms${Math.abs(shift) > .2 ? `, and the last day has been ${Math.round(Math.abs(shift) * 100)}% ${shift > 0 ? 'slower' : 'faster'} than the days before` : ''}.` : '',
       slow && typical && slow.ms > typical * 2 ? `The slowest hour was ${stamp(slow.h)}, at ${whole(slow.ms)} ms.` : ''].filter(Boolean).join(' ');
     return {
       head: d.name, deck: d.up == null ? 'Not checked yet.' : d.up ? `Up, answering in ${d.ms} ms.` : 'Not answering.', meta: `${d.host}, checked ${ago(d.checked)}`,
-      body: `<p class="el-verdict">${esc(said)}</p>${d.up === false ? askHere(d.ai, `${d.name} on ${d.host} isn't answering. What does the paper know about why, and what should I check first?`, 'What should I check?') : ''}
+      body: `${said ? `<p class="el-verdict">${esc(said)}</p>` : ''}${d.up === false ? askHere(d.ai, `${d.name} on ${d.host} isn't answering. What does the paper know about why, and what should I check first?`, 'What should I check?') : ''}
         <h3>The last seven days, one dot an hour</h3><div class="hours">${cells}</div><p class="small">${d.hours.length} of 168 hours measured so far.</p>
         ${d.outages.length ? `<h3>Outages</h3><ul class="plain">${[...d.outages].reverse().map((o) => `<li><b>${o.to ? esc(span(o.to - o.from)) : 'Still down'}</b><time>${esc(stamp(o.from))}</time></li>`).join('')}</ul>` : ''}`,
       side: `${facts([['Group', d.group], ['Uptime, measured hours', all ? `${all}%` : ''], ['Typical answer', typical ? `${whole(typical)} ms` : '']])}${d.near.length ? `<h3>Also in ${esc(d.group)}</h3><ul class="plain mk-others">${d.near.map((n) => `<li><a href="/systems/service/${encodeURIComponent(n.name)}">${esc(n.name)}</a><b class="${n.up ? 'pos' : 'neg'}">${n.up ? `${whole(n.ms || 0)} ms` : 'Down'}</b></li>`).join('')}</ul>` : ''}`,
@@ -699,14 +700,15 @@ const VIEWS = {
   },
 
   container(d) {
-    const memory = d.maxmem ? Math.round((d.mem / d.maxmem) * 100) : null, disk = d.maxdisk ? Math.round((d.disk / d.maxdisk) * 100) : null;
-    const said = [d.status === 'running' ? `Running for ${span(d.uptime || 0)}.` : `${title(d.status)}.`,
-      d.typical != null ? `Its processors averaged ${d.typical}% over the last day${d.peak ? `, peaking at ${d.peak.cpu}% on ${stamp(d.peak.t)}` : ''}.` : '',
+    const running = d.status === 'running', measured = running && d.guest === 'lxc' && d.maxdisk;  // Proxmox doesn't know how full a VM's disk is, and says 0
+    const memory = running && d.maxmem ? Math.round((d.mem / d.maxmem) * 100) : null, disk = measured ? Math.round((d.disk / d.maxdisk) * 100) : null;
+    const said = [running ? (d.uptime ? `Running for ${span(d.uptime)}.` : 'Running.') : `${title(d.status)}.`,
+      running && d.typical != null ? `Its processors averaged ${d.typical}% over the last day${d.peak ? `, peaking at ${d.peak.cpu}% on ${stamp(d.peak.t)}` : ''}.` : '',
       memory != null ? `Memory is ${memory}% used${memory > 85 ? ', which is tight' : ''}.` : '', disk != null ? `Disk is ${disk}% used, with ${bytes(d.maxdisk - d.disk)} free${disk > 85 ? ', so it needs a look soon' : ''}.` : ''].filter(Boolean).join(' ');
     return {
       head: `${d.id} ${d.name}`, meta: `${title(d.status)}${d.uptime ? `, up ${span(d.uptime)}` : ''}`,
-      body: `<p class="el-verdict">${esc(said)}</p>${(memory > 85 || disk > 85) ? askHere(d.ai, `${d.name} has memory at ${memory}% and disk at ${disk}%. What should I look at?`, 'What should I look at?') : ''}${lineChart(d.history, d.name)}${d.about.length ? `<h3>Notes</h3><ul class="plain">${d.about.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`,
-      side: `${facts([['Cores', d.cores], ['Memory', `${bytes(d.mem)} of ${bytes(d.maxmem)}`], ['Disk', d.maxdisk ? `${bytes(d.disk)} of ${bytes(d.maxdisk)}` : ''], ['Starts on boot', d.autostart ? 'Yes' : 'No'], ['Traffic in', bytes(d.netin)], ['Traffic out', bytes(d.netout)]])}${d.others.length ? `<h3>Also on this machine</h3><ul class="plain mk-others">${d.others.map((g) => `<li><a href="/systems/container/${esc(g.id)}">${esc(g.id)} ${esc(g.name)}</a><b class="${g.status === 'running' ? 'pos' : 'neg'}">${esc(title(g.status || 'unknown'))}</b></li>`).join('')}</ul>` : ''}`,
+      body: `<p class="el-verdict">${esc(said)}</p>${(memory > 85 || disk > 85) ? askHere(d.ai, `${d.name} is short of room: ${[memory > 85 && `memory at ${memory}%`, disk > 85 && `disk at ${disk}%`].filter(Boolean).join(' and ')}. What should I look at?`, 'What should I look at?') : ''}${lineChart(d.history, d.name)}${d.about.length ? `<h3>Notes</h3><ul class="plain">${d.about.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`,
+      side: `${facts([['Cores', d.cores], ['Memory', `${bytes(d.mem)} of ${bytes(d.maxmem)}`], ['Disk', measured ? `${bytes(d.disk)} of ${bytes(d.maxdisk)}` : d.maxdisk ? bytes(d.maxdisk) : ''], ['Starts on boot', d.autostart ? 'Yes' : 'No'], ['Traffic in', bytes(d.netin)], ['Traffic out', bytes(d.netout)]])}${d.others.length ? `<h3>Also on this machine</h3><ul class="plain mk-others">${d.others.map((g) => `<li><a href="/systems/container/${esc(g.id)}">${esc(g.id)} ${esc(g.name)}</a><b class="${g.status === 'running' ? 'pos' : 'neg'}">${esc(title(g.status || 'unknown'))}</b></li>`).join('')}</ul>` : ''}`,
     };
   },
 };
