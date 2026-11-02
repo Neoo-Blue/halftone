@@ -372,14 +372,16 @@ class Lens {
   }
 
   async loadRows() {
-    if (this.rows && !this.stale) return this.rows;
-    this.stale = false;  // cleared first, so a count arriving during this read marks it old
-    try {
-      this.rows = await this.opts.races();
-    } catch (e) {
-      this.stale = true;
-      if (!this.rows) throw e;  // the last count stands until a new one can be read
+    if (this.stale) {
+      this.stale = false;  // cleared first, so a count arriving during this read marks it old
+      const read = this.reading = this.opts.races().then((rows) => {
+        if (read === this.reading || !this.rows) this.rows = rows;  // an older read never replaces a newer one, but it beats nothing
+      }, (e) => {
+        this.stale = true;
+        if (!this.rows) throw e;  // the last count stands until a new one can be read
+      });
     }
+    await this.reading;  // a move made during a read waits for it, so it can't draw the count before
     return this.rows;
   }
 

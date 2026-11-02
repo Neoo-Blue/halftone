@@ -224,7 +224,7 @@ function usBlock(us, tz) {
     ${mapBlock(us)}${calls}${night(us, tz)}`;
 }
 
-let printed = '';
+let printed = '', parked = null;  // the map through a run with no US race in it, so the reader's place survives
 export function electionDesk(p) {
   const v = p.elections;
   if (!v) { printed = ''; return; }
@@ -233,13 +233,14 @@ export function electionDesk(p) {
     printed = stamp;
     body.classList.toggle('el-fresh', !body.dataset.seen);
     body.dataset.seen = '1';
-    const map = $('.el-map', body), lit = document.activeElement, down = $('.el-panel', map || body)?.scrollTop;  // the same map carries on through a redraw, with the reader's place, focus and scroll
+    const shown = $('.el-map', body), map = shown || parked, lit = document.activeElement, down = $('.el-panel', map || body)?.scrollTop;  // the same map carries on through a redraw, with the reader's place, focus and scroll
     body.innerHTML = `${us ? usBlock(us, p.tz) : ''}<div class="page-cols">${us ? `<section class="el-part"><h3>Closest Senate and governor races</h3>${raceList(us.closest)}</section><section class="el-part"><h3>House races to watch</h3>${raceList(us.house)}</section>` : ''}${abroad(v.world)}</div>${us ? '<p class="el-all"><a href="/elections">Every race</a></p>' : ''}`;
     if (map && $('.el-map', body)) {
       $('.el-map', body).replaceWith(map);
       $('.el-panel', map).scrollTop = down;
       if (map.contains(lit)) lit.focus({ preventScroll: true });
     }
+    parked = us ? null : map;
     if (us) mountMap(body, us);
   }
   const now = $('.el-now', body), age = Date.now() / 1000 - (v.as_of || 0), foot = $('#asof-elections');

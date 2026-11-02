@@ -273,10 +273,48 @@ assert s.note_holds("Brent at 113.43 a barrel", {"what": "Brent is about 113"}),
 _says = "Hormuz transits fall to 12. Iran says two tankers hit mines. Trump says targets remain. Brent is at $113.43."
 for _wrong in ("Fifteen ships crossed.", "Four ships crossed.", "It cost $90 trillion.", "Oil is at $113bn.", "And President Biden says so.", "And former President Trump says so.", "Putin ordered it. Netanyahu agreed. Zelensky objected.", "See evil-site.example now."):
     assert not s.note_holds(_says, {"what": _wrong}), _wrong
-for _fine in ("Only twelve ships crossed.", "Only a dozen ships crossed.", "Iran says 2 tankers hit mines.", "Brent is around $110.", "Trade through the Gulf is at risk, and the two sides wait.", "Iran's Revolutionary Guard says so."):
+for _wrong in ("But Putin ordered it. And Netanyahu agreed.", "The Kremlin ordered it. The Vatican agreed.", "About a fifth of all oil crosses here."):
+    assert not s.note_holds(_says, {"what": _wrong}), _wrong
+_titled = _says + " Former President Trump spoke. A general and Iran's leader did not."
+for _wrong in ("President Biden says so.", "General Soleimani says so.", "Iran's Supreme Leader Khamenei says so."):
+    assert not s.note_holds(_titled, {"what": _wrong}), "a title in the note doesn't vouch for a new name: " + _wrong
+assert s.note_holds(_titled, {"what": "President Trump says so."})
+for _fine in ("Only twelve ships crossed.", "Only a dozen ships crossed.", "Iran says 2 tankers hit mines.", "Brent is around $110.", "Trade through the Gulf is at risk, and the two sides wait.", "Iran's Revolutionary Guard says so.", "The general picture is pressure.", "Insurers will decide. Crude could rise. Households pay.", "It matters to Europe and Asia and the United States."):
     assert s.note_holds(_says, {"what": _fine}), _fine
+for _wrote in ("Damage of up to $15B.", "Damage of up to $15bn.", "Damage of up to $15 billion.", "Damage of up to 15 bn."):
+    for _told in ("$15B", "$15bn", "$15 billion", "15 billion dollars"):
+        assert s.note_holds(_wrote, {"what": f"Damage of up to {_told}."}), (_wrote, _told)
+for _told in ("$15 trillion", "$15M", "$15mn"):
+    assert not s.note_holds("Damage of up to $15B.", {"what": f"Damage of up to {_told}."}), _told
+for _wrote, _told in (("It closed for 10 minutes.", "It closed for 10m."), ("Three B-52s flew.", "3 B-52 bombers flew."), ("A 200 metre channel.", "A 200m channel.")):
+    assert s.note_holds(_wrote, {"what": _told}), "a bare m or b is no scale: " + _told
+_ships = "Ships crossed in the third week. A ship was hit."
+for _fine in ("In the second half of the year a ship was hit.", "A third ship was hit.", "Third parties watch.", "It may reach the third quarter."):
+    assert s.note_holds(_ships, {"what": _fine}), _fine
+for _wrong in ("About a quarter of ships crossed.", "One-tenth of ships crossed."):
+    assert not s.note_holds(_ships, {"what": _wrong}), _wrong
+_cased = "Trump says shipping could halt. Tehran claims mine hits and Hormuz traffic collapses. President Trump spoke."
+for _head in ("President Trump Warns Shipping Could Halt", "Hormuz Traffic Collapses As Tehran Claims Mine Hits"):
+    assert s.note_holds(_cased, {"head": _head, "what": "Shipping could halt."}), _head
+assert s.note_holds("Guards and Houthis say mines hit.", {"what": "One Guard source says so, as does the Houthi side."}), "a singular is the note's plural"
+assert not s.note_holds("Thin reports [thr:caf9264cde] on freight.", {"what": "Only 9,264 ships moved."}), "an id isn't a figure, with a prefix or without"
 for _wrong in ("Ten ships were hit.", "Eight ships were hit.", "Only 40 ships moved."):
     assert not s.note_holds("Tensions rise over freight [ec48178dcddf1cbc87a3f2396b881a16].", {"what": _wrong}), _wrong
+assert s.market_words("Lithium & Battery Tech (LIT)") == ["lithium", "battery", "tech"] and s.market_words("EUR / USD") == ["eur", "usd"], "a lone mark matches nothing"
+assert s.market_words("US Natural Gas (Henry Hub)") == ["natural gas"] and s.market_words("S&P 500") == ["s&p"] and s.market_words("The US") == ["the us"]
+_real_spend, _real_find, _charged = s.spend_ai, s.spend_find, []
+def _spent():
+    raise OverflowError("daily limit")
+s.spend_ai, s.spend_find = _spent, lambda kind: _charged.append(kind)
+_day_over = {**_small, "headline": "A day with nothing left to spend"}
+for _ in range(3):
+    try:
+        s.note_reading(_day_over)
+    except OverflowError:
+        pass
+assert not _charged, "a spent day doesn't use up the notes' own allowance, page after page"
+assert s.find_kept("noteless", s.note_said(_day_over)), "and it waits its hour"
+s.spend_ai, s.spend_find = _real_spend, _real_find
 s.ai.ask = lambda system, text, **k: "HEAD: \nWHAT: Some ships wait.\nWHY: Oil.\nWATCH: Traffic."
 assert s.note_reading({**_small, "headline": "A fifth"}) is None, "an empty part is no part"
 s.ai.ask = lambda system, text, **k: "**HEAD: Ships are held**\nWHAT: Some ships wait.\nWHY: Oil.\nWATCH: Traffic."

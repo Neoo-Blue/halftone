@@ -2542,28 +2542,46 @@ def note_said(n):
 
 
 NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100, "hundreds": 100, "thousand": 1e3, "thousands": 1e3, "million": 1e6, "millions": 1e6, "billion": 1e9, "billions": 1e9, "trillion": 1e12, "trillions": 1e12, "dozen": 12, "dozens": 12}
-TITLED = set("former ex president premier minister chancellor secretary general ayatollah king queen prince senator governor commander ambassador mayor bn tn mn".split())  # a job title or a scale the note didn't give is a fact it didn't give
-OPENERS = set("the a an this that these those it its they their there here both only some most many few if but and while after before with without since for in on at by as what why how when where who which neither nor yet so still now even more less any all each no not nothing anyone anything anybody nobody everyone people however meanwhile although though because until unless once over under about around near much such another other others first second third last next new rising falling higher lower shipping ships tankers oil gas prices fighting talks traffic markets energy trade buyers drivers civilians families forces troops officials analysts reports sources strikes attacks us uk eu un".split())
+TITLED = set("former ex president premier minister chancellor secretary ayatollah king queen prince senator governor commander ambassador mayor".split())  # a job title the note didn't give is a fact it didn't give
+RANKS = TITLED | {"general", "leader"}  # only in front of a name: "the general picture" is ordinary English
+OPENERS = set("the a an this that these those it its they their there here both only some most many few if but and while after before with without since for in on at by as what why how when where who which neither nor yet so still now even more less any all each no not nothing anyone anything anybody nobody everyone people however meanwhile although though because until unless once over under about around near much such another other others first second third last next new rising falling higher lower shipping ships tankers oil gas prices fighting talks traffic markets energy trade buyers drivers civilians families forces troops officials analysts reports sources strikes attacks us uk eu un one two every whether either several none also already never perhaps instead despite during against between among through across amid within then just very too has have had is are was were will would could should may might must can do does did treat expect look see watch keep crude fuel food power water cheaper costlier bigger smaller fewer greater worse better longer shorter further early late recent today tomorrow overnight households insurers shippers shipowners owners vessels boats crews consumers companies investors traders governments leaders diplomats residents workers farmers voters lawmakers negotiators banks refineries costs rates supplies exports imports demand supply stocks shares bonds war peace violence damage losses casualties deaths europe european asia asian africa african america american states washington".split())  # and the regions any reader already knows
 DIGITS = re.compile(r"\d[\d,]*(?:\.\d+)?")
+SCALES = {"bn": "billion", "b": "billion", "mn": "million", "m": "million", "tn": "trillion"}
+SHARE = re.compile(r"\b(?:a|one)[ -](third|quarter|fifth|tenth) of\b", re.I)  # "a fifth of the world's oil", not "the third quarter"
+
+
+def spelled(text):
+    """$15B, $15bn and $15 billion are one number, however the note or the telling writes it. A bare b or m needs its currency sign: 10m may be minutes, and a B-52 is a bomber."""
+    return re.sub(r"((?:[$€£][\d,.]*)?\d)\s*(bn|b|mn|m|tn)\b(?!-)", lambda m: m[0] if len(m[2]) == 1 and m[1][0] not in "$€£" else f"{m[1]} {SCALES[m[2].lower()]}", text, flags=re.I)
+
+
+def unheaded(head):
+    """A Title Case Headline isn't a run of names."""
+    words = head.split()
+    return head.capitalize() if sum(w[0].isupper() for w in words) > len(words) * .6 else head
 
 
 def note_holds(said, got):
     """The prompt says add nothing, and this holds it to that as far as a pattern can: numbers in digits or words, near enough to allow for rounding, titles, addresses and names. A false claim in ordinary words gets past, which is why the page says who wrote this and keeps the note one tap below."""
-    said = re.sub(r"\[[0-9a-f]{8,}\]", " ", said)  # a cited report's id isn't a figure the note gave
-    told, known = ". ".join(got.values()), set(re.findall(r"[a-z]+", said.lower()))
+    said = spelled(re.sub(r"\[(?:\w+:)?[0-9a-f]{8,}\]", " ", said))  # a cited report's id isn't a figure the note gave
+    told, known = spelled(". ".join(unheaded(v) if k == "head" else v for k, v in got.items())), set(re.findall(r"[a-z]+", said.lower()))
+    known |= {w[:-1] for w in known if w.endswith("s")}  # Guards and Guard, Houthis and Houthi
     words = re.findall(r"[a-z]+", told.lower())
     held = {float(x.replace(",", "")) for x in DIGITS.findall(said)} | {NUMBER_WORDS[w] for w in known & NUMBER_WORDS.keys()}
     asked = [float(x.replace(",", "")) for x in DIGITS.findall(told)] + [NUMBER_WORDS[w] for w in words if w in NUMBER_WORDS and w not in ("one", "two")]
     if not all(any(abs(v - h) <= (.035 if max(v, h) >= 100 else .015) * max(v, h, 1) for h in held) for v in asked):
         return False
-    if any(w in TITLED and w not in known for w in words) or re.search(r"\b[\w-]+\.(?:com|org|net|io|gov|info|news|ru|ir|ua|il|cn|uk|example)\b", told, re.I):
+    if any(w in TITLED and w not in known for w in words) or any(x.lower() not in known for x in SHARE.findall(told)) or re.search(r"\b[\w-]+\.(?:com|org|net|io|gov|info|news|ru|ir|ua|il|cn|uk|example)\b", told, re.I):
         return False
     inside, opening = set(), set()
     for hit in re.finditer(r"[A-Z][\w'’-]*(?: (?:of |the )?[A-Z][\w'’-]*)*", told):
         parts = [re.split(r"['’-]", w)[0].lower() for w in hit.group().split() if w not in ("of", "the")]
-        if not any(p in known or p in OPENERS for p in parts):
-            before = told[:hit.start()].rstrip()
-            (opening if not before or before[-1] in ".!?:" else inside).add(hit.group())
+        if parts[-1] in known or parts[-1] in OPENERS:  # the last word is the name: "President Biden", "The Kremlin", "But Putin"
+            continue
+        if RANKS & set(parts[:-1]):
+            return False
+        before = told[:hit.start()].rstrip()
+        (opening if len(parts) == 1 and (not before or before[-1] in ".!?:") else inside).add(hit.group())
     return len(inside) <= 1 and len(opening) <= 2 and len(inside) + len(opening) <= 2
 
 
@@ -2573,9 +2591,9 @@ def note_reading(n):
     held = find_kept("note", said)
     if held or not said or find_kept("noteless", said) or not ai.ready():
         return held
-    spend_find("note")
-    spend_ai()
     try:
+        spend_ai()  # first, so a day's AI being spent doesn't also use up the notes' own allowance
+        spend_find("note")
         text = ai.ask(NOTE_SYSTEM, "<note>" + said.replace("<", "\\u003c") + "</note>", max_tokens=500, cheap=True)
     except Exception:
         find_keep("noteless", said, {"at": int(time.time())})
@@ -2803,13 +2821,18 @@ def d_hazard(hid):
     return {**depth, "related": related_news((h.get("name") or "").split("-")[0] if h.get("kind") == "cyclone" else None, h.get("country") if h.get("kind") in ("earthquake", "volcano", "flood") else None), "kind": "hazard", "title": f"{h.get('name') or h.get('kind')}", "text": h.get("severity_text"), "about": plain((h.get("extra") or {}).get("description"), 600), "alert": h.get("alert"), "country": h.get("country"), "hkind": h.get("kind"), "from": h.get("from_ts"), "to": h.get("to_ts"), "lat": h.get("lat"), "lon": h.get("lon"), "url": h.get("url")}
 
 
+def market_words(label):
+    """What a story must say to be about this market. "Natural Gas" means the whole phrase, and a lone "&" or "/" means nothing."""
+    named = [w for w in re.sub(r"\(.*?\)", " ", label).lower().split() if re.search(r"\w", w) and w not in ("us", "eu", "uk", "the")]
+    return [w for w in named if not w.isdigit() and w not in ("crude", "gas", "natural", "oil", "index", "price", "futures")] or [" ".join(named) or label.lower()]
+
+
 def d_market(key):
     m = next((x for x in (load("world")["data"] or {}).get("markets", []) if x["key"] == key), None)
     if not m:
         raise LookupError(key)
     bars = war("/markets", 45).get("items", {}).get(key, [])
-    named = [w for w in re.sub(r"\(.*?\)", " ", m["label"]).lower().split() if w not in ("us", "eu", "uk", "the")]
-    words = [w for w in named if not w.isdigit() and w not in ("crude", "gas", "natural", "oil", "index", "price", "futures")] or [" ".join(named)]
+    words = market_words(m["label"])
     told = [c for c in (live("news")["data"] or {}).get("stories", []) if about(c["t"], words)][:6]
     others = [{k: x.get(k) for k in ("key", "label", "pct")} for x in (load("world")["data"] or {}).get("markets", []) if x["key"] != key][:12]
     return {"kind": "market", **m, "series": [{"t": b["ts"], "v": b["close"]} for b in bars[-3000:]], "stories": [{"t": c["t"], "u": c["u"], "src": c["src"], "ts": c["ts"], "n": len(c["outlets"])} for c in told], "others": others, "ai": bool(ai.ready() and C("FIND_AI")), "q": plain(f"Why is {m['label']} moving this week", 110)}
