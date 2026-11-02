@@ -449,7 +449,7 @@ def curated(events, limit=48, notices=False):
             continue
         seen.add(key)
         out.append({"i": e.get("id"), "t": title, "k": "k" if e.get("domain") == "kinetic" else "e", "ts": e.get("ts"), "s": round(float(e.get("severity") or 0), 2), "place": e.get("place"), "src": outlet_of(e.get("source_url")), "w": e.get("theater"),
-                    "la": e.get("lat"), "lo": e.get("lon"), "cat": e.get("category")})
+                    **({} if e.get("geo_precision") == "country" else {"la": e.get("lat"), "lo": e.get("lon")}), "cat": e.get("category")})  # a country's middle is no place on a map
         if len(out) >= limit:
             break
     return out
@@ -464,7 +464,7 @@ def world():
     space = war("/spaceweather", 60)
     dots = []
     for e in state.get("events", []):
-        if e.get("lat") is not None and e.get("lon") is not None:
+        if e.get("lat") is not None and e.get("lon") is not None and e.get("geo_precision") != "country":
             dots.append({"la": round(e["lat"], 2), "lo": round(e["lon"], 2), "s": round(float(e.get("severity") or 0), 2), "i": e.get("id"),
                          "k": "k" if e.get("domain") == "kinetic" else "e", "t": clean_title(e.get("title")), "ts": e.get("ts"), "w": e.get("theater")})
     for h in hazards.get("items", []):
@@ -2699,7 +2699,7 @@ def d_event(eid):
             break
     near = war(f"/events/{eid}/nearby").get("items", [])
     return {"kind": "event", "who": d.get("who"), "title": clean_title(e.get("title_en") or e.get("title")), "summary": e.get("summary_en") or e.get("summary"), "ts": e.get("ts"), "domain": e.get("domain"), "category": e.get("category"),
-            "severity": e.get("severity"), "confidence": e.get("confidence"), "place": e.get("place"), "admin1": e.get("admin1"), "country": e.get("country"), "lat": e.get("lat"), "lon": e.get("lon"), "actors": [a for a in (e.get("actor_a"), e.get("actor_b")) if a],
+            "severity": e.get("severity"), "confidence": e.get("confidence"), "place": e.get("place"), "admin1": e.get("admin1"), "country": e.get("country"), **({"lat": None, "lon": None} if e.get("geo_precision") == "country" else {"lat": e.get("lat"), "lon": e.get("lon")}), "actors": [a for a in (e.get("actor_a"), e.get("actor_b")) if a],
             "fatalities": e.get("fatalities"), "theater": e.get("theater"), "thread": {"id": d["thread"].get("id"), "title": clean_title(d["thread"].get("title"))} if d.get("thread") else None, "sources": sources[:6],
             "story": story if story and story["body"] else None, "note": with_reading(intel_notes([d["intel_note"]]))[0] if d.get("intel_note") else None, "nearby": curated(near, 8), **beside(e.get("source_url"), clean_title(e.get("title_en") or e.get("title")))}
 
@@ -3104,9 +3104,19 @@ def saved_in(c, key, now):
     return held.get("n") if held.get("day") == utc_day() else 0
 
 
+CITY = 500_000  # a place this big is what the words mean, whatever the news is about
+
+
 def place_card(q):
+    """A town, unless the paper's own news on these words is about something else. A smaller town the stories never put in its state or country is a namesake: Rogers the Michigan candidate isn't Rogers, Arkansas, while a crash in a small Florida town says Florida."""
     hit = find.place(q, outside_at)
-    return hit and forecast_card({"latitude": hit["lat"], "longitude": hit["lon"], "name": hit["name"], "admin1": hit["region"], "country": hit["country"]})
+    if not hit:
+        return None
+    has = hit["population"] < CITY and about_all(q)
+    said = " ".join(f"{c['t']} {c.get('sum') or ''}" for c in (live("news")["data"] or {}).get("stories", []) if has and has(c["t"]))
+    if said and not any(w and re.search(rf"\b{re.escape(w)}\b", said, re.I) for w in (hit["region"], hit["country"])):
+        return None
+    return forecast_card({"latitude": hit["lat"], "longitude": hit["lon"], "name": hit["name"], "admin1": hit["region"], "country": hit["country"]})
 
 
 def forecast_card(place):

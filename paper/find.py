@@ -179,7 +179,7 @@ def place(q, at):
     p = hits[0] if hits else {}
     if str(p.get("name")).lower() != name.lower() or not str(p.get("feature_code")).startswith("PPL") or (p.get("population") or 0) < BIG_TOWN:
         return None
-    return {"name": text(p["name"], 60), "region": text(p.get("admin1"), 60), "country": text(p.get("country"), 60), "lat": float(p["latitude"]), "lon": float(p["longitude"])}
+    return {"name": text(p["name"], 60), "region": text(p.get("admin1"), 60), "country": text(p.get("country"), 60), "lat": float(p["latitude"]), "lon": float(p["longitude"]), "population": int(p.get("population") or 0)}
 
 
 # ---------------------------------------------------------------------- what else is out there

@@ -67,7 +67,7 @@ An event:
   "severity": 0.62,
   "confidence": 0.7,
   "place": "City", "admin1": "Region", "country": "XX",
-  "lat": 0.0, "lon": 0.0,
+  "lat": 0.0, "lon": 0.0, "geo_precision": "city",
   "theater": "theater_id",
   "thread_id": "thr:1a2b3c4d5e6f7a8b9c0d1e2f",
   "actor_a": null, "actor_b": null,
@@ -78,6 +78,8 @@ An event:
   "lang": "en"
 }
 ```
+
+`geo_precision` says how exactly a report is placed: `exact`, `city`, `admin1` (a state or province) or `country`. A `country` point is that country's middle, which only says what the report is about, so Halftone leaves those off its maps. Map pins from `/state` carry it too.
 
 Errors look like `{"ok": false, "ts": 1793485138, "error": {"code": "not_found", "message": "no such record"}}`.
 

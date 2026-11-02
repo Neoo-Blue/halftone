@@ -1091,7 +1091,7 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 .find-turn h4 { margin: 0 0 4px; font: 700 15px/1.25 var(--ui); }
 .find-next { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .find-next:empty { display: none; }
-.find-next .ghost.text { height: auto; min-height: 44px; padding-block: 7px; text-align: left; line-height: 1.25; }
+.find-next .ghost.text { height: auto; min-height: 44px; max-width: 100%; padding-block: 7px; text-align: left; line-height: 1.25; white-space: normal; }  /* a long question wraps rather than run off the page */
 .find-ask { display: flex; gap: 8px; margin-top: 12px; }
 .find-ask input { flex: 1; min-width: 0; min-height: 44px; padding: 0 14px; background: transparent; color: var(--ink); border: 1px solid var(--ink3); font: 400 16px/1 var(--ui); }
 .find-ask input:focus { border-color: var(--ink); outline: 2px solid var(--accent); outline-offset: 1px; }

@@ -185,3 +185,26 @@ assert s.follow_card({"id": "p", "kind": "conflict", "key": "x", "name": "X"})["
 s.follow_fresh = lambda f: {"href": "/world/theater/x"}
 assert s.follow_card({"id": "p", "kind": "conflict", "key": "x", "name": "X"})["href"] == "/world/theater/x"
 s.follow_fresh = real_fresh
+
+# A town only when the news is about the town: Rogers the Michigan candidate isn't Rogers, Arkansas
+_real_place, _real_forecast = s.find.place, s.forecast_card
+_town = lambda name, pop, region: (lambda q, at: {"name": name, "region": region, "country": "United States", "lat": 1.0, "lon": 2.0, "population": pop})
+s.forecast_card = lambda p: {"kind": "place", "name": p["name"]}
+_story = lambda t, summary="": {"t": t, "sum": summary, "u": "https://n.example/" + t[:8], "src": "A", "ts": int(s.time.time()), "desks": [], "outlets": [{"src": "A"}]}
+s.save("news", {"stories": [_story("Carville rips Stevens over Rogers endorsement", "The Michigan Senate race tightens."), _story("Haley Stevens backs Mike Rogers")]})
+s.find.place = _town("Rogers", 70_000, "Arkansas")
+assert s.place_card("Rogers") is None, "a namesake town the news never puts in its state isn't what the page is about"
+s.find.place = _town("Rogers", 700_000, "Arkansas")
+assert s.place_card("Rogers"), "a big city is what the word means whatever the news says"
+s.save("news", {"stories": [_story("Jet crashes in Cresthaven", "A private jet crashed in Cresthaven, Florida, killing nine.")]})
+s.find.place = _town("Cresthaven", 60_000, "Florida")
+assert s.place_card("Cresthaven"), "a small town in the news is the place when the news says where it is"
+s.save("news", {"stories": []})
+assert s.place_card("Cresthaven"), "and a search with no news about it gets its forecast"
+s.find.place, s.forecast_card = _real_place, _real_forecast
+assert "population" in (find.place("Oakland", lambda url, cache: {"results": [{"name": "Oakland", "feature_code": "PPLA2", "population": 419267, "latitude": 37.8, "longitude": -122.3}]}) or {})
+
+# a report WARROOM could only place in a country has no point on a map
+_coarse = s.curated([{"id": "c", "title": "Prominent Democrat backs Republican candidate in Michigan midterm", "ts": 5, "domain": "economic", "severity": 0.4, "lat": 31.5, "lon": 34.75, "geo_precision": "country"},
+                     {"id": "p", "title": "Strike hits a depot near Kharkiv", "ts": 6, "domain": "kinetic", "severity": 0.6, "lat": 49.9, "lon": 36.2, "geo_precision": "city"}])
+assert [("la" in r) for r in _coarse] == [True, False], _coarse
