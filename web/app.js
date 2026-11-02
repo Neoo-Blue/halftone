@@ -94,6 +94,8 @@ function front(p) {
 function fitFront() {
   if ($('#paper').hidden) return;  // nothing has a size while a page is open: this runs again when it's back
   const list = $('.also'), table = $('#theaters'), rows = [...table.children], side = $('#inside'), foot = (e) => e.getBoundingClientRect().bottom, tall = (e) => e.getBoundingClientRect().height;
+  const lede = $('.lead-body p');
+  lede?.classList.toggle('cut', lede.scrollHeight > lede.clientHeight + 1);  // the last line fades only when there's more
   if (innerWidth <= 860) { rows.slice(5).forEach((r) => r.remove()); return; }
   const outer = (e) => tall(e) + parseFloat(getComputedStyle(e).marginTop), wide = innerWidth > 1180;
   if (wide) $('.note-col').append(side);
