@@ -49,7 +49,7 @@ class Lens {
     Object.assign(this, { host, g, canvas: $('canvas', host), tip: $('.el-tip', host), crumbs: $('.el-crumbs', host), panel: $('.el-panel', host), mix: 0, hot: null, turn: 0, sweep: 1 });
     this.ctx = this.canvas.getContext('2d');
     this.canvas.onpointermove = (e) => this.hover(e);
-    this.canvas.onpointerleave = () => { this.hot = null; this.tip.hidden = true; this.paint(); };
+    this.canvas.onpointerleave = () => { this.hot = this.hotSt = null; this.tip.hidden = true; this.paint(); };
     this.canvas.onclick = (e) => this.press(e);
     this.host.onkeydown = (e) => { if (e.key === 'Escape' && where.st) { e.preventDefault(); this.up(); } };
     this.crumbs.onclick = (e) => {
@@ -70,14 +70,15 @@ class Lens {
     this.panel.onpointerleave = () => { this.hot = null; this.paint(); };
     this.grown = new ResizeObserver(() => {
       if (!this.canvas.isConnected) { this.grown.disconnect(); return; }
-      if (Math.round(this.canvas.clientWidth) !== this.W) this.fitAll();
+      const w = Math.round(this.canvas.clientWidth);
+      if (w && w !== this.W) this.fitAll();  // 0 is the page being hidden: everything it knows still holds for when it's back
     });
     this.grown.observe(this.canvas);
   }
 
   // ------------------------------------------------------------ the country
   update(map, view, opts) {
-    Object.assign(this, { map, view, opts, ink: colours(this.host), rows: null });
+    Object.assign(this, { map, view, opts, ink: colours(this.host), stale: true });
     const races = map[view] || {}, g = this.g;
     this.cells = [];
     this.byCell = new Map();
@@ -91,6 +92,7 @@ class Lens {
       }
     }
     this.size();
+    if (!this.W || this.pending) return;  // the observer draws it once it can be seen, and a move already on its way will draw this count
     if (where.st) { this.go(where, true); return; }
     this.mix = 0;
     this.cam = this.home;
@@ -107,6 +109,7 @@ class Lens {
 
   size() {
     const { canvas, g } = this, w = Math.round(canvas.clientWidth), h = Math.round(w * (g.rows * ROW + 1) / g.cols), dpr = Math.min(3, devicePixelRatio || 1);
+    if (!w) return;
     Object.assign(this, { W: w, H: h, dpr, base: w / WIDE });
     canvas.width = w * dpr;
     canvas.height = h * dpr;
@@ -294,11 +297,13 @@ class Lens {
     return { x: cx - (16 + room / 2 - W / 2) / (base * z), y: cy - (top + high / 2 - H / 2) / (base * z), z };
   }
 
-  async go(next, still = false) {
+  async go(next, still = false, stay = false) {
     const turn = (this.turn += 1), target = { st: next.st || null, seat: next.seat ?? null, county: next.county ?? null };
     this.hot = null;
     this.tip.hidden = true;
+    $('[data-el-state]', this.host).value = target.st || '';
     if (!target.st) {
+      this.pending = false;
       where = target;
       this.crumbs.hidden = this.panel.hidden = true;
       this.opts.pick?.(null);
@@ -308,32 +313,39 @@ class Lens {
       this.fly(this.home, still, (e) => { this.wasOn = 1 - clip(e / .6); this.mix = 1 - e; this.on = 0; });
       return;
     }
+    this.pending = true;
     let s, rows;
     try {
       [s, rows] = await Promise.all([shapeOf(target.st), this.loadRows()]);
+      this.here = rows.filter((r) => r.state === target.st);
     } catch {
+      if (turn !== this.turn) return;
+      this.pending = false;
+      if (!this.det) where = { st: null, seat: null, county: null };  // nothing to stand on, so back to the country rather than an empty frame
+      this.cam ||= this.home;
+      this.paint();
       this.say('That state could not be opened just now.');
       return;
     }
     if (turn !== this.turn || !this.canvas.isConnected) return;
+    this.pending = false;
     if (target.seat >= s.seats.length) target.seat = null;
     if (target.county >= s.cos.length) target.county = null;
-    const changed = where.st !== target.st;
     this.s = s;
-    this.here = rows.filter((r) => r.state === target.st);
-    if (changed) this.opts.pick?.(target.st);
+    this.opts.pick?.(target.st);
     const box = target.county != null ? s.cos[target.county].box : target.seat != null ? s.seats[target.seat].box : s.box;
     const cam = this.fit(box), fresh = this.print(cam, s, target), from = this.mix;
     this.cam ||= this.home;
     this.was = this.det;
     this.det = fresh;
     where = target;
-    this.card(still);
+    this.card(still, stay);
     this.fly(cam, still, (e) => { this.mix = Math.max(from, e); this.on = clip((e - .3) / .7); this.wasOn = this.was ? 1 - clip(e / .55) : 0; });
   }
 
   fly(cam, still, tick) {
     cancelAnimationFrame(this.frame);
+    this.flying = !still && !reduce;
     const from = { ...(this.cam || this.home) }, start = performance.now(), ms = still || reduce ? 0 : 1500;
     const step = (now) => {
       const t = ms ? Math.min(1, (now - start) / ms) : 1, e = ease(t);
@@ -341,7 +353,7 @@ class Lens {
       tick(e);
       this.paint();
       if (t < 1 && this.canvas.isConnected) this.frame = requestAnimationFrame(step);
-      else { this.was = null; this.wasOn = 0; }
+      else { this.was = null; this.wasOn = 0; this.flying = false; }
     };
     if (ms) this.frame = requestAnimationFrame(step);
     else step(start);
@@ -359,7 +371,13 @@ class Lens {
   }
 
   async loadRows() {
-    this.rows ||= await this.opts.races();
+    if (this.rows && !this.stale) return this.rows;
+    try {
+      this.rows = await this.opts.races();
+      this.stale = false;
+    } catch (e) {
+      if (!this.rows) throw e;  // the last count stands until a new one can be read
+    }
     return this.rows;
   }
 
@@ -367,6 +385,7 @@ class Lens {
 
   // ------------------------------------------------------------ the pointer
   hover(e) {
+    if (this.flying) return;
     const box = this.canvas.getBoundingClientRect(), px = e.clientX - box.left, py = e.clientY - box.top, tip = this.tip;
     const put = (text) => {
       if (text === null) { tip.hidden = true; return; }
@@ -392,6 +411,7 @@ class Lens {
   }
 
   press(e) {
+    if (this.flying) return;  // what's under a click in flight isn't what the click would land on
     const box = this.canvas.getBoundingClientRect(), px = e.clientX - box.left, py = e.clientY - box.top;
     if (!where.st) {
       const r = Math.round(py / (this.base * CELL) / ROW - .5), c = this.byCell.get(`${Math.round(px / (this.base * CELL) - .5 - (r % 2) / 2)},${r}`);
@@ -407,7 +427,7 @@ class Lens {
   }
 
   // ------------------------------------------------------------ what's beside the map
-  card(still) {
+  card(still, stay) {
     const { s, here, opts, crumbs, panel } = this, { st, seat, county } = where, name = opts.states[st] || st;
     if (still && panel.contains(document.activeElement)) return;  // a new count doesn't take the reader's place in the list
     const step = (label, to) => `<button type="button" data-to='${esc(JSON.stringify(to))}'>${esc(label)}</button>`;
@@ -440,7 +460,7 @@ class Lens {
     panel.hidden = false;
     if (still) return;
     panel.scrollTop = 0;
-    $('h3', panel).focus({ preventScroll: true });
+    if (!stay) $('h3', panel).focus({ preventScroll: true });
   }
 }
 
@@ -453,4 +473,4 @@ export async function openMap(host, map, view, opts) {
 }
 
 export const shut = (host) => { if (host.lens && where.st) host.lens.go({}, true); };
-export const going = (host, st) => host.lens?.go({ st });
+export const going = (host, st) => host.lens?.go({ st }, false, true);

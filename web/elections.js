@@ -83,7 +83,11 @@ const mapBlock = (us) => {
 function mountMap(root, us, pick, races) {
   const host = $('.el-map', root);
   if (!host) return null;
-  const opts = { pick, states: STATES, row: raceRow, seat: seatText, names: nameLine, state: raceState, bar, races: races || (async () => (await (await fetch('/api/detail/elections/', { credentials: 'same-origin' })).json()).races) };
+  const opts = { pick, states: STATES, row: raceRow, seat: seatText, names: nameLine, state: raceState, bar, races: races || (async () => {
+    const r = await fetch('/api/detail/elections/', { credentials: 'same-origin' });
+    if (!r.ok) throw new Error(String(r.status));
+    return (await r.json()).races;
+  }) };
   const opening = openMap(host, us.map, mapView, opts);
   host.onclick = (e) => {
     const b = e.target.closest('[data-el-view]');
@@ -229,7 +233,13 @@ export function electionDesk(p) {
     printed = stamp;
     body.classList.toggle('el-fresh', !body.dataset.seen);
     body.dataset.seen = '1';
+    const map = $('.el-map', body), lit = document.activeElement, down = $('.el-panel', map || body)?.scrollTop;  // the same map carries on through a redraw, with the reader's place, focus and scroll
     body.innerHTML = `${us ? usBlock(us, p.tz) : ''}<div class="page-cols">${us ? `<section class="el-part"><h3>Closest Senate and governor races</h3>${raceList(us.closest)}</section><section class="el-part"><h3>House races to watch</h3>${raceList(us.house)}</section>` : ''}${abroad(v.world)}</div>${us ? '<p class="el-all"><a href="/elections">Every race</a></p>' : ''}`;
+    if (map && $('.el-map', body)) {
+      $('.el-map', body).replaceWith(map);
+      $('.el-panel', map).scrollTop = down;
+      if (map.contains(lit)) lit.focus({ preventScroll: true });
+    }
     if (us) mountMap(body, us);
   }
   const now = $('.el-now', body), age = Date.now() / 1000 - (v.as_of || 0), foot = $('#asof-elections');

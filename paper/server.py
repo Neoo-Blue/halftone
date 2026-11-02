@@ -2537,36 +2537,63 @@ NOTE_PARTS = {"HEAD": "head", "WHAT": "what", "WHY": "why", "WATCH": "watch"}
 
 
 def note_said(n):
-    return "\n".join([n["headline"] or "", n["body"] or "", *[b if isinstance(b, str) else b.get("text", "") for b in n["bullets"]]])
+    return "\n".join([n["headline"] or "", n["body"] or "", *[b if isinstance(b, str) else b.get("text") or "" for b in n["bullets"]]]).strip()
+
+
+COUNTS = "five six seven eight nine ten eleven twelve twenty thirty forty fifty sixty seventy eighty ninety hundred hundreds thousand thousands million millions billion billions dozen dozens".split()
+
+
+def note_holds(said, got):
+    """The prompt says add nothing, and this is what makes it so: a number or a counted amount has to be in the note, near enough to allow for rounding, and so do the names, bar one a reader's general knowledge can supply."""
+    held = [float(x.replace(",", "")) for x in re.findall(r"\d[\d,]*(?:\.\d+)?", said)]
+    text, low = " ".join(got.values()), said.lower()
+    for x in re.findall(r"\d[\d,]*(?:\.\d+)?", text):
+        v = float(x.replace(",", ""))
+        if not any(abs(v - h) <= .015 * max(abs(v), abs(h), 1) for h in held):
+            return False
+    if any(w in COUNTS and w not in low for w in re.findall(r"[a-z]+", text.lower())):
+        return False
+    return sum(1 for w in set(re.findall(r"(?<=[a-z,;] )[A-Z][a-z]{2,}", text)) if w.lower() not in low) <= 1
 
 
 def note_reading(n):
-    """The note as an editor would tell it, once for each note. No reading, no harm: the analyst's words stand."""
+    """The note as an editor would tell it, once for each note. No reading, no harm: the analyst's words stand, and a failure waits an hour rather than spend the day's questions."""
     said = note_said(n)
     held = find_kept("note", said)
-    if held or not ai.ready():
+    if held or not said or find_kept("noteless", said) or not ai.ready():
         return held
+    spend_find("note")
     spend_ai()
-    text = ai.ask(NOTE_SYSTEM, "<note>" + said.replace("<", "\\u003c") + "</note>", max_tokens=500, cheap=True)
-    got = {NOTE_PARTS[k]: plain(v, 500) for k, v in re.findall(r"^\**(HEAD|WHAT|WHY|WATCH):\**\s*(.+)$", text, re.M)}
-    return find_keep("note", said, got) if len(got) == len(NOTE_PARTS) else None
+    try:
+        text = ai.ask(NOTE_SYSTEM, "<note>" + said.replace("<", "\\u003c") + "</note>", max_tokens=500, cheap=True)
+    except Exception:
+        find_keep("noteless", said, {"at": int(time.time())})
+        raise
+    got = {NOTE_PARTS[k]: plain(v, 500) for k, v in re.findall(r"^\W*(HEAD|WHAT|WHY|WATCH)\W*?:\**\s*(.+)$", text, re.M)}
+    if len(got) != len(NOTE_PARTS) or not note_holds(said, got):
+        find_keep("noteless", said, {"at": int(time.time())})
+        return None
+    return find_keep("note", said, {**got, "doubt": "UNVERIFIED" in said})
 
 
-READERS, TELLING = ThreadPoolExecutor(2), {}  # notes being told, by a key only a page that holds one can name
+READERS, TELLING, TELLING_LOCK = ThreadPoolExecutor(2), {}, threading.Lock()  # notes being told, by a key only a page that holds one can name
 
 
 def with_reading(notes):
     """The first note on a page, in an editor's words. One already told comes with the page, and a new one follows it, so a page never waits on a model."""
     if not notes:
         return notes
-    n, held = notes[0], find_kept("note", note_said(notes[0]))
+    n, said = notes[0], note_said(notes[0])
+    held = find_kept("note", said)
     if held:
         n["reading"] = held
-    elif ai.ready():
-        key = hashlib.sha256(note_said(n).encode()).hexdigest()[:24]
-        if len(TELLING) > 64:
-            TELLING.clear()
-        TELLING.setdefault(key, READERS.submit(quiet, lambda: note_reading(n)))
+    elif said and ai.ready() and not find_kept("noteless", said):
+        key = hashlib.sha256(said.encode()).hexdigest()[:24]
+        with TELLING_LOCK:
+            if len(TELLING) > 64:
+                TELLING.clear()
+            if key not in TELLING:
+                TELLING[key] = READERS.submit(quiet, lambda: note_reading(n))
         n["telling"] = key
     return notes
 
@@ -2903,9 +2930,9 @@ def d_machine(name):
 
 # ---------------------------------------------------------------------- search past the paper
 
-FIND_DAILY = {"web": 60, "answer": 150, "around": 300}  # a day: what costs money, and what starts nine fetches
+FIND_DAILY = {"web": 60, "answer": 150, "around": 300, "note": 60}  # a day: what costs money, and what starts nine fetches
 FIND_WAIT = 8  # seconds: one slow source shouldn't hold up the rest, and a late one is simply left off
-FIND_KEEP = {"around": 1800, "web": 3600, "answer": 3600, "note": 172800}
+FIND_KEEP = {"around": 1800, "web": 3600, "answer": 3600, "note": 172800, "noteless": 3600}
 FOLLOW_MOST = 40
 FOLLOW_EVERY = {"place": 1800, "topic": 1800, "team": 300, "market": 300, "conflict": 300, "race": 30, "ballot": 300}
 WEB_PRICE = 0.01  # dollars a search

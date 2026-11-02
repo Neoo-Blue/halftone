@@ -92,11 +92,13 @@ function front(p) {
 
 // Every column of the front page ends level. "Inside" goes under the note if the conflicts can grow to meet it, or under them if they can't, and the conflicts and the headlines then take as many rows as there's room for.
 function fitFront() {
+  if ($('#paper').hidden) return;  // nothing has a size while a page is open: this runs again when it's back
   const list = $('.also'), table = $('#theaters'), rows = [...table.children], side = $('#inside'), foot = (e) => e.getBoundingClientRect().bottom, tall = (e) => e.getBoundingClientRect().height;
   if (innerWidth <= 860) { rows.slice(5).forEach((r) => r.remove()); return; }
+  $('#orb figcaption').append(side);  // always measured from here, or each redraw would answer differently from the last
   const spare = rows.slice(5).reduce((a, r) => a + tall(r), 0), note = foot($('#glance'));
   const onNote = innerWidth > 1180 && note + tall(side) <= foot(table);  // with every conflict showing, can that column reach it?
-  (onNote ? $('.note-col') : $('#orb figcaption')).append(side);
+  if (onNote) $('.note-col').append(side);
   const end = onNote ? table : side, level = Math.max(onNote ? foot(side) : note, foot(end) - spare, list ? list.getBoundingClientRect().top + 90 : 0);  // their own heights: the columns themselves stretch
   while (rows.length > 5 && foot(end) > level) rows.pop().remove();
   while (list?.lastElementChild && foot(list) > level) list.lastElementChild.remove();
@@ -148,7 +150,7 @@ function world(p) {
   }
   const idx = Math.round(w.index?.value ?? w.index ?? 0);
   const assessed = w.assessed != null ? `The analyst's hourly reading, ${ago(w.ts)}, was ${Math.round(w.assessed)}, on a narrower window than the live index. ` : '';
-  const asks = (q, text) => (p.on.ai ? `<button type="button" class="ask-row" data-ask="${esc(q)}">${text}</button>` : text);
+  const asks = (q, text) => (p.on.ai ? `<button type="button" class="ask-row" data-ask="${esc(q.replace(/[<>]/g, ' '))}">${text}</button>` : text);
   const fc = w.forecast.map((f) => `<li><span class="odds" style="--v:${Math.round((f.probability || 0) * 100)}"><i></i></span><b>${Math.round((f.probability || 0) * 100)}%</b><span class="fc-t">${asks(`The analyst gives ${Math.round((f.probability || 0) * 100)}% to this: ${f.statement} What would decide it?`, `${esc(f.statement)} <em>${esc(f.horizon)}</em>`)}</span></li>`).join('');
   const claim = { confirmed: 'Confirmed', reported: 'Reported', claimed: "One side's claim" };
   const front = (w.front || []).map((s) => {
@@ -907,6 +909,7 @@ startFind(go);
 startPhone({ go, onTab: (id) => { if (id === 'world') startGlobe(); }, onForm: seatGlobe });
 
 addEventListener('paper:reload', load);
+addEventListener('paper:front', fitFront);
 start((lat, lon) => globe?.fly(lat, lon), () => paper?.world.data?.dots || []);
 load();
 let beats = 0;

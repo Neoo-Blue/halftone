@@ -245,7 +245,7 @@ function cited(text) {
 const LABELS = { OBSERVED: '', ASSESSED: 'Judgement: ', UNVERIFIED: 'Not confirmed: ' };
 const bullet = (b) => (typeof b === 'string' ? b : b.text || '').replace(/^(OBSERVED|ASSESSED|UNVERIFIED):\s*/, (_, k) => LABELS[k]).replace(/^\[(high|medium|low)\]\s*/i, '').replace(/\s*\((up|down|flat)[^)]*confidence[^)]*\)/gi, '');  // the analyst's working, not the reader's
 const worked = (n) => `<h3>${esc(n.headline)}</h3>${n.body ? `<p>${cited(n.body)}</p>` : ''}${n.bullets?.length ? `<ul>${n.bullets.map((b) => `<li>${cited(bullet(b))}</li>`).join('')}</ul>` : ''}`;
-const told = (r) => `<h3>${esc(r.head)}</h3><p class="intel-lead">${esc(r.what)}</p><p><b>Why it matters.</b> ${esc(r.why)}</p><p><b>What to watch.</b> ${esc(r.watch)}</p><small>Written by AI from the analyst's note below. It can be wrong.</small>`;
+const told = (r) => `<h3>${esc(r.head)}</h3><p class="intel-lead">${esc(r.what)}</p><p><b>Why it matters.</b> ${esc(r.why)}</p><p><b>What to watch.</b> ${esc(r.watch)}</p>${r.doubt ? '<p class="intel-doubt">Part of the note this comes from is marked as not confirmed.</p>' : ''}<small>Written by AI from the analyst's note below. It can be wrong.</small>`;
 const evidence = (html) => `<details class="intel-more"><summary>The analyst's note and its evidence</summary>${html}</details>`;
 const notes = (list) => (list || []).map((n) => `<section class="intel"${n.telling ? ` data-telling="${esc(n.telling)}"` : ''}>${n.reading ? `${told(n.reading)}${evidence(worked(n))}` : `<div class="intel-body">${worked(n)}</div>`}${n.telling ? '<p class="intel-wait">The editor is reading this.</p>' : ''}<time>${esc(ago(n.ts))}</time></section>`).join('');
 
@@ -280,14 +280,13 @@ function fillMarket(d) {
 }
 
 // A note nobody has told yet follows the page: the analyst's words stand until the editor's arrive.
-function fillNotes(kind) {
+function fillNotes() {
   $$('[data-telling]', sheet()).forEach(async (box) => {
     const r = await fetch(`/api/detail/reading/${box.dataset.telling}`, { credentials: 'same-origin' }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
     $('.intel-wait', box)?.remove();
     if (!r?.reading || !box.isConnected) return;
     const body = $('.intel-body', box);
     body.outerHTML = `<div class="intel-told">${told(r.reading)}</div>${evidence(body.innerHTML)}`;
-    if (kind === 'event') $('.page-head', sheet()).textContent = r.reading.head;
   });
 }
 const stories = (rows) => `<ul class="wire-list">${rows.map((s) => `<li><a href="${eventHref(s)}">${esc(s.t)}</a><span>${esc([s.src, s.place, ago(s.ts)].filter(Boolean).join(', '))}</span></li>`).join('')}</ul>`;
@@ -465,7 +464,7 @@ const VIEWS = {
     const body = `${long ? `<div class="page-body"><p>${esc(d.summary)}</p></div>` : ''}${d.note ? notes([d.note]) : ''}
       ${d.story ? storyBody(d.story) : d.note && !d.sources.length ? '' : `<p class="empty">${d.sources.length ? 'The publisher would not share the full story with the paper. The sources alongside may have more.' : 'WARROOM has no article for this event, only the report itself.'}</p>`}`;
     return {
-      scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: d.note?.reading?.head || ((d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title), deck: `${whoLine(d.who) ? `${whoLine(d.who)}. ` : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
+      scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: (d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title, deck: `${whoLine(d.who) ? `${whoLine(d.who)}. ` : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };
   },
 
   following: followingPage,
@@ -606,10 +605,11 @@ const VIEWS = {
   },
 
   market(d) {
+    const held = d.series.length ? (d.series[d.series.length - 1].t - d.series[0].t) / 86400 : 0, spans = RANGES.filter(([days]) => !days || days < held);  // a stretch longer than the prices held would only repeat All
     const stories = (d.stories || []).length ? `<h3>In the news</h3><ul class="wire-list">${d.stories.map((n) => `<li><a href="${esc(reading(n.u))}">${esc(n.t)}</a><span>${esc(n.src)}, ${esc(ago(n.ts))}</span></li>`).join('')}</ul>` : '';
     return {
       head: d.label, deck: d.why, meta: `${marketNum(d.last)} ${d.unit || ''}, ${(d.pct || 0) >= 0 ? 'up' : 'down'} ${Math.abs(d.pct || 0).toFixed(1)}%`,
-      body: `<p class="el-verdict" id="mk-said"></p><div class="seg mk-span" role="group" aria-label="How far back">${RANGES.map(([k, label], i) => `<button type="button" data-mk="${k}" aria-pressed="${i === RANGES.length - 1}">${label}</button>`).join('')}</div><div id="mk-chart"></div>
+      body: `<p class="el-verdict" id="mk-said"></p><div class="seg mk-span" role="group" aria-label="How far back">${spans.map(([k, label]) => `<button type="button" data-mk="${k}" aria-pressed="${!k}">${label}</button>`).join('')}</div><div id="mk-chart"></div>
         ${d.ai ? '<section class="el-part"><h3>Why it\'s moving</h3><div id="mk-answer"></div></section>' : ''}${stories}<p class="el-all"><a href="/topic/${encodeURIComponent(d.label)}">Everything on ${esc(d.label)}</a></p>`,
       side: `${(d.others || []).length ? `<h3>Elsewhere today</h3><ul class="plain mk-others">${d.others.map((x) => `<li><a href="/world/market/${esc(x.key)}">${esc(x.label)}</a><b class="${(x.pct || 0) >= 0 ? 'pos' : 'neg'}">${(x.pct || 0) >= 0 ? '+' : ''}${(x.pct || 0).toFixed(1)}%</b></li>`).join('')}</ul>` : ''}`,
     };
@@ -773,6 +773,7 @@ export async function route() {
     stage?.destroy();
     stage = null;
     if (!sheet().hidden) await swap(false, () => { sheet().replaceChildren(); document.title = NAME; });
+    dispatchEvent(new Event('paper:front'));
     phonePage(null);
     if (phoneTab(location.hash.slice(1), front)) return;
     const target = location.hash && $(location.hash);
@@ -806,7 +807,7 @@ export async function route() {
   phonePage(m.kind);
   if (m.kind === 'read' && body.lean && body.spread?.length >= 3) fillTakes(body.url);
   if (m.kind === 'topic') fillFind(body);
-  fillNotes(m.kind);
+  fillNotes();
   if (m.kind === 'market') fillMarket(body);
   if (m.kind === 'elections') fillElections(body);
   if (m.kind === 'race' || m.kind === 'ballot') fillRace(body);

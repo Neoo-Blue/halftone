@@ -216,7 +216,7 @@ _asks, _real_ask, _real_ready = [], s.ai.ask, s.ai.ready
 s.ai.ready = lambda: True
 s.ai.ask = lambda system, text, **k: _asks.append((system, text)) or "HEAD: Ships still aren't coming back\nWHAT: About 12 a day cross.\n**WHY:** Oil.\nWATCH: Traffic."
 _read = s.note_reading(_note)
-assert _read == {"head": "Ships still aren't coming back", "what": "About 12 a day cross.", "why": "Oil.", "watch": "Traffic."}, _read
+assert _read == {"head": "Ships still aren't coming back", "what": "About 12 a day cross.", "why": "Oil.", "watch": "Traffic.", "doubt": True}, _read
 assert "<script" not in _asks[0][1] and _asks[0][1].startswith("<note>") and "AIS transits 12" in _asks[0][1] and "a story" in _asks[0][1], "strangers' text can't close the tag it's held in"
 assert s.note_reading(_note) == _read and len(_asks) == 1, "each note is told once"
 s.ai.ask = lambda system, text, **k: "Sorry, I can't."
@@ -234,6 +234,42 @@ for _odd in ("0" * 24, "not-a-key"):
         raise AssertionError("only a key a page was given")
     except (LookupError, KeyError):
         pass
+_tellings = []
+s.ai.ask = lambda system, text, **k: (_tellings.append(1), time.sleep(.2), "HEAD: H\nWHAT: W\nWHY: Y\nWATCH: T")[2]
+_a, _b = s.with_reading([{**_note, "headline": "Same note"}])[0], s.with_reading([{**_note, "headline": "Same note"}])[0]
+assert _a["telling"] == _b["telling"] and s.detail("reading", _a["telling"])["reading"]["head"] == "H" and len(_tellings) == 1, "one note on two pages is told once"
+
+# a failure costs one question an hour, not the day's
+_tries = []
+def _down(system, text, **k):
+    _tries.append(1)
+    raise OSError("down")
+s.ai.ask = _down
+for _ in range(5):
+    assert s.quiet(lambda: s.note_reading({**_note, "headline": "Provider down"})) is None
+assert len(_tries) == 1, "a provider that's down gets one try"
+_late = s.with_reading([{**_note, "headline": "Provider down"}])[0]
+assert "telling" not in _late and "reading" not in _late, "and pages stop waiting on it"
+s.ai.ask = lambda system, text, **k: _tries.append(1) or "I'd rather not."
+_tries.clear()
+for _ in range(3):
+    s.note_reading({**_note, "headline": "Out of shape"})
+assert len(_tries) == 1, "nor does a reply that isn't the shape get asked again"
+_tries.clear()
+assert s.note_reading({"headline": "", "body": "", "bullets": [{"text": None}], "ts": 1}) is None and not _tries, "an empty note costs nothing"
+
+# what the rule says, the code holds to
+_small = {"headline": "Two ships delayed near Iran", "body": "Two ships were delayed.", "bullets": ["UNVERIFIED: a report of 12 mines"], "ts": 1}
+s.ai.ask = lambda system, text, **k: "HEAD: Forty ships sunk by Iran\nWHAT: Forty ships were sunk.\nWHY: Oil.\nWATCH: More."
+assert s.note_reading(_small) is None, "a count the note never gave doesn't print"
+s.ai.ask = lambda system, text, **k: "HEAD: 900 ships delayed\nWHAT: 900 ships.\nWHY: Oil.\nWATCH: More."
+assert s.note_reading({**_small, "headline": "Another"}) is None, "nor does a number"
+s.ai.ask = lambda system, text, **k: "HEAD: Ships delayed\nWHAT: Ships off Tehran and Dubai and Muscat are held.\nWHY: Oil.\nWATCH: More."
+assert s.note_reading({**_small, "headline": "A third"}) is None, "nor a run of names the note never used"
+s.ai.ask = lambda system, text, **k: "HEAD: Two ships are held up\nWHAT: Two ships were delayed near Iran, and the mines, about 12, aren't confirmed. Trade through the Gulf waits.\nWHY: Oil.\nWATCH: More."
+_ok = s.note_reading({**_small, "headline": "A fourth, near Iran"})
+assert _ok and _ok["doubt"] is True, "a true telling prints, one general name is fine, and an unverified note says so on the page"
+assert s.note_holds("Brent at 113.43 a barrel", {"what": "Brent is about 113"}), "rounding isn't invention"
 s.ai.ready = lambda: False
 assert s.note_reading({**_note, "headline": "Third"}) is None, "no AI, and the page stands"
 s.ai.ask, s.ai.ready = _real_ask, _real_ready
