@@ -90,6 +90,15 @@ class Lens {
         this.byCell.set(`${c},${r}`, cell);
       }
     }
+    this.borders = [];  // where two states' dots meet, a short stroke between them: the country's state lines, in the print's own grain
+    for (const [k, a] of this.byCell) {
+      const [c, r] = k.split(',').map(Number), down = r % 2 ? [c, c + 1] : [c - 1, c];
+      for (const b of [this.byCell.get(`${c + 1},${r}`), ...down.map((d) => this.byCell.get(`${d},${r + 1}`))]) {
+        if (!b || b.st === a.st) continue;
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, dx = b.x - a.x, dy = b.y - a.y, n = Math.hypot(dx, dy) || 1, half = CELL * .32;
+        this.borders.push([mx - (dy / n) * half, my + (dx / n) * half, mx + (dy / n) * half, my - (dx / n) * half]);
+      }
+    }
     this.size();
     if (!this.W) return;  // the observer draws it once it can be seen
     if (this.pending) { this.paint(); return; }  // a move already on its way will draw this count
@@ -108,14 +117,21 @@ class Lens {
   }
 
   size() {
-    const { canvas, g } = this, w = Math.round(canvas.clientWidth), h = Math.round(w * (g.rows * ROW + 1) / g.cols), dpr = Math.min(3, devicePixelRatio || 1);
+    const { canvas, g } = this, w = Math.round(canvas.clientWidth), whole = w * (g.rows * ROW + 1) / g.cols, dpr = Math.min(3, devicePixelRatio || 1);
     if (!w) return;
+    const h = Math.round(Math.min(whole, Math.max(300, innerHeight - 170)));  // never taller than the window, so a state or a district is seen whole
     Object.assign(this, { W: w, H: h, dpr, base: w / WIDE });
     canvas.width = w * dpr;
     canvas.height = h * dpr;
     canvas.style.height = `${h}px`;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.home = { x: WIDE / 2, y: h / this.base / 2, z: 1 };
+    this.home = { x: WIDE / 2, y: whole / this.base / 2, z: h / whole };  // the whole country, however short the window
+  }
+
+  cellAt(px, py) {
+    const { cam, base } = this, wx = cam.x + (px - this.W / 2) / (base * cam.z), wy = cam.y + (py - this.H / 2) / (base * cam.z);
+    const r = Math.round(wy / CELL / ROW - .5);
+    return this.byCell.get(`${Math.round(wx / CELL - .5 - (r % 2) / 2)},${r}`);
   }
 
   fitAll() {
@@ -144,6 +160,16 @@ class Lens {
       ctx.beginPath();
       ctx.arc(sx, sy, big, 0, 7);
       ctx.fill();
+    }
+    ctx.globalAlpha = .55 * (1 - mix) * Math.min(1, sweep * 1.5);
+    if (ctx.globalAlpha > .01) {
+      const k = base * cam.z, ox = W / 2 - cam.x * k, oy = H / 2 - cam.y * k;
+      ctx.beginPath();
+      for (const [ax, ay, bx, by] of this.borders) { ctx.moveTo(ox + ax * k, oy + ay * k); ctx.lineTo(ox + bx * k, oy + by * k); }
+      ctx.strokeStyle = ink.ink;
+      ctx.lineWidth = W < 600 ? .8 : 1.1;
+      ctx.lineCap = 'round';
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
   }
@@ -398,7 +424,7 @@ class Lens {
       tip.style.transform = `translate(${Math.min(box.width - 200, Math.max(0, px - 60))}px, ${py + 14}px)`;
     };
     if (!this.where.st) {
-      const r = Math.round(py / (this.base * CELL) / ROW - .5), c = this.byCell.get(`${Math.round(px / (this.base * CELL) - .5 - (r % 2) / 2)},${r}`), st = c?.st || null;
+      const c = this.cellAt(px, py), st = c?.st || null;
       if (st === this.hotSt) return;
       this.hotSt = st;
       put(c ? `${this.opts.states[st] || st}: ${leaning(c.v)}` : null);
@@ -418,7 +444,7 @@ class Lens {
     if (this.flying) return;  // what's under a click in flight isn't what the click would land on
     const box = this.canvas.getBoundingClientRect(), px = e.clientX - box.left, py = e.clientY - box.top;
     if (!this.where.st) {
-      const r = Math.round(py / (this.base * CELL) / ROW - .5), c = this.byCell.get(`${Math.round(px / (this.base * CELL) - .5 - (r % 2) / 2)},${r}`);
+      const c = this.cellAt(px, py);
       if (c) { this.hotSt = null; this.go({ st: c.st }); }
       return;
     }
