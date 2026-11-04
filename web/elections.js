@@ -348,14 +348,30 @@ export function raceView(d) {
   const facts = [['Held by', d.holder ? `${d.holder.n}${d.inc ? ` (${d.inc})` : ''}` : PARTY[d.inc]], ['Since', d.holder?.since?.slice(0, 4)], ['Seat', d.open ? 'Open' : d.holder ? 'Incumbent running' : ''], ['Rating', d.rating.replace('Tossup', 'Toss-up')]].filter(([, v]) => v);
   return {
     head: seatText(d), deck: nameLine(d), meta: d.won ? `${d.won.n} wins` : '',
-    body: `${followBox('race', d.key, d.seat, d.followed)}<div id="el-live">${counted(d)}</div>${signalScale(d)}${d.ai ? asked('What this race is about') : ''}${pollTrail(d)}${stories(d.stories)}${d.news.length ? `<section class="el-part"><h3>More reporting</h3><ul class="wire-list">${d.news.map(storyRow).join('')}</ul></section>` : ''}`,
+    body: `${followBox('race', d.key, d.seat, d.followed)}<div id="el-live">${counted(d)}</div>${/^[SGP]-/.test(d.key) ? '<div id="el-counties"></div>' : ''}${signalScale(d)}${d.ai ? asked('What this race is about') : ''}${pollTrail(d)}${stories(d.stories)}${d.news.length ? `<section class="el-part"><h3>More reporting</h3><ul class="wire-list">${d.news.map(storyRow).join('')}</ul></section>` : ''}`,
     side: `<dl class="facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`,
   };
 }
 
+// A statewide race county by county, the biggest counts first. WARROOM reads one state at a time while votes are counted.
+async function countiesInto(root, key, all = false) {
+  const got = await fetch(`/api/detail/counties/${encodeURIComponent(key)}`, { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!root.isConnected) return;
+  const votes = (r) => r.c.reduce((n, x) => n + (x.votes || 0), 0);
+  const rows = Object.values(got?.rows || {}).filter((r) => votes(r) > 0).sort((a, b) => votes(b) - votes(a));
+  if (!rows.length) { root.innerHTML = ''; return; }
+  const line = (r) => {
+    const [a, b] = r.c, lead = a && b ? Math.round((a.pct ?? 0) - (b.pct ?? 0)) : null;
+    return `<li><b>${esc(r.name)}</b><span>${a ? `${esc(String(a.name).split(' ').slice(-1)[0])}${lead != null ? ` by ${lead}` : ''}` : ''}, ${Math.round(r.reporting ?? 0)}% counted</span></li>`;
+  };
+  root.innerHTML = `<section class="el-part"><h3>By county</h3><ul class="plain el-count">${(all ? rows : rows.slice(0, 12)).map(line).join('')}</ul>${rows.length > 12 && !all ? `<button type="button" class="ghost text" data-all-counties>All ${rows.length} counties</button>` : ''}<p class="small">Read ${got.fetched ? ago(got.fetched) : 'recently'}: WARROOM reads one state's counties at a time while votes are counted.</p></section>`;
+  $('[data-all-counties]', root)?.addEventListener('click', () => countiesInto(root, key, true));
+}
+
 export function fillRace(d) {
-  const box = $('#el-answer'), root = $('#el-live');
+  const box = $('#el-answer'), root = $('#el-live'), cos = $('#el-counties');
   if (box) answerInto(box, d.q);
+  if (cos) countiesInto(cos, d.key);
   let shown = d;
   keepUp(d, root, `/api/detail/count/${encodeURIComponent(d.key)}`, (fresh) => {
     const moved = stampOf(fresh.runners) !== stampOf(shown.runners) || stampOf(fresh.reading) !== stampOf(shown.reading);

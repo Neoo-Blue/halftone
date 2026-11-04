@@ -8,7 +8,15 @@ const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const WIDE = 960, CELL = 8, ROW = .92, GAP = 7, DEEPEST = 90;
 let grid = null, swept = false;  // the map prints in once, not at every new count
 const gridded = () => (grid ||= fetch('/us-dots.json').then((r) => r.json()).catch((e) => { grid = null; throw e; }));
-const held = new Map();
+const held = new Map(), tallied = new Map();
+// A statewide race county by county, where WARROOM has read it: the county shapes are keyed by name, as the server keys the count.
+const COUNTY_RACE = { senate: ['S', 'Senate'], governor: ['G', "governor's"], president: ['P', 'presidential'] };
+const coName = (n) => String(n || '').toLowerCase().replace(/\b(county|parish|borough|census area|city and borough|municipality)\b/g, ' ').replace('saint', 'st').replace(/[^a-z]/g, '');
+const coLean = (row) => {
+  const share = (p) => row?.c.find((x) => String(x.party).startsWith(p))?.pct ?? null, d = share('Democ'), r = share('Repub');
+  return d == null && r == null ? null : Math.max(-1, Math.min(1, (((d ?? 0) - (r ?? 0)) / 100) * 2.5));
+};
+const coLine = (row) => row.c.map((x) => `${String(x.name).split(' ').slice(-1)[0]} ${Math.round(x.pct ?? 0)}%`).join(', ');
 const shapeOf = (st) => {
   if (!held.has(st)) held.set(st, fetch(`/us/${st}.json`).then((r) => { if (!r.ok) throw new Error(st); return r.json(); }).catch((e) => { held.delete(st); throw e; }));
   return held.get(st);
@@ -232,12 +240,13 @@ class Lens {
     const seatPaths = s.seats.map((q) => trace(q.r)), coPaths = s.cos.map((q) => trace(q.r));
     const seatAt = shapeMap(W, H, seatPaths), countyAt = shapeMap(W, H, coPaths);
     const inks = s.seats.map((q) => this.rowOf(q.k)?.ink ?? null), focus = at.seat, gap = W < 600 ? 4.5 : GAP;
+    const byCo = this.coRows ? s.cos.map((c) => coLean(this.coRows[coName(c.n)])) : null;  // a Senate or governor race prints by county
     const plates = new Map();
     for (let r = 0, py = gap / 2; py < H; r += 1, py += gap * ROW) {
       for (let px = gap / 2 + (r % 2) * gap / 2; px < W; px += gap) {
-        const i = seatAt(px, py);
+        const i = byCo ? countyAt(px, py) : seatAt(px, py);
         if (i < 0) continue;
-        const v = inks[i], dim = focus != null && i !== focus, sure = v == null ? 0 : Math.abs(v);
+        const v = byCo ? byCo[i] : inks[i], dim = byCo ? at.county != null && i !== at.county : focus != null && i !== focus, sure = v == null ? 0 : Math.abs(v);
         const key = `${v == null ? ink.h : v > .02 ? ink.l : v < -.02 ? ink.r : ink.m}|${dim ? .22 : 1}`;
         if (!plates.has(key)) plates.set(key, new Path2D());
         const p = plates.get(key), big = gap * .5 * (v == null ? .3 : .34 + .62 * sure);
@@ -340,9 +349,9 @@ class Lens {
       return;
     }
     this.pending = true;
-    let s, rows;
+    let s, rows, coRows;
     try {
-      [s, rows] = await Promise.all([shapeOf(target.st), this.loadRows()]);
+      [s, rows, coRows] = await Promise.all([shapeOf(target.st), this.loadRows(), this.countyRows(target.st)]);
       this.here = rows.filter((r) => r.state === target.st);
     } catch {
       if (turn !== this.turn) return;
@@ -356,6 +365,7 @@ class Lens {
     }
     if (turn !== this.turn || !this.canvas.isConnected) return;
     this.pending = false;
+    this.coRows = coRows;
     if (target.seat >= s.seats.length) target.seat = null;
     if (target.county >= s.cos.length) target.county = null;
     this.s = s;
@@ -413,6 +423,17 @@ class Lens {
 
   rowOf(key) { return this.rows?.find((r) => r.key === key); }
 
+  async countyRows(st) {
+    const kind = COUNTY_RACE[this.view];
+    if (!kind || !st) return null;
+    const key = `${kind[0]}-${st}`, had = tallied.get(key);
+    if (had && Date.now() - had.at < 60e3) return had.rows;
+    const got = await fetch(`/api/detail/counties/${key}`, { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const rows = got?.rows && Object.keys(got.rows).length ? got.rows : null;  // none yet: the state keeps its usual print
+    tallied.set(key, { at: Date.now(), rows });
+    return rows;
+  }
+
   // ------------------------------------------------------------ the pointer
   hover(e) {
     if (this.flying) return;
@@ -436,7 +457,9 @@ class Lens {
     if (JSON.stringify(hot) === JSON.stringify(this.hot)) { if (!tip.hidden) put(tip.textContent); return; }
     this.hot = hot;
     const q = this.s.seats[seat], row = q && this.rowOf(q.k), co = this.s.cos[county];
-    put(q ? `${row ? this.opts.seat(row) : `District ${q.n}`}: ${leaning(row?.ink)}${co ? `. ${co.n}` : ''}` : co ? co.n : null);
+    const tally = co && this.coRows?.[coName(co.n)];
+    if (tally) put(`${co.n}: ${coLine(tally)}, ${Math.round(tally.reporting ?? 0)}% counted`);
+    else put(q ? `${row ? this.opts.seat(row) : `District ${q.n}`}: ${leaning(row?.ink)}${co ? `. ${co.n}` : ''}` : co ? co.n : null);
     this.paint();
   }
 
@@ -474,7 +497,8 @@ class Lens {
     let body;
     if (county != null) {
       const c = s.cos[county], seats = s.seats.filter((q) => c.k.includes(q.k)), towns = s.towns.filter((t) => this.det && this.det.countyAt(this.x(this.det.cam, t[0]), this.y(this.det.cam, t[1])) === county);
-      body = `<h3 tabindex="-1">${esc(c.n)}</h3><p class="small">${seats.length > 1 ? `Split between ${seats.length} House seats.` : seats.length ? 'All in one House seat.' : 'Not matched to a House seat.'}</p>${list(seats)}
+      const tally = this.coRows?.[coName(c.n)], race = COUNTY_RACE[this.view];
+      body = `<h3 tabindex="-1">${esc(c.n)}</h3>${tally ? `<p class="el-who">${esc(coLine(tally))}</p><p class="small">${Math.round(tally.reporting ?? 0)}% counted in the ${esc(race[1])} race.</p>` : ''}<p class="small">${seats.length > 1 ? `Split between ${seats.length} House seats.` : seats.length ? 'All in one House seat.' : 'Not matched to a House seat.'}</p>${list(seats)}
         ${towns.length ? `<h4>Towns and cities</h4><p class="el-chips">${towns.slice(0, 40).map((t) => `<a href="/topic/${encodeURIComponent(t[2])}">${esc(t[2])}</a>`).join('')}</p>` : ''}`;
     } else if (seat != null) {
       const q = s.seats[seat], r = this.rowOf(q.k), cos = s.cos.filter((c) => c.k.includes(q.k));
@@ -483,7 +507,7 @@ class Lens {
     } else {
       const big = here.filter((r) => r.kind !== 'house'), tally = { D: 0, R: 0, T: 0 };
       s.seats.forEach((q) => { const v = this.rowOf(q.k)?.ink ?? 0; tally[Math.abs(v) < .1 ? 'T' : v > 0 ? 'D' : 'R'] += 1; });
-      body = `<h3 tabindex="-1">${esc(name)}</h3>${s.seats.length ? `<p class="small">${s.seats.length === 1 ? 'One House seat' : `${s.seats.length} House seats`}: ${tally.D} leaning Democratic, ${tally.R} Republican${tally.T ? `, ${tally.T} too close` : ''}.</p>` : '<p class="small">No voting seat in the House.</p>'}
+      body = `<h3 tabindex="-1">${esc(name)}</h3>${this.coRows ? `<p class="small">Counties shaded by who leads the ${esc(COUNTY_RACE[this.view][1])} count. Tap one for its numbers.</p>` : ''}${s.seats.length ? `<p class="small">${s.seats.length === 1 ? 'One House seat' : `${s.seats.length} House seats`}: ${tally.D} leaning Democratic, ${tally.R} Republican${tally.T ? `, ${tally.T} too close` : ''}.</p>` : '<p class="small">No voting seat in the House.</p>'}
         ${big.length ? `<ul class="wire-list el-races">${big.map(opts.row).join('')}</ul>` : ''}${s.seats.length ? `<h4>House seats</h4>${list(s.seats)}` : ''}`;
     }
     panel.innerHTML = body;

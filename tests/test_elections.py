@@ -394,3 +394,12 @@ assert all(k.startswith("H-") and (k.endswith("-AL") or k[-2:].isdigit()) for v 
 assert _shapes["GA"]["seats"][4]["k"] == "H-GA-05" and any(c["n"] == "Fulton" and "H-GA-05" in c["k"] for c in _shapes["GA"]["cos"]), "a district knows its counties"
 assert any(t[2] == "Atlanta" for t in _shapes["GA"]["towns"]) and not any("CDP" in t[2] for t in _shapes["GA"]["towns"])
 assert "ink" in elect.row(elect.race(_race("H-GA-05", "house"))), "the map draws each seat from its row"
+
+# a statewide race county by county, keyed by name as the paper's own county shapes are
+assert s.county_name("St. Louis County") == s.county_name("Saint Louis") == "stlouis" and s.county_name("DeKalb") == "dekalb"
+assert s.county_name("Fairfax") != s.county_name("Fairfax City"), "a county and the city of the same name are two places"
+_real_war = s.war_open
+s.war_open = lambda path, timeout=30: {"fetched": 7, "counties": {"13089": {"name": "DeKalb", "reporting": 61, "candidates": [{"name": "Jon Ossoff", "party": "Democratic", "votes": 900, "percent": 81.2}, {"name": "Mike Collins", "party": "Republican", "votes": 200, "percent": 18.8}]}, "x": {"name": "", "candidates": []}}}
+_cos = s.d_counties("S-GA")
+assert _cos["fetched"] == 7 and list(_cos["rows"]) == ["dekalb"] and _cos["rows"]["dekalb"]["c"][0]["pct"] == 81.2, _cos
+s.war_open = _real_war

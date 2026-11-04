@@ -3382,6 +3382,23 @@ def d_count(key):
     return race_count(*race_held(key))
 
 
+def county_name(name):
+    """Census and civicAPI spell a county alike once its kind and its punctuation are gone: St. Louis, Saint Louis, DeKalb."""
+    n = re.sub(r"\b(county|parish|borough|census area|city and borough|municipality)\b", " ", str(name or "").lower())
+    return re.sub(r"[^a-z]", "", n.replace("saint", "st"))
+
+
+def d_counties(key):
+    """A Senate, governor or presidential race county by county, by name, which is how the paper's own county shapes are keyed."""
+    d = war_open(f"/elections/us/races/{key}/counties", timeout=20)
+    rows = {}
+    for c in (d.get("counties") or {}).values():
+        cands = [{"name": plain(x.get("name"), 60), "party": plain(x.get("party"), 30), "pct": x.get("percent"), "votes": x.get("votes")} for x in c.get("candidates") or [] if isinstance(x, dict)][:3]
+        if cands and county_name(c.get("name")):
+            rows[county_name(c["name"])] = {"name": plain(c.get("name"), 60), "reporting": c.get("reporting"), "c": cands}
+    return {"kind": "counties", "key": key, "fetched": d.get("fetched"), "rows": rows}
+
+
 def d_race(key):
     s, r = race_held(key)
     on = {f["id"] for f in follow_rows()}
@@ -3542,7 +3559,7 @@ DETAILS = {
     "machine": (r"[^/]{1,80}", d_machine), "topic": (r"[^/]{1,80}", d_topic), "weather": (r"", d_weather), "usage": (r"", d_usage), "investments": (r"", d_investments), "saved": (r"", d_saved), "archive": (r"(\d{4}-\d{2}-\d{2})?", d_archive),
     "event": (r"[0-9a-f]{16,64}", d_event), "theater": (r"[a-z0-9_]{2,40}", d_theater), "thread": (r"thr:[0-9a-f]{8,64}", d_thread), "hazard": (r"[\w:.-]{3,80}", d_hazard), "market": (r"[a-z0-9_]{2,40}", d_market),
     "mail": (r"[0-9a-f]{24}", d_mail), "plex": (r"\d{1,9}", d_plex), "show": (r"\d{1,9}", d_show), "movie": (r"\d{1,9}", d_movie), "issue": (r"[a-z0-9-]{3,80}", d_issue), "container": (r"\d{3,4}", d_container),
-    "product": (r"[a-z]{1,40}", d_product), "service": (r"[^/]{1,120}", d_service), "sides": (r"", d_sides), "elections": (r"", d_elections), "reading": (r"[0-9a-f]{24}", d_reading), "count": (elect.RACE.pattern, d_count), "race": (elect.RACE.pattern, d_race), "ballot": (elect.ELECTION.pattern, d_ballot), "following": (r"", d_following),
+    "product": (r"[a-z]{1,40}", d_product), "service": (r"[^/]{1,120}", d_service), "sides": (r"", d_sides), "elections": (r"", d_elections), "counties": (r"[SGP]-[A-Z]{2}", d_counties), "reading": (r"[0-9a-f]{24}", d_reading), "count": (elect.RACE.pattern, d_count), "race": (elect.RACE.pattern, d_race), "ballot": (elect.ELECTION.pattern, d_ballot), "following": (r"", d_following),
 }
 HOT, HOT_TTL = {}, 120  # ponytail: a plain dict, cleared when full, because one reader tapping around needs nothing cleverer
 
