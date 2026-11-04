@@ -12,7 +12,7 @@ SIDE = {LEFT: "l", LEAN_LEFT: "l", CENTER: "c", LEAN_RIGHT: "r", RIGHT: "r"}
 RATED = {
     **dict.fromkeys(("Daily Beast", "Democracy Now", "HuffPost", "MS NOW", "Mother Jones", "Salon", "Slate", "The Intercept", "The Nation", "Vox"), LEFT),
     **dict.fromkeys(("ABC News", "Al Jazeera", "Axios", "Bloomberg", "CBS News", "NBC News", "New York Times", "NPR", "Politico", "The Atlantic", "The Guardian", "Time"), LEAN_LEFT),
-    **dict.fromkeys(("BBC", "CNBC", "Christian Science Monitor", "Financial Times", "MarketWatch", "NewsNation", "PBS NewsHour", "The Hill"), CENTER),
+    **dict.fromkeys(("BBC", "CNBC", "Christian Science Monitor", "Financial Times", "MarketWatch", "NewsNation", "PBS NewsHour", "The Hill", "Wall Street Journal"), CENTER),
     **dict.fromkeys(("New York Post", "Reason", "The American Conservative", "The Dispatch", "The Free Press", "Washington Examiner", "Washington Times"), LEAN_RIGHT),
     **dict.fromkeys(("American Spectator", "Breitbart", "Daily Signal", "Daily Wire", "Fox News", "Free Beacon", "National Review", "The Blaze", "The Federalist"), RIGHT),
 }

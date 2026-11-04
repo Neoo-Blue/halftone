@@ -115,15 +115,18 @@ FEEDS = [
     ("world", "Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"), ("world", "New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"), ("world", "DW", "https://rss.dw.com/rdf/rss-en-all"),
     ("world", "France 24", "https://www.france24.com/en/rss"), ("world", "CBS News", "https://www.cbsnews.com/latest/rss/world"), ("world", "ABC News", "https://abcnews.go.com/abcnews/internationalheadlines"),
     ("world", "Sky News", "https://feeds.skynews.com/feeds/rss/world.xml"), ("world", "Euronews", "https://www.euronews.com/rss"), ("world", "SCMP", "https://www.scmp.com/rss/91/feed"),
+    ("world", "Wall Street Journal", "https://feeds.content.dowjones.io/public/rss/RSSWorldNews"),
     ("us", "New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/US.xml"), ("us", "NPR", "https://feeds.npr.org/1003/rss.xml"), ("us", "The Guardian", "https://www.theguardian.com/us-news/rss"),
     ("us", "Politico", "https://rss.politico.com/politics-news.xml"), ("us", "PBS NewsHour", "https://www.pbs.org/newshour/feeds/rss/headlines"), ("us", "CBS News", "https://www.cbsnews.com/latest/rss/us"),
-    ("us", "The Hill", "https://thehill.com/homenews/feed/"), ("us", "ABC News", "https://abcnews.go.com/abcnews/usheadlines"),
+    ("us", "The Hill", "https://thehill.com/homenews/feed/"), ("us", "ABC News", "https://abcnews.go.com/abcnews/usheadlines"), ("us", "Wall Street Journal", "https://feeds.content.dowjones.io/public/rss/RSSUSnews"),
     ("business", "BBC", "https://feeds.bbci.co.uk/news/business/rss.xml"), ("business", "CNBC", "https://www.cnbc.com/id/100003114/device/rss/rss.html"), ("business", "Bloomberg", "https://feeds.bloomberg.com/markets/news.rss"),
     ("business", "Financial Times", "https://www.ft.com/rss/home"), ("business", "New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"), ("business", "MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
+    ("business", "Wall Street Journal", "https://feeds.content.dowjones.io/public/rss/WSJcomUSBusiness"), ("business", "Wall Street Journal", "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain"),
     ("tech", "The Verge", "https://www.theverge.com/rss/index.xml"), ("tech", "Ars Technica", "https://feeds.arstechnica.com/arstechnica/index"), ("tech", "TechCrunch", "https://techcrunch.com/feed/"),
     ("tech", "Wired", "https://www.wired.com/feed/rss"), ("tech", "Engadget", "https://www.engadget.com/rss.xml"), ("tech", "The Register", "https://www.theregister.com/headlines.atom"),
     ("tech", "Hacker News", "https://hnrss.org/frontpage?points=100"), ("tech", "Techmeme", "https://www.techmeme.com/feed.xml"), ("tech", "404 Media", "https://www.404media.co/rss/"),
     ("tech", "BBC", "https://feeds.bbci.co.uk/news/technology/rss.xml"), ("tech", "New York Times", "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml"), ("tech", "The Next Web", "https://thenextweb.com/feed"),
+    ("tech", "Wall Street Journal", "https://feeds.content.dowjones.io/public/rss/RSSWSJD"),
     ("tech", "Lobsters", "https://lobste.rs/rss"),
     ("ai", "The Verge", "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"), ("ai", "Ars Technica", "https://arstechnica.com/ai/feed/"), ("ai", "TechCrunch", "https://techcrunch.com/category/artificial-intelligence/feed/"),
     ("ai", "MIT Technology Review", "https://www.technologyreview.com/topic/artificial-intelligence/feed"), ("ai", "OpenAI", "https://openai.com/news/rss.xml"), ("ai", "Google AI", "https://blog.google/technology/ai/rss/"),
@@ -1189,7 +1192,7 @@ def known_item(url):
 
 
 HOMES = {"ABC News": "US", "Al Jazeera": "Qatar", "BBC": "UK", "Bloomberg": "US", "CBS News": "US", "CNBC": "US", "DW": "Germany", "Euronews": "EU", "Financial Times": "UK", "France 24": "France", "MarketWatch": "US", "NPR": "US",
-         "New York Times": "US", "PBS NewsHour": "US", "Politico": "US", "SCMP": "Hong Kong", "Sky News": "UK", "The Guardian": "UK", "The Hill": "US"}  # where each outlet is based. A fact, not a rating of its slant
+         "New York Times": "US", "PBS NewsHour": "US", "Politico": "US", "SCMP": "Hong Kong", "Sky News": "UK", "The Guardian": "UK", "The Hill": "US", "Wall Street Journal": "US"}  # where each outlet is based. A fact, not a rating of its slant
 
 
 def coverage(outlets):
