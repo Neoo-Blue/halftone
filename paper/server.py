@@ -1302,7 +1302,6 @@ def reader(url):
         found = elsewhere(item, url, story)
         if found.get("words", 0) > story.get("words", 0) or not story.get("body"):
             story = {**story, **found, **({"author": None} if found else {})}  # the original's byline doesn't go over another outlet's words
-            story["title"] = story.get("title") or (found.get("via") or {}).get("t") or ""  # a refused page the paper never saw has no headline of its own
     if item:
         own = next(o for o in item["outlets"] if o["u"] == url)
         site = own["src"]
@@ -1310,6 +1309,7 @@ def reader(url):
         story.update({"title": story["title"] or own.get("t") or item["t"], "deck": story["deck"] or (item["sum"] if item["u"] == url else ""), "published": story["published"] or item["ts"], "site": site, "image": story["image"] or item["img"],
                       "also": [o for o in item["outlets"] if o["u"] != url], "spread": sorted(({**o, "side": sides.SIDE.get(sides.rated(o["src"], own_leans()))} for o in item["outlets"]), key=lambda o: o.get("ts") or 0), "homes": coverage(item["outlets"]),
                       "lean": item.get("lean") or sides.count(item["outlets"], own_leans()), "facing": sides.facing(item["outlets"], words, own_leans())})
+    story["title"] = story.get("title") or (story.get("via") or {}).get("t") or ""  # last: a refused page the paper never saw has no headline of its own
     if story.get("url"):
         note_read(story["url"], story.get("title"), story.get("site"))
     return {"kind": "read", **story, **beside(url, story.get("title")), "listen": speech()[0] if speech() else "browser", "voice": C("TTS_VOICE"), "saved": any(r["url"] == story.get("url") for r in shelf_view()["saved"])}

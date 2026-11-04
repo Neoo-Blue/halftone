@@ -425,3 +425,9 @@ s.known_item = lambda u: None
 s.elsewhere = lambda item, url, story: {"body": "<p>whole</p>", "words": 400, "via": {"src": "Yahoo Finance", "u": "https://y.example/1", "t": "AMD beats forecasts"}}
 assert s.reader("https://www.toms.example/amd-outsell-intel")["title"] == "AMD beats forecasts"
 s.read_page, s.known_item, s.elsewhere = _real_read, _real_known, _real_else
+# ...but a refused page the paper did see keeps its own headline, whatever its stand-in called the story
+s.read_page = lambda u, **k: (_ for _ in ()).throw(urllib.error.HTTPError(u, 403, "Forbidden", {}, None))
+s.known_item = lambda u: _item
+s.elsewhere = lambda item, url, story: {"body": "<p>whole</p>", "words": 651, "via": {"src": "Daily Wire", "u": "https://dw.example/1", "t": "JD Vance Pins Republican Midterm Losses On Iran War"}}
+assert s.reader("https://nyt.example/0")["title"].startswith("Vance, in Break")
+s.read_page, s.known_item, s.elsewhere = _real_read, _real_known, _real_else
