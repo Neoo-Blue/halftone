@@ -646,6 +646,15 @@ def picks(ranked, count):
     return out
 
 
+STORED = 500  # the newest stories kept for search and related reading
+
+
+def findable(stories):
+    """What the paper keeps of its stories: the newest, and every one more than one outlet carried however long since it
+    last moved. The front page ranks by reach, so a story it shows must still open with its sides and who carried it."""
+    return [c for i, c in enumerate(stories) if i < STORED or len(c["outlets"]) > 1]
+
+
 def news():
     feeds = FEEDS + [(f["desk"], f["name"], f["url"]) for f in C("EXTRA_FEEDS")]
     with ThreadPoolExecutor(8) as pool:
@@ -669,7 +678,7 @@ def news():
     used = {c["u"] for c in tops}  # a story leads one desk only
     also = [{"u": c["u"], "t": c["t"], "src": c["src"], "n": len(c["outlets"]), "ts": c["ts"], "lean": c["lean"]} for c in hard if c["u"] not in used][:16]
     tech = [c for c in ranked if set(c["desks"]) & set(TECH_DESKS) and c["u"] not in used]
-    return {"lead": lead, "tops": [t for t in tops if t is not lead], "also": also, "trending": trending(stories, now), "blind": unseen, "tech_lead": (picks(tech, 1) or [None])[0], "stories": stories[:500], "feeds": sum(s["ok"] for s in FEED_STATE.values()), "total": len(feeds), "outlets": len({f[1] for f in feeds})}
+    return {"lead": lead, "tops": [t for t in tops if t is not lead], "also": also, "trending": trending(stories, now), "blind": unseen, "tech_lead": (picks(tech, 1) or [None])[0], "stories": findable(stories), "feeds": sum(s["ok"] for s in FEED_STATE.values()), "total": len(feeds), "outlets": len({f[1] for f in feeds})}
 
 
 NOT_NAMES = set("january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday".split())

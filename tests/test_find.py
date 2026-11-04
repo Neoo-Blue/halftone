@@ -431,3 +431,7 @@ s.known_item = lambda u: _item
 s.elsewhere = lambda item, url, story: {"body": "<p>whole</p>", "words": 651, "via": {"src": "Daily Wire", "u": "https://dw.example/1", "t": "JD Vance Pins Republican Midterm Losses On Iran War"}}
 assert s.reader("https://nyt.example/0")["title"].startswith("Vance, in Break")
 s.read_page, s.known_item, s.elsewhere = _real_read, _real_known, _real_else
+
+# a story the front page shows for its reach stays findable after 500 newer ones, so the reader can draw its sides
+_many = [{"u": f"https://x.example/{n}", "outlets": [{}]} for n in range(600)] + [{"u": "https://pbs.example/el-sayed", "outlets": [{}, {}, {}]}]
+assert len(s.findable(_many)) == 501 and s.findable(_many)[-1]["u"] == "https://pbs.example/el-sayed"
