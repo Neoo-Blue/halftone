@@ -354,18 +354,32 @@ export function raceView(d) {
 }
 
 // A statewide race county by county, the biggest counts first. WARROOM reads one state at a time while votes are counted.
-async function countiesInto(root, key, all = false) {
-  const got = await fetch(`/api/detail/counties/${encodeURIComponent(key)}`, { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+let citiesOnce = null;  // each state's major cities and the counties holding them, from the Census Bureau's 2024 estimates
+const majorCities = () => (citiesOnce ||= fetch('/us-cities.json').then((r) => (r.ok ? r.json() : {})).catch(() => ((citiesOnce = null), {})));
+
+async function countiesInto(root, key, all = false, by = 'counties') {
+  const [got, cities] = await Promise.all([fetch(`/api/detail/counties/${encodeURIComponent(key)}`, { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).catch(() => null), majorCities()]);
   if (!root.isConnected) return;
+  const mine = cities[key.slice(2)] || [], byFips = Object.fromEntries(Object.values(got?.rows || {}).map((r) => [r.fips, r]));
   const votes = (r) => r.c.reduce((n, x) => n + (x.votes || 0), 0);
   const rows = Object.values(got?.rows || {}).filter((r) => votes(r) > 0).sort((a, b) => votes(b) - votes(a));
   if (!rows.length) { root.innerHTML = ''; return; }
-  const line = (r) => {
+  const said = (r) => {
     const [a, b] = r.c, lead = a && b ? Math.round((a.pct ?? 0) - (b.pct ?? 0)) : null;
-    return `<li><b>${esc(r.name)}</b><span>${a ? `${esc(String(a.name).split(' ').slice(-1)[0])}${lead != null ? ` by ${lead}` : ''}` : ''}, ${Math.round(r.reporting ?? 0)}% counted</span></li>`;
+    return `${a ? `${esc(String(a.name).split(' ').slice(-1)[0])}${lead != null ? ` by ${lead}` : ''}` : ''}, ${Math.round(r.reporting ?? 0)}% counted`;
   };
-  root.innerHTML = `<section class="el-part"><h3>By county</h3><ul class="plain el-count">${(all ? rows : rows.slice(0, 12)).map(line).join('')}</ul>${rows.length > 12 && !all ? `<button type="button" class="ghost text" data-all-counties>All ${rows.length} counties</button>` : ''}<p class="small">Read ${got.fetched ? ago(got.fetched) : 'recently'}: WARROOM reads one state's counties at a time while votes are counted.</p></section>`;
-  $('[data-all-counties]', root)?.addEventListener('click', () => countiesInto(root, key, true));
+  const line = (r) => `<li><b>${esc(r.name)}</b><span>${said(r)}</span></li>`;
+  const city = (c) => {
+    const home = byFips[c.co[0]?.[0]], more = c.co.slice(1).map(([f]) => byFips[f]?.name).filter(Boolean);
+    return home ? `<li><b>${esc(c.n)}</b><span>${said(home)} · ${esc(home.name)}${more.length ? ` with ${esc(more.join(', '))}` : ''}</span></li>` : `<li><b>${esc(c.n)}</b><span>Its county has no count yet</span></li>`;
+  };
+  const tabs = mine.length ? `<div class="seg" role="group" aria-label="Results by">${[['counties', 'Counties'], ['cities', 'Major cities']].map(([v, l]) => `<button type="button" data-by="${v}" aria-pressed="${by === v}">${l}</button>`).join('')}</div>` : '';
+  const list = by === 'cities' && mine.length
+    ? `<ul class="plain el-count">${mine.map(city).join('')}</ul><p class="small">Counted by county: a city shows the county holding most of its people.</p>`
+    : `<ul class="plain el-count">${(all ? rows : rows.slice(0, 12)).map(line).join('')}</ul>${rows.length > 12 && !all ? `<button type="button" class="ghost text" data-all-counties>All ${rows.length} counties</button>` : ''}`;
+  root.innerHTML = `<section class="el-part"><h3>By county</h3>${tabs}${list}<p class="small">Read ${got.fetched ? ago(got.fetched) : 'recently'}: WARROOM reads statewide races' counties while votes are counted.</p></section>`;
+  $('[data-all-counties]', root)?.addEventListener('click', () => countiesInto(root, key, true, by));
+  root.querySelectorAll('[data-by]').forEach((b) => b.addEventListener('click', () => countiesInto(root, key, all, b.dataset.by)));
 }
 
 export function fillRace(d) {

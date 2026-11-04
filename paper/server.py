@@ -3392,10 +3392,10 @@ def d_counties(key):
     """A Senate, governor or presidential race county by county, by name, which is how the paper's own county shapes are keyed."""
     d = war_open(f"/elections/us/races/{key}/counties", timeout=20)
     rows = {}
-    for c in (d.get("counties") or {}).values():
+    for fips, c in (d.get("counties") or {}).items():
         cands = [{"name": plain(x.get("name"), 60), "party": plain(x.get("party"), 30), "pct": x.get("percent"), "votes": x.get("votes")} for x in c.get("candidates") or [] if isinstance(x, dict)][:3]
         if cands and county_name(c.get("name")):
-            rows[county_name(c["name"])] = {"name": plain(c.get("name"), 60), "reporting": c.get("reporting"), "c": cands}
+            rows[county_name(c["name"])] = {"name": plain(c.get("name"), 60), "fips": str(fips)[:5], "reporting": c.get("reporting"), "c": cands}
     return {"kind": "counties", "key": key, "fetched": d.get("fetched"), "rows": rows}
 
 

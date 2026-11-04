@@ -401,5 +401,5 @@ assert s.county_name("Fairfax") != s.county_name("Fairfax City"), "a county and 
 _real_war = s.war_open
 s.war_open = lambda path, timeout=30: {"fetched": 7, "counties": {"13089": {"name": "DeKalb", "reporting": 61, "candidates": [{"name": "Jon Ossoff", "party": "Democratic", "votes": 900, "percent": 81.2}, {"name": "Mike Collins", "party": "Republican", "votes": 200, "percent": 18.8}]}, "x": {"name": "", "candidates": []}}}
 _cos = s.d_counties("S-GA")
-assert _cos["fetched"] == 7 and list(_cos["rows"]) == ["dekalb"] and _cos["rows"]["dekalb"]["c"][0]["pct"] == 81.2, _cos
+assert _cos["fetched"] == 7 and list(_cos["rows"]) == ["dekalb"] and _cos["rows"]["dekalb"]["c"][0]["pct"] == 81.2 and _cos["rows"]["dekalb"]["fips"] == "13089", _cos
 s.war_open = _real_war
