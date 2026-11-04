@@ -381,7 +381,7 @@ async function readWithService(button) {
   audio.src = URL.createObjectURL(new Blob([Uint8Array.from(atob('UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='), (c) => c.charCodeAt(0))], { type: 'audio/wav' }));
   audio.play().catch(() => {});  // while the tap still counts, so a phone lets the real audio play
   const piece = async (part) => {
-    const r = await fetch('/api/listen', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify(button.dataset.today ? { today: true, part } : { url: button.dataset.url, part }) });
+    const r = await fetch('/api/listen', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-paper': '1' }, body: JSON.stringify(button.dataset.today ? { today: true, part } : { url: button.dataset.read || button.dataset.url, part }) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'no audio');
     return { blob: await r.blob(), parts: Number(r.headers.get('x-parts')) };
   };
@@ -616,11 +616,13 @@ const VIEWS = {
   },
 
   read(d) {
-    const none = d.why === 'not a public page' ? 'The paper only opens public web pages.' : d.why ? 'That site did not answer.' : `${d.site} would not share the full story with the paper.`;
+    const lost = { refused: 'turned the paper away', paid: 'keeps this story for its subscribers', 'no answer': "didn't answer" }[d.why] || 'sent its page without the story in it';
+    const none = d.why === 'not a public page' ? 'The paper only opens public web pages.' : `${d.site} ${lost}${d.also?.length ? ', and no other outlet carrying it would share it either' : ''}.`;
+    const via = d.via ? `<p class="small read-via">${esc(d.site)} ${esc(lost)}, so this is how <a href="${esc(reading(d.via.u))}">${esc(d.via.src)}</a> reported it.</p>` : d.held ? `<p class="small read-via">That's as much as ${esc(d.site)} shows. It keeps the rest for its subscribers.</p>` : '';
     return {
       head: d.title || d.site, deck: d.deck, meta: [d.site, d.author, d.published ? stamp(d.published) : '', d.words ? `${Math.max(1, Math.round(d.words / 230))} min read` : ''].filter(Boolean).join(', '),
       side: `${d.homes?.length ? `<p class="small">Carried in ${esc(d.homes.map(([home, n]) => `${home} ${n}`).join(', '))}.${d.homes.length === 1 && d.homes[0][1] > 2 ? ` So far only ${esc(d.homes[0][0])} outlets.` : ''}</p>` : ''}${spread(d.spread)}${rail('On the same subject', d.related)}${rail('Top stories', d.top)}`,
-      body: d.body ? `<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${d.listen !== 'browser' || 'speechSynthesis' in window ? `<button type="button" class="ghost text" data-listen="${esc(d.listen)}" data-voice="${esc(d.voice || '')}" data-url="${esc(d.url)}" aria-pressed="false">Listen</button>` : ''}</div>${coverageBlock(d)}${storyBody(d, photograph(d.image))}` : `${photograph(d.image)}<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
+      body: d.body ? `${via}<div class="story-tools"><button type="button" class="ghost text" data-save="${esc(d.url)}" data-title="${esc(d.title || d.site)}" data-site="${esc(d.site)}" aria-pressed="${!!d.saved}">${d.saved ? 'Saved' : 'Save'}</button>${d.listen !== 'browser' || 'speechSynthesis' in window ? `<button type="button" class="ghost text" data-listen="${esc(d.listen)}" data-voice="${esc(d.voice || '')}" data-url="${esc(d.url)}" data-read="${esc(d.via?.u || d.url)}" aria-pressed="false">Listen</button>` : ''}</div>${coverageBlock(d)}${storyBody(d, photograph(d.image))}` : `${photograph(d.image)}<p class="empty">${esc(none)}</p>${d.url ? `<p class="source">Original at <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.site)}</a></p>` : ''}`,
     };
   },
 
@@ -831,7 +833,7 @@ export async function route() {
   mountLocator();
   mountStage(v);
   mountArc();
-  dockStory(m.kind === 'read' && body.body ? body.url : null);
+  dockStory(m.kind === 'read' && body.body ? body.via?.u || body.url : null);  // Ask reads what's on screen, a stand-in's words included
   phonePage(m.kind);
   if (m.kind === 'read' && body.lean && body.spread?.length >= 3) fillTakes(body.url);
   if (m.kind === 'topic') fillFind(body);

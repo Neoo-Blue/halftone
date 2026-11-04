@@ -41,7 +41,7 @@ To look around first, with no Docker and no setup, run `python3 tools/demo.py` a
 
 ## Every story in its own way
 
-Stories open inside the paper, in a clean reader. A cyclone draws its track across a map you can scrub through time, with its wind swath, forecast path and the people in its way. An earthquake's shaking spreads from the epicentre. A conflict plays back report by report, and a story shows which outlets carried it and when, and what each one led with. Every map has real place names, and on a wider screen a small world in the corner, so you always know where you are.
+Stories open inside the paper, in a clean reader. When a publisher turns the paper away or keeps a story for its subscribers, the reader says so and shows how another outlet reported the same story, named, so you always know whose words you're reading. It never gets around a paywall: what a page says is for subscribers stays out. Every other page is read twice, the second time trusting nothing in the site's markup, so a story the first read missed or cut short is caught. When the story is plainly on the page and neither read finds it, an AI connected to the paper says which passages are the article. It answers with passage numbers only, so every word you read is still the publisher's. A cyclone draws its track across a map you can scrub through time, with its wind swath, forecast path and the people in its way. An earthquake's shaking spreads from the epicentre. A conflict plays back report by report, and a story shows which outlets carried it and when, and what each one led with. Every map has real place names, and on a wider screen a small world in the corner, so you always know where you are.
 
 ![A made-up cyclone's track, wind swath and forecast](docs/img/scene.png)
 
