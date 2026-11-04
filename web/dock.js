@@ -1,17 +1,48 @@
 // The Ask button. It grows out of its own corner into the panel, so the page stays where it is and you can read beside it.
 import { $, askPaper } from '/lib.js';
 
-const dock = $('#dock'), button = $('#dock-btn'), panel = $('#dock-panel'), form = $('#dock-form'), box = $('#dock-q'), go = $('#dock-go'), log = $('#dock-log'), tries = $('#dock-try');
+const dock = $('#dock'), button = $('#dock-btn'), panel = $('#dock-panel'), form = $('#dock-form'), box = $('#dock-q'), go = $('#dock-go'), log = $('#dock-log'), tries = $('#dock-try'), pin = $('#dock-side');
 let asked = false, story = null, front = [];
-const touch = matchMedia('(pointer: coarse)');
+const touch = matchMedia('(pointer: coarse)'), roomy = matchMedia('(min-width: 1100px) and (pointer: fine)');
+let beside = false;  // a choice for this screen, kept in this browser
+try {
+  beside = localStorage.getItem('ask-beside') === '1';
+} catch { /* private windows can't keep it, and the panel just floats */ }
+
+// Beside the page, the panel takes the right of the window and the page narrows to sit next to it, rather than under it.
+function place() {
+  const on = beside && roomy.matches && dock.classList.contains('open');
+  if (on === dock.classList.contains('side')) return;
+  dock.classList.toggle('side', on);
+  document.body.classList.toggle('ask-beside', on);
+  requestAnimationFrame(() => dispatchEvent(new Event('resize')));  // maps and charts redraw at the page's new width
+}
 
 function open(on) {
   dock.style.setProperty('--pill-w', `${button.offsetWidth}px`);
   panel.inert = !on;
   dock.classList.toggle('open', on);
   button.setAttribute('aria-expanded', String(on));
+  place();
   (on ? (touch.matches ? panel : box) : button).focus({ preventScroll: true });  // on a phone the keyboard would cover the suggestions
 }
+
+const label = () => {
+  pin.setAttribute('aria-pressed', String(beside));
+  pin.title = beside ? 'Float it over the page' : 'Keep it beside the page';
+  pin.setAttribute('aria-label', pin.title);
+};
+label();
+pin.addEventListener('click', () => {
+  beside = !beside;
+  label();
+  try {
+    localStorage.setItem('ask-beside', beside ? '1' : '0');
+  } catch { /* kept for this visit only */ }
+  place();
+  box.focus({ preventScroll: true });
+});
+roomy.addEventListener('change', place);
 
 async function ask(question) {
   tries.hidden = true;

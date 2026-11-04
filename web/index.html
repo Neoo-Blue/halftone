@@ -216,7 +216,10 @@
   <div class="dock-panel" id="dock-panel" inert>
     <header class="dock-head">
       <h2>Ask the paper</h2>
-      <button type="button" class="ghost" id="dock-close" aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg></button>
+      <span class="dock-tools">
+        <button type="button" class="ghost" id="dock-side" aria-pressed="false" aria-label="Keep it beside the page" title="Keep it beside the page"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.6"/><path d="M9.6 2.8v10.4"/></svg></button>
+        <button type="button" class="ghost" id="dock-close" aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg></button>
+      </span>
     </header>
     <div class="dock-body">
       <p class="dock-lead">It has read today's edition and everything you've connected. It can answer, and it can't do anything else.</p>

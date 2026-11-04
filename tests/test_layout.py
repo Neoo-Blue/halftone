@@ -316,7 +316,14 @@ big = {"t": "Arch", "outlets": [{"src": "A", "u": "https://a.example/1", "ts": 1
 assert s.judge_story(big)["contested"] and s.judge_story(big)["contested"] and len(asked) == 1, "one question a story"
 assert s.judge_story({**big, "outlets": [*big["outlets"][:2], {"src": "C", "u": "https://c.example/rotated", "ts": 3}]})["contested"] and len(asked) == 1, "and a feed that changes its links doesn't make it a new one"
 s.judge_story({**big, "outlets": [*big["outlets"], {"src": "D", "u": "https://d.example/1", "ts": 4}]})
-assert len(asked) == 2, "a new outlet does"
+assert len(asked) == 1, "nor does one more outlet: on election night that spent the day's questions by evening"
+grown = {**big, "outlets": [*big["outlets"], *({"src": x, "u": f"https://{x.lower()}.example/1", "ts": 4} for x in "DE")]}
+s.judge_story(grown)
+assert len(asked) == 1, "half as many outlets again, but within the hour"
+with s.db() as c:
+    c.execute("UPDATE takes SET ts = ts - 3700")
+s.judge_story(grown)
+assert len(asked) == 2, "half as many outlets again, an hour on, is a new question"
 
 
 def raises(kind, fn, *args):
@@ -338,12 +345,20 @@ assert raises(OSError, s.judge_story, broken) and s.judge_story(broken) == {} an
 with s.db() as c:
     c.execute("UPDATE takes SET ts = ts - 3700 WHERE json = '{}'")
 assert raises(OSError, s.judge_story, broken) and len(asked) == 4, "and then tried again"
-with s.db() as c:
-    c.executemany("INSERT INTO takes VALUES (?, 'null', ?)", [(f"full{i}", int(time.time())) for i in range(s.TAKES_DAILY)])
 s.ai.ask = lambda *a, **k: asked.append(1) or fake
-assert raises(OverflowError, s.judge_story, {**big, "t": "Tower", "outlets": [{**o, "u": o["u"] + "t"} for o in big["outlets"]]}) and len(asked) == 4, "the two cases can't spend what Ask needs"
+tower = {**big, "t": "Tower", "outlets": [{**o, "u": o["u"] + "t"} for o in big["outlets"]]}
 with s.db() as c:
-    c.execute("DELETE FROM takes WHERE id LIKE 'full%'")
+    c.execute("INSERT OR REPLACE INTO meta VALUES ('finds:takes', ?)", (json.dumps({"day": s.utc_day(), "n": s.TAKES_DAILY // 2}),))
+assert raises(OverflowError, s.judge_story, tower, True) and len(asked) == 4, "the front page's own asking stops at half the day's questions"
+assert s.judge_story(tower)["contested"] and len(asked) == 5, "so a story someone opens still has its own"
+with s.db() as c:
+    c.execute("INSERT OR REPLACE INTO meta VALUES ('finds:takes', ?)", (json.dumps({"day": s.utc_day(), "n": s.TAKES_DAILY}),))
+assert raises(OverflowError, s.judge_story, {**tower, "t": "Spire", "outlets": [{**o, "u": o["u"] + "s"} for o in big["outlets"]]}) and len(asked) == 5, "the two cases can't spend what Ask needs"
+with s.db() as c:
+    c.execute("UPDATE takes SET ts = ts - 3700")
+assert s.judge_story({**tower, "outlets": [*tower["outlets"], *({"src": x, "u": f"https://{x.lower()}.example/t", "ts": 9} for x in "DEFG")]})["contested"] and len(asked) == 5, "and when there are none left, an older answer stands"
+with s.db() as c:
+    c.execute("DELETE FROM meta WHERE k = 'finds:takes'")
 s.ai.ask, s.read_page, s.spend_ai = real_ask, real_read, real_spend
 real_war = s.war
 for odd in (["x"], None, {"tally": "no"}, {}):

@@ -905,12 +905,15 @@ class Reader(HTMLParser):
                 self.open_block("p", loose=True)
             if self.cur is None:
                 return
-            if tag == "br":
+            if tag == "br" or (tag == "span" and "br" in (a.get("class") or "").split()):  # the Times of India breaks lines with an empty <span class="br">
                 if self.cur.get("loose"):
                     self.close_block()
                 else:
                     self.cur["html"].append("<br>")
                     self.cur["text"].append(" ")
+            elif tag in self.BOX:  # a box inside a paragraph still parts the words either side of it
+                self.cur["html"].append(" ")
+                self.cur["text"].append(" ")
             elif tag == "a" or tag in self.INLINE:
                 name = "a" if tag == "a" else self.INLINE[tag]
                 self.cur["html"].append(open_link(a.get("href"), self.base) if tag == "a" else f"<{name}>")
@@ -1385,26 +1388,38 @@ def clean_takes(reply, outlets):
             "stances": stances if contested else {}, "n": len(outlets)}
 
 
-def claim_takes(key):
-    """The answer if there is one, or None and the turn to ask. A try is written down first, so a failing provider costs one question an hour, and a story can't be asked about twice at once."""
+TAKES_GROWTH = 1.5  # how much a story's coverage must grow before its cases are set out again
+
+
+def claim_takes(key, n, background=False):
+    """The answer if there is one, or None and the turn to ask. A try is written down first, so a failing provider costs
+    one question an hour, and a story can't be asked about twice at once. A story is asked again only once half as many
+    outlets again carry it, and not within the hour: on election night every top story gained an outlet each hour, and
+    asking each time spent the day's questions before anyone opened one. The front page's own asking stops at half of
+    them, so a story you open always has some, and an older answer stands when there are none left."""
     now = int(time.time())
     with db() as c:
         c.execute("BEGIN IMMEDIATE")
         row = c.execute("SELECT json, ts FROM takes WHERE id = ?", (key,)).fetchone()
-        if row and (row["json"] != "{}" or now - row["ts"] < 3600):
-            return json.loads(row["json"])
-        if c.execute("SELECT COUNT(*) n FROM takes WHERE ts > ?", (now - 86400,)).fetchone()["n"] >= TAKES_DAILY:
+        held = json.loads(row["json"]) if row else None
+        if row and (now - row["ts"] < 3600 or (held and n < TAKES_GROWTH * (held.get("n") or 0))):
+            return held
+        used = int(saved_in(c, "finds:takes", now) or 0)
+        if used >= (TAKES_DAILY // 2 if background else TAKES_DAILY):
+            if held:
+                return held
             raise OverflowError("daily limit")
-        c.execute("INSERT OR REPLACE INTO takes VALUES (?, '{}', ?)", (key, now))
+        c.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", ("finds:takes", json.dumps({"day": utc_day(), "n": used + 1})))
+        c.execute("INSERT OR REPLACE INTO takes VALUES (?, ?, ?)", (key, row["json"] if row else "{}", now))  # an older answer stands if this try fails
     return None
 
 
-def judge_story(item):
-    """One cheap question per story, asked again only when new outlets join. A text that won't open just leaves that outlet's headline to go on."""
+def judge_story(item, background=False):
+    """One cheap question per story, asked again only when its coverage has grown. A text that won't open just leaves that outlet's headline to go on."""
     outlets = sorted(item["outlets"], key=lambda o: (sides.rated(o["src"], own_leans()) is None, o.get("ts") or 0))[:TAKES_MOST]
     oldest = min(item["outlets"], key=lambda o: o.get("ts") or 0)
-    key = hashlib.sha256("\n".join([oldest["u"], *sorted(o["src"] for o in item["outlets"])]).encode()).hexdigest()  # names, not addresses: a feed that changes its links isn't news
-    known = claim_takes(key)
+    key = hashlib.sha256(oldest["u"].encode()).hexdigest()  # the story itself: who joins it later is how much it has grown
+    known = claim_takes(key, len(outlets), background)
     if known is not None:
         return known
 
@@ -1445,7 +1460,7 @@ def takes_run():
     for story in [data.get("lead"), *(data.get("tops") or [])]:
         if story and len(story.get("outlets") or []) >= 3:
             try:
-                t = judge_story(story)
+                t = judge_story(story, background=True)
             except (OverflowError, OSError, ValueError, KeyError, TypeError, http.client.HTTPException):
                 continue
             if t.get("contested"):

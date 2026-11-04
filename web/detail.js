@@ -237,12 +237,21 @@ function facts(rows) {
 // WARROOM's analysts cite events as [hex id]; here each becomes a numbered link to that story.
 function cited(text) {
   const seen = [];
-  return esc(text).replace(/\s*\[([0-9a-f]{24,40})\]/g, (_, id) => {
+  const ref = (id) => {
     if (!seen.includes(id)) seen.push(id);
     return `<a class="ref" href="/world/event/${id}" aria-label="Source ${seen.indexOf(id) + 1}">${seen.indexOf(id) + 1}</a>`;
-  });
+  };
+  // a note cites one source as [id] and several as [id, id, id]
+  return esc(text).replace(/\s*\[((?:[0-9a-f]{24,40}[\s,;]*)+)\]/g, (_, ids) => ids.match(/[0-9a-f]{24,40}/g).map(ref).join(''));
 }
 const LABELS = { OBSERVED: '', ASSESSED: 'Judgement: ', UNVERIFIED: 'Not confirmed: ' };
+const nation = (code) => {  // KR is South Korea; a name already spelled out stays as it is
+  try {
+    return code ? new Intl.DisplayNames(['en'], { type: 'region' }).of(code) : '';
+  } catch {
+    return code;
+  }
+};
 const bullet = (b) => (typeof b === 'string' ? b : b.text || '').replace(/^(OBSERVED|ASSESSED|UNVERIFIED):\s*/, (_, k) => LABELS[k]).replace(/^\[(high|medium|low)\]\s*/i, '').replace(/\s*\((up|down|flat)[^)]*confidence[^)]*\)/gi, '');  // the analyst's working, not the reader's
 const worked = (n) => `<h3>${esc(n.headline)}</h3>${n.body ? `<p>${cited(n.body)}</p>` : ''}${n.bullets?.length ? `<ul>${n.bullets.map((b) => `<li>${cited(bullet(b))}</li>`).join('')}</ul>` : ''}`;
 const told = (r) => `<h3>${esc(r.head)}</h3><p class="intel-lead">${esc(r.what)}</p><p><b>Why it matters.</b> ${esc(r.why)}</p><p><b>What to watch.</b> ${esc(r.watch)}</p>${r.doubt ? '<p class="intel-doubt">Part of the note this comes from is marked as not confirmed.</p>' : ''}<small>Written by AI from the analyst's note below. It can be wrong.</small>`;
@@ -355,20 +364,24 @@ const explain = Object.assign(document.createElement('button'), { type: 'button'
 let chosen = '';
 document.body.append(explain);
 const coarse = matchMedia('(pointer: coarse)');
+const QUOTED = 600;  // characters of a long selection that go into the question: past that it's cut short, never the button taken away
 document.addEventListener('selectionchange', () => {
-  const sel = getSelection(), text = sel.toString().trim();
+  const sel = getSelection(), text = sel.toString().trim().replace(/\s+/g, ' ');
   const inside = sel.rangeCount && $('.page-body', sheet())?.contains(sel.anchorNode) && !$('#dock').hidden;
-  explain.hidden = !inside || text.length < 2 || text.length > 120;
+  explain.hidden = !inside || text.length < 2;
   if (explain.hidden) return;
-  chosen = text;
-  const box = sel.getRangeAt(0).getBoundingClientRect();
-  explain.style.left = `${Math.min(innerWidth - 96, Math.max(12, box.left + box.width / 2 - 42))}px`;
+  chosen = text.length > QUOTED ? `${text.slice(0, QUOTED)}\u2026` : text;
+  explain.textContent = chosen.split(' ').length > 6 ? 'Explain this' : 'Explain';  // a passage, rather than a word or a name
+  const box = sel.getRangeAt(0).getBoundingClientRect(), wide = explain.offsetWidth;
+  explain.style.left = `${Math.min(innerWidth - wide - 12, Math.max(12, box.left + box.width / 2 - wide / 2))}px`;
   explain.style.top = `${coarse.matches ? box.bottom + 14 : Math.max(60, box.top - 46)}px`;  // a phone puts its own menu above a selection
 });
 explain.addEventListener('pointerdown', (e) => e.preventDefault());  // or the tap clears the selection first
 explain.addEventListener('click', () => {
   explain.hidden = true;
-  askDock(`In this story, what does "${chosen}" mean? Explain it simply. If it's a price or a measure, give it in US terms too.`);
+  askDock(chosen.split(' ').length > 6
+    ? `In this story, explain this passage simply: what's behind it, and why it matters. "${chosen}"`
+    : `In this story, what does "${chosen}" mean? Explain it simply. If it is a price or a measurement, add its US equivalent; otherwise say nothing about units.`);
 });
 
 async function readWithService(button) {
@@ -453,7 +466,8 @@ const VIEWS = {
   }),
 
   event(d) {
-    const place = [...new Set([d.place, d.admin1].filter(Boolean).flatMap((x) => x.split(', ')).filter((x) => !/^[A-Z]{2}\d*$/.test(x)))].join(', ') || d.country;
+    const region = d.country && d.country !== 'US' ? nation(d.country) : d.admin1;  // abroad, a reader knows the country, not a province's romanized name
+    const place = [...new Set([d.place, region].filter(Boolean).flatMap((x) => x.split(', ')).filter((x) => !/^[A-Z]{2}\d*$/.test(x)))].join(', ') || nation(d.country);
     const side = `${facts([['Kind', title(d.category)], ['Place', place], ['When', stamp(d.ts)], ['Who', d.actors.join(', ')], ['Fatalities', d.fatalities], ['Severity', d.severity != null ? `${Math.round(d.severity * 100)} of 100` : ''], ['Confidence', d.confidence != null ? `${Math.round(d.confidence * 100)}%` : ''], ['Reported by', (d.who?.voices || []).slice(0, 3).map((v) => v.name).join(', ')]])}
       ${d.lat == null ? '' : onGlobe(d.lat, d.lon)}
       ${d.theater && d.theater !== 'global' ? `<p class="to"><a href="/world/theater/${esc(d.theater)}">This conflict</a></p>` : ''}
@@ -461,7 +475,7 @@ const VIEWS = {
       ${d.sources.length ? `<h3>Sources</h3><ul class="plain">${d.sources.map((s) => `<li><a href="${reading(s.url)}">${esc(s.title || s.publisher || s.url)}</a>${s.title ? `<time>${esc(s.publisher)}</time>` : ''}</li>`).join('')}</ul>` : ''}
       ${d.nearby.length ? `<h3>Nearby in the last three days</h3>${stories(d.nearby)}` : ''}${rail('On the same subject', d.related)}${rail('Top stories', d.top)}`;
     const long = (d.summary || '').length > 220;
-    const body = `${long ? `<div class="page-body"><p>${esc(d.summary)}</p></div>` : ''}${d.note ? notes([d.note]) : ''}
+    const body = `${long ? `<div class="page-body"><p>${esc(d.summary)}</p></div>` : ''}${d.note ? `<div class="event-note">${notes([d.note])}</div>` : ''}
       ${d.story ? storyBody(d.story) : d.note && !d.sources.length ? '' : `<p class="empty">${d.sources.length ? 'The publisher would not share the full story with the paper. The sources alongside may have more.' : 'WARROOM has no article for this event, only the report itself.'}</p>`}`;
     return {
       scene: d.lat != null ? reportScene(uniqueReports([...(d.nearby || []), ...around(d.lat, d.lon)]), [d.lat, d.lon], `Where this happened, and what else was reported nearby`) : null, head: (d.title || '').length > 140 ? `${d.title.slice(0, 137).replace(/\s+\S*$/, '')}...` : d.title, deck: `${whoLine(d.who) ? `${whoLine(d.who)}. ` : ''}${long ? '' : d.summary || ''}`, meta: [place, ago(d.ts)].filter(Boolean).join(', '), body, side, locate: [d.lat, d.lon] };

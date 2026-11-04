@@ -435,3 +435,8 @@ s.read_page, s.known_item, s.elsewhere = _real_read, _real_known, _real_else
 # a story the front page shows for its reach stays findable after 500 newer ones, so the reader can draw its sides
 _many = [{"u": f"https://x.example/{n}", "outlets": [{}]} for n in range(600)] + [{"u": "https://pbs.example/el-sayed", "outlets": [{}, {}, {}]}]
 assert len(s.findable(_many)) == 501 and s.findable(_many)[-1]["u"] == "https://pbs.example/el-sayed"
+
+# the Times of India breaks its lines with an empty <span class="br">, and a box inside a paragraph parts its words too
+import re  # noqa: E402
+_got = s.extract('<html><body><article><p>' + "Hackers stole more than six billion dollars, in what appeared to be the largest heist on record." + '<span class="id-r-component br" data-pos="15"></span>The FBI later named the group responsible for it, and its earlier hacks too.<div class="spacer"></div>Officials said more would follow.</p>' + _para(1) + _para(2) + '</article></body></html>', "https://x.example/toi")
+assert "record.<br>The FBI" in _got["body"] and "too. Officials" in re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", _got["body"])) and "record.The" not in _got["body"], _got["body"][:300]
