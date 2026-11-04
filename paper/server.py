@@ -985,9 +985,11 @@ AD_LINE = re.compile(r"sponsored content|taboola|outbrain|list \d+ of \d+|^adver
 
 
 def link_only(block):
-    """A line that is nothing but one link is a teaser for another story, not this one."""
+    """A line that is nothing but links is a teaser for another story, or a byline (PBS prints its byline's link twice),
+    not this story. Every <a> the reader keeps is closed, so the pattern can't run on past its own link."""
     text = block["html"].strip()
-    return text.startswith("<a ") and text.endswith("</a>") and text.count("<a ") == 1
+    rest = re.sub(r"<[^<>]*>", "", re.sub(r"<a\b[^>]*>.*?</a>", "", text, flags=re.S))
+    return text.startswith("<a") and not rest.strip(" \n\t,.|/-\u00b7\u2022\u2013\u2014")
 
 
 def story_blocks(pool, deck):
@@ -1244,7 +1246,7 @@ def first_full(outlets):
     got = waited({o["u"]: (lambda o=o: read_page(o["u"])) for o in outlets}) if outlets else {}
     whole = [(o, got[o["u"]]) for o in outlets if (got.get(o["u"]) or {}).get("body") and not got[o["u"]].get("held")]
     for o, page in sorted(whole, key=lambda x: ((x[1].get("words") or 0) < REPORT, bool(LIVE.search(x[0]["u"]))))[:1]:  # stable: closest first within each
-        return {"body": page["body"], "words": page.get("words") or 0, "via": {"src": o["src"], "u": o["u"]}}
+        return {"body": page["body"], "words": page.get("words") or 0, "via": {"src": o["src"], "u": o["u"], "t": page.get("title") or ""}}
     return {}
 
 
@@ -1300,6 +1302,7 @@ def reader(url):
         found = elsewhere(item, url, story)
         if found.get("words", 0) > story.get("words", 0) or not story.get("body"):
             story = {**story, **found, **({"author": None} if found else {})}  # the original's byline doesn't go over another outlet's words
+            story["title"] = story.get("title") or (found.get("via") or {}).get("t") or ""  # a refused page the paper never saw has no headline of its own
     if item:
         own = next(o for o in item["outlets"] if o["u"] == url)
         site = own["src"]

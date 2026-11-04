@@ -221,7 +221,7 @@ _pages = {"https://a.example/1": {"body": ""}, "https://b.example/2": {"body": "
 s.read_page = lambda u, **k: _pages[u] if u in _pages else (_ for _ in ()).throw(OSError("403"))
 _item = {"outlets": [{"u": "https://nyt.example/0", "src": "New York Times"}, {"u": "https://a.example/1", "src": "A"}, {"u": "https://b.example/2", "src": "The Guardian"}]}
 _from = s.elsewhere(_item, "https://nyt.example/0", {})
-assert _from["via"] == {"src": "The Guardian", "u": "https://b.example/2"} and _from["body"].startswith("<p>Vice"), _from
+assert {k: _from["via"][k] for k in ("src", "u")} == {"src": "The Guardian", "u": "https://b.example/2"} and _from["body"].startswith("<p>Vice"), _from
 assert "image" not in _from, "the original's picture stays"
 
 # nobody the paper saw has it: the same story further out, never from the publisher that refused, never an unrelated one
@@ -234,7 +234,7 @@ find.news = lambda q, at, most=8: _searched.append(q) or [{"t": "Vance distances
 s.spend_find = lambda kind: None
 _lone = {"t": "Vance distances himself from the administration", "outlets": [{"u": "https://www.nyt.example/0", "src": "New York Times"}], "ts": time.time()}
 _from = s.elsewhere(_lone, "https://www.nyt.example/0", {})
-assert _from["via"] == {"src": "c.example", "u": "https://c.example/3"}, _from
+assert {k: _from["via"][k] for k in ("src", "u")} == {"src": "c.example", "u": "https://c.example/3"}, _from
 assert s.elsewhere(_lone, "https://www.nyt.example/0", {})["via"]["u"] == "https://c.example/3" and len(_searched) == 1, "an hour's search is kept"
 assert s.slug_words("https://www.nytimes.com/2026/11/04/us/politics/vance-ohio-recount.html") == "vance ohio recount" and s.slug_words("https://x.example/a/12345") == ""
 find.news, s.spend_find, s.read_page = _real_news, _real_spend_find, _real_read
@@ -414,3 +414,14 @@ find.news, s.spend_find, s.read_page, s.known_item = _real_news, _real_spend_fin
 _ld = '<script type="application/ld+json">{"articleBody": "<p>First&nbsp;part of the story.</p>' + "More of the story follows here. " * 20 + '"}</script>'
 _got = s.extract(f"<html><body>{_ld}</body></html>", "https://x.example/ent")
 assert "&amp;nbsp;" not in _got["body"] and "&lt;p&gt;" not in _got["body"] and "First part of the story." in _got["body"].replace("\xa0", " "), _got["body"][:200]
+# a line that is nothing but links is a byline or a teaser: PBS prints its byline's link twice
+_byline = '<p><a href="/author/ap">Associated Press</a>\n <a href="/author/ap">Associated Press</a></p>'
+_got = s.extract(f"<html><body><article>{_byline}<p>{_long}</p>{_para(1)}{_para(2)}</article></body></html>", "https://x.example/pbs")
+assert "Associated Press" not in _got["body"] and "Paragraph 2" in _got["body"], _got["body"][:200]
+assert not s.link_only({"html": 'Read more: <a href="/x">this</a>'}) and s.link_only({"html": '<a href="/x">One</a>, <a href="/y">Two</a>'})
+# a refused page the paper never saw takes its stand-in's headline
+s.read_page = lambda u, **k: (_ for _ in ()).throw(urllib.error.HTTPError(u, 403, "Forbidden", {}, None)) if "toms" in u else {"body": "<p>" + _long + "</p>", "words": 400, "title": "AMD beats forecasts"}
+s.known_item = lambda u: None
+s.elsewhere = lambda item, url, story: {"body": "<p>whole</p>", "words": 400, "via": {"src": "Yahoo Finance", "u": "https://y.example/1", "t": "AMD beats forecasts"}}
+assert s.reader("https://www.toms.example/amd-outsell-intel")["title"] == "AMD beats forecasts"
+s.read_page, s.known_item, s.elsewhere = _real_read, _real_known, _real_else
