@@ -327,7 +327,11 @@ def headline(s, today):
     called, races = sum(c["called"] for c in houses), sum(c["up"] for c in houses)
     counts = [f"{c['name']}: Democrats {c['won'].get('D', 0)}, Republicans {c['won'].get('R', 0)}" for c in houses]
     title = ". ".join(done) if done else "Counting the votes" if not called else f"{called} of {races} races called"
-    return {"title": title, "line": ". ".join(counts) + "." if counts else ""}
+    won = {c["name"]: c["decided"] for c in houses if c["decided"]}
+    # for a one-line glance: "Democrats win Congress", or "House D · Senate R" when they split
+    short = (f"{PARTIES[next(iter(won.values()))]} win Congress" if len(won) == len(houses) == 2 and len(set(won.values())) == 1
+             else " \u00b7 ".join(f"{name} {party}" for name, party in won.items()) if won else title)
+    return {"title": title, "short": short, "line": ". ".join(counts) + "." if counts else ""}
 
 
 def phase(s, now):

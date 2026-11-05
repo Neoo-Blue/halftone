@@ -106,6 +106,13 @@ assert elect.chance(elect.race(_race("S-GA", "senate", winner={"name": "Ind", "p
 _old = elect.us({**_us, "schedule": {"polls_open": 100, "first_close": 200}})
 assert elect.summary({"us": _old}, _day, 50)["us"]["phase"] == "campaign" and elect.summary({"us": _old}, _day, 150)["us"]["phase"] == "voting" and elect.summary({"us": _old}, _day, 250)["us"]["phase"] == "counting", "the clock says, not an old copy"
 assert elect.headline({"presidential": False, "date": "2026-11-03", "phase": "counting", "chambers": []}, _day)["line"] == ""
+# the front page's one-line glance gets a short form of the result, which fits its row
+_house = {"kind": "house", "name": "House", "decided": "D", "called": 435, "up": 435, "won": {"D": 230, "R": 205}}
+_senate = {"kind": "senate", "name": "Senate", "decided": "D", "called": 35, "up": 35, "won": {"D": 20, "R": 15}}
+_h = elect.headline({"presidential": False, "date": "2026-11-03", "phase": "counting", "chambers": [_house, _senate]}, _day)
+assert _h["title"] == "Democrats win the House. Democrats win the Senate" and _h["short"] == "Democrats win Congress", _h
+assert elect.headline({"presidential": False, "date": "2026-11-03", "phase": "counting", "chambers": [_house, {**_senate, "decided": "R"}]}, _day)["short"] == "House D \u00b7 Senate R"
+assert elect.headline({"presidential": False, "date": "2026-11-03", "phase": "counting", "chambers": [{**_house, "decided": None}, {**_senate, "decided": None, "called": 0}]}, _day)["short"] == "435 of 470 races called"
 _won = elect.outcome({"decided": False, "rows": [{"party": "A"}, {"party": "B", "pct": 40.0}]})
 assert _won["decided"] is False and [r["party"] for r in _won["rows"]] == ["B"], "a row with no numbers isn't a result"
 

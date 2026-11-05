@@ -161,7 +161,8 @@ main { padding: 0 var(--gutter); }
 .glance { margin-top: 20px; font: 500 14px/1.25 var(--ui); }
 .glance div { display: flex; justify-content: space-between; gap: 10px; padding: 11px 0; border-top: var(--rule) solid var(--hair); }
 .glance a { text-decoration: none; color: var(--ink2); }
-.glance dd { font-weight: 700; white-space: nowrap; }
+.glance dt { flex: none; }
+.glance dd { min-width: 0; font-weight: 700; text-align: right; text-wrap: balance; overflow-wrap: anywhere; }  /* a long value wraps in its row; it never prints over the next column */
 .glance .bad { color: var(--bad); } .glance .good { color: var(--good); } .glance .neg { color: var(--neg); }
 
 .inside { margin-top: 22px; }

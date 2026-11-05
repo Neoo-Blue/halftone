@@ -46,7 +46,7 @@ function front(p) {
   const fresh = (med?.added || []).filter((a) => (a.at || 0) >= p.now - 86400).length;
   const wx = p.weather.data;
   const rows = [
-    p.elections?.us && [p.elections.us.presidential ? 'Election' : 'Midterms', '/#elections', p.elections.us.title.replace(/ to the (midterms|election)$/, ''), ''],
+    p.elections?.us && [p.elections.us.presidential ? 'Election' : 'Midterms', '/#elections', p.elections.us.short || p.elections.us.title.replace(/ to the (midterms|election)$/, ''), ''],
     wx && ['Weather', '/weather', `${wx.now.temp}\u00b0 ${wx.now.sky}`, ''],
     p.on.systems && ['Systems', '/#systems', pr.length ? (bad ? plural(bad, 'issue') : `${pr.length} of ${pr.length} up`) : 'Checking', bad ? 'bad' : 'good'],
     p.on.money && [`${m ? m.days : 30}-day result`, '/#business', m ? `${m.result > 0 && m.missing.length ? 'At most ' : ''}${usd(m.result)}` : 'Counting', m && m.result < 0 ? 'neg' : ''],
