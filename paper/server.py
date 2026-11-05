@@ -1471,7 +1471,7 @@ def takes_run():
 # ---------------------------------------------------------------------- Reading aloud
 
 LISTEN_DAILY = 150000  # characters a day, about three hours of a voice: a hard ceiling on the bill
-SPEECH_KEY = {"deepgram": "DEEPGRAM_TTS_KEY", "livekit": "LIVEKIT_TTS_TOKEN"}
+SPEECH_KEY = {"cartesia": "CARTESIA_TTS_KEY", "deepgram": "DEEPGRAM_TTS_KEY", "livekit": "LIVEKIT_TTS_TOKEN"}
 
 
 def speech(provider=None, voice=None):

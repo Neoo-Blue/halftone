@@ -28,7 +28,13 @@ OTHERS = (("cartesia/sonic-3:a167e0f3-df7e-4d52-a9c3-f949145efdab", "Blake", "Am
           ("cartesia/sonic-3:f31cc6a7-c1e8-4764-980c-60a361443dd1", "Robyn", "Australian woman, neutral", "Cartesia"), ("inworld/inworld-tts-2:Olivia", "Olivia", "British woman, friendly", "Inworld"),
           ("inworld/inworld-tts-2:Ashley", "Ashley", "American woman, warm", "Inworld"), ("inworld/inworld-tts-2:Edward", "Edward", "American man, emphatic", "Inworld"),
           ("rime/coda:astra", "Astra", "American woman, upbeat", "Rime"), ("rime/coda:luna", "Luna", "American woman, lively", "Rime"))
-DEFAULT = {"deepgram": "aura-2-draco-en", "livekit": "deepgram/aura-2:draco"}
+# Cartesia's own API: Sonic 3.6, the newest, which LiveKit's gateway doesn't carry. Ids are model:voice.
+SONIC = (("4703c250-66e4-4682-a223-0a60acafcfc0", "Levi", "American man, newsreader"), ("26403c37-80c1-4a1a-8692-540551ca2ae5", "Marian", "American woman, poised narrator"),
+         ("a167e0f3-df7e-4d52-a9c3-f949145efdab", "Blake", "American man, energetic"), ("9626c31c-bec5-4cca-baa8-f8ba9e84c8bc", "Jacqueline", "American woman, confident"),
+         ("62ae83ad-4f6a-430b-af41-a9bede9286ca", "Gemma", "British woman, confident"), ("ef191366-f52f-447a-a398-ed8c0f2943a1", "Archie", "British man, warm"),
+         ("f31cc6a7-c1e8-4764-980c-60a361443dd1", "Robyn", "Australian woman, neutral"), ("9c8880b2-ccf9-4730-b805-cea23df247d7", "Conrad", "American man, seasoned"))
+CARTESIA = "https://api.cartesia.ai/tts/bytes"
+DEFAULT = {"cartesia": f"sonic-3.6:{SONIC[0][0]}", "deepgram": "aura-2-draco-en", "livekit": "deepgram/aura-2:draco"}
 
 
 def aura(models):
@@ -47,6 +53,8 @@ def aura(models):
 def voices(provider, models=None):
     if provider == "deepgram":
         return [{"id": f"aura-2-{n}-en", "name": n.title(), "about": about, "group": "Deepgram"} for n, about in aura(models) or AURA]
+    if provider == "cartesia":
+        return [{"id": f"sonic-3.6:{i}", "name": n, "about": about, "group": "Cartesia"} for i, n, about in SONIC]
     if provider == "livekit":
         return [*({"id": f"deepgram/aura-2:{n}", "name": n.title(), "about": about, "group": "Deepgram"} for n, about in AURA), *({"id": i, "name": n, "about": about, "group": g} for i, n, about, g in OTHERS)]
     return []
@@ -54,11 +62,13 @@ def voices(provider, models=None):
 
 def fits(provider, voice):
     """A voice picked for one service, or for one device, means nothing to another."""
+    if provider == "cartesia":
+        return bool(re.fullmatch(r"sonic[\w.-]*:[0-9a-f-]{36}", voice or ""))
     return bool(SERVICE_VOICE.fullmatch(voice or "")) and (voice.startswith("aura-") if provider == "deepgram" else "/" in voice and ":" in voice)
 
 
 def price(voice):
-    return PRICE.get(voice.split("/")[0], PRICE["deepgram"])
+    return PRICE.get("cartesia" if voice.startswith("sonic") else voice.split("/")[0], PRICE["deepgram"])
 
 
 def pieces(title, deck, body):
@@ -84,6 +94,14 @@ def pieces(title, deck, body):
 def deepgram(key, voice, text):
     url = "https://api.deepgram.com/v1/speak?" + urllib.parse.urlencode({"model": voice, "encoding": "mp3"})
     req = urllib.request.Request(url, json.dumps({"text": text}).encode(), {"Authorization": f"Token {key}", "Content-Type": "application/json"})
+    with OPENER.open(req, timeout=60) as r:  # no redirects, so the key goes to this address or nowhere
+        return read_all(r, AUDIO_MOST, 120), "audio/mpeg"
+
+
+def cartesia(key, voice, text):
+    model, _, vid = voice.partition(":")
+    body = {"model_id": model, "transcript": text, "voice": {"mode": "id", "id": vid}, "language": "en", "output_format": {"container": "mp3", "sample_rate": 44100, "bit_rate": 128000}}
+    req = urllib.request.Request(CARTESIA, json.dumps(body).encode(), {"Authorization": f"Bearer {key}", "Cartesia-Version": "2026-03-01", "Content-Type": "application/json"})
     with OPENER.open(req, timeout=60) as r:  # no redirects, so the key goes to this address or nowhere
         return read_all(r, AUDIO_MOST, 120), "audio/mpeg"
 
@@ -127,7 +145,7 @@ def livekit(token, voice, text, connect=None):
 
 def speak(provider, key, voice, text):
     try:
-        return livekit(key, voice, text) if provider == "livekit" else deepgram(key, voice, text)
+        return {"livekit": livekit, "cartesia": cartesia}.get(provider, deepgram)(key, voice, text)
     except OSError:
         raise
     except Exception as e:  # noqa: BLE001 - a library's own failures, and a reply that isn't what it promised, all mean the same to the reader

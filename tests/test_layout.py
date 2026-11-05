@@ -157,6 +157,8 @@ assert "goes on for a" in one[-1] and one[-1].rstrip().endswith("."), "broken be
 assert tts.pieces("", "", "") == [] and tts.pieces(None, None, None) == [], "an empty story has nothing to read"
 assert all(len(p) <= tts.LIMIT for p in tts.pieces("t", "", "<p>" + "y" * 5000 + "</p>")), "and one endless sentence is cut, not refused"
 assert tts.fits("deepgram", "aura-2-draco-en") and not tts.fits("deepgram", "deepgram/aura-2:draco") and tts.fits("livekit", "deepgram/aura-2:draco") and not tts.fits("livekit", "Google UK English Female") and not tts.fits("livekit", "a/b:c d"), "a voice belongs to one service"
+assert tts.voices("cartesia")[0]["id"] == tts.DEFAULT["cartesia"] and all(tts.fits("cartesia", v["id"]) for v in tts.voices("cartesia")), "Cartesia's own voices fit its own service"
+assert not tts.fits("cartesia", "cartesia/sonic-3:abc") and not tts.fits("cartesia", "aura-2-draco-en") and tts.price(tts.DEFAULT["cartesia"]) == tts.PRICE["cartesia"], "and nothing else does; its price is its own"
 assert tts.voices("livekit")[0]["id"] == tts.DEFAULT["livekit"] and any("cartesia" in v["id"] for v in tts.voices("livekit")) and tts.voices("browser") == []
 listed = {"tts": [{"canonical_name": "aura-2-zeus-en", "metadata": {"accent": "American", "tags": ["masculine", "deep"]}}, {"canonical_name": "aura-zeus-en"}, {"canonical_name": "aura-2-ama-ja"}, "junk", {"canonical_name": "aura-2-ok-en", "metadata": "junk"}]}
 assert [v["id"] for v in tts.voices("deepgram", listed)] == ["aura-2-zeus-en", "aura-2-ok-en"] and tts.voices("deepgram", listed)[0]["about"] == "American man, deep", "only current English voices, and a strange reply costs nothing"

@@ -156,10 +156,11 @@ SECTIONS = [
         F("TWILIO_SECRET", "API key secret", "secret"),
     ]},
     {"id": "listen", "title": "Listen", "about": "How the Listen button sounds on a story. Your device's own voice is free. A voice service sounds like a person, and reads the story's text, not your mail or your money.", "needs": ("TTS_PROVIDER",), "fields": [
-        F("TTS_PROVIDER", "Voice service", "select", "browser", options=[("browser", "This device's own voice, free"), ("livekit", "LiveKit"), ("deepgram", "Deepgram")]),
+        F("TTS_PROVIDER", "Voice service", "select", "browser", options=[("browser", "This device's own voice, free"), ("cartesia", "Cartesia"), ("livekit", "LiveKit"), ("deepgram", "Deepgram")]),
         F("TTS_VOICE", "Voice", "voice", hint="Save after choosing a service to see its voices with your key."),
         F("LIVEKIT_TTS_TOKEN", "LiveKit speech token", "secret", hint="A token with the inference grant, so your API secret stays where it is. Uses your plan's inference credits."),
         F("DEEPGRAM_TTS_KEY", "Deepgram key", "secret", hint="Any key that can speak. About $0.03 per 1,000 characters, so about 15 cents for a long story."),
+        F("CARTESIA_TTS_KEY", "Cartesia key", "secret", hint="Any Cartesia API key. Sonic 3.6 voices, about $0.05 per 1,000 characters at list price, or your plan's credits."),
     ]},
     {"id": "deepgram", "title": "Deepgram", "about": "Fills in what Deepgram cost over the last 30 days on the Business desk.", "needs": ("DEEPGRAM_KEY",), "fields": [
         F("DEEPGRAM_KEY", "API key", "secret", hint="It has to be able to read billing. A key that can only transcribe is refused."),
