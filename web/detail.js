@@ -492,7 +492,7 @@ const VIEWS = {
       head: d.name, deck: h?.summary || `Escalation stands at ${d.esc} of 100.`, meta: `${whole(d.events.length)} recent ${d.events.length === 1 ? 'story' : 'stories'}`,
       scene: reportScene(uniqueReports([...d.events, ...getDots().filter((x) => x.w === d.id)]), null, `Reports in ${d.name}, over time`),
       wide: h ? arc(h, d) : '',
-      body: `<div class="page-cols"><section><h3>What's happening now</h3>${notes(d.intel.slice(0, 1))}${d.intel.length > 1 ? `<details class="older"><summary>Earlier notes</summary>${notes(d.intel.slice(1))}</details>` : ''}</section>${whoIsReporting(d.who)}<section><h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}</section></div>`,
+      body: `<div class="page-flow"><section><h3>What's happening now</h3>${notes(d.intel.slice(0, 1))}${d.intel.length > 1 ? `<details class="older"><summary>Earlier notes</summary>${notes(d.intel.slice(1))}</details>` : ''}</section>${whoIsReporting(d.who)}<section><h3>Latest</h3>${d.events.length ? stories(d.events) : '<p class="empty">Nothing recent with a real headline.</p>'}</section></div>`,
       side: `${facts([['Escalation', `${d.esc} of 100`], ['Began', h?.began ? longDate(h.began) : ''], ['Running for', years ? `${whole(years)} years` : ''], ['Turning points', turns || '']])}${h?.began_note ? `<p class="small">${esc(h.began_note)}</p>` : ''}${d.lat == null ? '<p class="small">This one is about what two sides do, not one place, so it has no spot on the globe.</p>' : onGlobe(d.lat, d.lon)}`,
       locate: [d.lat, d.lon],
     };
@@ -502,7 +502,7 @@ const VIEWS = {
     return {
       head: d.title, deck: d.summary, meta: `${whole(d.count)} reports since ${stamp(d.first)}`,
       scene: reportScene(d.events, d.events.some((e) => e.la != null) ? null : d.lat != null ? [d.lat, d.lon] : null, `How ${d.title} developed`),
-      body: `<div class="page-cols">${d.intel?.length ? `<section>${notes(d.intel)}</section>` : ''}<section><h3>Latest</h3>${stories(d.events)}</section></div>`,
+      body: `<div class="page-flow">${d.intel?.length ? `<section>${notes(d.intel)}</section>` : ''}<section><h3>Latest</h3>${stories(d.events)}</section></div>`,
       side: `${facts([['Status', title(d.status)], ['Last report', ago(d.last)], ['Who', d.actors.join(', ')]])}${onGlobe(d.lat, d.lon)}${d.theater && d.theater !== 'global' ? `<p class="to"><a href="/world/theater/${esc(d.theater)}">This conflict</a></p>` : ''}`,
       locate: [d.lat, d.lon],
     };

@@ -161,6 +161,10 @@ main { padding: 0 var(--gutter); }
 .glance { margin-top: 20px; font: 500 14px/1.25 var(--ui); }
 .glance div { display: flex; justify-content: space-between; gap: 10px; padding: 11px 0; border-top: var(--rule) solid var(--hair); }
 .glance a { text-decoration: none; color: var(--ink2); }
+/* fit.js keeps every spill inside its box: text that ran past its side wraps there, and as a last resort is clipped */
+.fit-wrap, .fit-wrap * { white-space: normal !important; overflow-wrap: anywhere; min-width: 0; }
+.fit-wrap { flex-wrap: wrap; }
+.fit-clip { overflow: hidden !important; }
 .glance dt { flex: none; }
 .glance dd { min-width: 0; font-weight: 700; text-align: right; text-wrap: balance; overflow-wrap: anywhere; }  /* a long value wraps in its row; it never prints over the next column */
 .glance .bad { color: var(--bad); } .glance .good { color: var(--good); } .glance .neg { color: var(--neg); }
@@ -432,6 +436,12 @@ a:hover .poster::after, a:focus-visible .poster::after { opacity: 0; }
 .story-lead > .hero { margin-bottom: 18px; }
 .story-body .story-chunk > :is(h2, h3, h4):first-child { margin: 1.5em 0 .6em; padding-top: 14px; border-top: var(--heavy) solid var(--line); font: 800 clamp(26px, calc(var(--read) * 1.5), 36px)/1.12 var(--display); letter-spacing: var(--head-track); text-wrap: balance; }
 .page-cols, #machine-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 18px clamp(24px, 3vw, 44px); align-items: start; }
+/* Sections that flow like a newspaper's columns: a long list runs on into the next one, so the columns end together and
+   no stretch of the page sits empty beside it (a war page's 30 latest reports left 1,300px bare under the rest) */
+.page-flow { columns: 400px; column-gap: clamp(24px, 3vw, 44px); }
+.page-flow > section { margin-bottom: 26px; }
+.page-flow > section > h3 { break-after: avoid; }
+.page-flow li, .page-flow .intel, .page-flow > section:has(table, svg, canvas) { break-inside: avoid; }
 .page-main > .wire-list { columns: 380px; column-gap: clamp(24px, 3vw, 44px); column-rule: var(--rule) solid var(--hair); }
 [data-sample] { margin-top: 10px; }
 .page-cols .plain { columns: 300px; column-gap: clamp(24px, 3vw, 44px); }

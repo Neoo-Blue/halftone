@@ -5,6 +5,7 @@ import { start, go, reading, picture, eventHref, isFront } from '/detail.js';
 import { startPhone, onPhone, phoneCheck } from '/phone.js';
 import { followed, findData, startFind } from '/find.js';
 import { electionDesk } from '/elections.js';
+import { watchLayout } from '/fit.js';
 
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const THEMES = ['morning', 'night', 'cobalt', 'glass'];
@@ -916,6 +917,8 @@ startPhone({ go, onTab: (id) => { if (id === 'world') startGlobe(); }, onForm: s
 
 addEventListener('paper:reload', load);
 addEventListener('paper:front', fitFront);
+watchLayout($('#paper'), fitFront);  // a spill kept in its box can change a column's height: level them again
+watchLayout($('#page'));
 start((lat, lon) => globe?.fly(lat, lon), () => paper?.world.data?.dots || []);
 load();
 let beats = 0;
